@@ -703,7 +703,7 @@ Future<Peer> startServer(String exe) async {
 ## 14. Fuera de alcance de la versión 1
 
 - Renombrar conversaciones (aún no existe en la TUI; está en "Ideas para después").
-- Tool calling y "ChatBot Code".
+- Tool calling y "Moss Code".
 - Varias conversaciones abiertas y respuestas en paralelo (el handle ya va en cada evento para poder agregarlas sin cambiar de versión).
 - Avisar cambios hechos por **otro** proceso en la carpeta de conversaciones (otra TUI). La GUI puede volver a pedir `conversations.list` al recibir el foco.
 - Adjuntar archivos o imágenes.
