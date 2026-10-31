@@ -17,6 +17,7 @@ Versión del protocolo: **1**.
 | `blocks.list`, `blocks.get`, `blocks.save` | 6.6 | Implementado |
 | `settings.provider.*`, `models.list`, `settings.system_prompt.*`, `settings.search.*`, `settings.gui.*` | 6.7 | Implementado |
 | `settings.provider.switch`; `key_saved`, `selectable` y `note` en `settings.provider.get`; `commands.run` con `kind` `model` y `model_picker` (`/model`) | 6.5, 6.7 | Implementado |
+| Endpoints personalizados: `kind` en `settings.provider.get`, borrador con `custom:<id>` / `custom:` y `name`, `provider` en la respuesta de `settings.provider.save`, `settings.endpoint.delete`; sin la entrada `custom` | 6.7 | Implementado |
 | `addons.*`, `service.*` (Linux; en Windows `-32006`) | 6.8 | Implementado |
 | Eventos `conversation.entry_added`, `entry_delta`, `entry_updated`, `phase`, `saved`, `closed`; `chat.finished`; `conversations.changed` | 7 | Implementado |
 | Evento `settings.changed` (`provider`, `system_prompt`, `search`, `gui`) | 7 | Implementado |
@@ -121,7 +122,7 @@ cliente                                  servidor
 ```
 
 - Si `protocol_version` no coincide, el servidor responde `-32010 ProtocolMismatch` con `data: {"server": 1}` y el cliente avisa "actualiza la app".
-- `ready: false` es el equivalente de la TUI abriendo F2 con `Configura un proveedor para empezar.`. La carga usa `allow_missing_key_and_model = true`, como la TUI.
+- `ready: false` es el equivalente de la TUI abriendo F2 con `Configura un proveedor para empezar.` (o, si el proveedor de `config.json` no existe, con su error: `Proveedor desconocido en config.json: <id>. Elige uno en F2.` o `El endpoint <id> no existe. Elige un proveedor en F2.`, que es entonces el `problem`; `Session::setup_problem`). La carga usa `allow_missing_key_and_model = true`, como la TUI.
 - `warnings` son los avisos de arranque que la TUI manda a la línea de estado, por ejemplo un system prompt que no es cadena. Los avisos de tema y símbolos son solo de la TUI y no aparecen aquí.
 - `capabilities` dice qué soporta este servidor y no cambia durante la sesión. `search: true`: `chat.send` acepta `search` (que haya key o no lo dice `app.status.has_search_key`). En Linux, `addons` trae los de `known_addons` (`["telegram"]`) y `service` es `"systemd"` (sección 6.8), aunque el addon no esté instalado; en Windows quedan en `[]` y `null`.
 - `paths.downloads` es la carpeta de `/guardar` y `/exportar`, con su `moss/` (no se crea al arrancar).
@@ -281,7 +282,7 @@ Siempre hay exactamente una conversación abierta, igual que en la TUI: al arran
 **`chat.send`** `→ {conversation, text, search?}` `← {accepted: true}`
 - `text` se manda tal cual: **no** se interpretan comandos (para eso está `commands.run`).
 - `search` (cadena) hace lo mismo que `/buscar <consulta>`: `text` es lo que se muestra y se guarda, y `search` es la consulta. Para que se vea igual que en la TUI, la GUI manda `text: "/buscar <consulta>"`.
-- Errores inmediatos, en este orden: `-32004 NotConfigured` (`data.message`: `Configura un proveedor para empezar.`), `-32002 Busy` (respuesta en curso), `-32005` con `data.message` `El mensaje está vacío.` si el texto queda vacío al recortarlo o `search` solo tiene espacios, y `-32005` con el texto de la TUI si falta la key de búsqueda (`Configura la key de búsqueda en Configuración (F2) → Búsqueda web`).
+- Errores inmediatos, en este orden: `-32004 NotConfigured` (`data.message`: el `problem` de `app.status`, normalmente `Configura un proveedor para empezar.`), `-32002 Busy` (respuesta en curso), `-32005` con `data.message` `El mensaje está vacío.` si el texto queda vacío al recortarlo o `search` solo tiene espacios, y `-32005` con el texto de la TUI si falta la key de búsqueda (`Configura la key de búsqueda en Configuración (F2) → Búsqueda web`).
 - Si se acepta, siguen los eventos de la sección 7 y siempre termina con un solo `chat.finished`.
 
 **`chat.cancel`** `→ {conversation}` `← {cancelled: bool}`
@@ -356,29 +357,35 @@ Si `config.json` o `credentials.json` no se pueden leer (JSON inválido, permiso
 **`settings.provider.get`** `→ {}` `←`
 
 ```jsonc
-{"providers":[{"id":"nvidia","name":"NVIDIA NIM",
+{"providers":[{"id":"nvidia","kind":"builtin","name":"NVIDIA NIM",
                "base_url":"https://integrate.api.nvidia.com/v1","needs_key":true,
                "key_saved":true, "selectable":true, "note":""}, ...,
-              {"id":"custom","name":"Personalizado…","base_url":"","needs_key":true,
-               "key_saved":false, "selectable":false, "note":"falta la URL"}],
- "saved":{"provider":"nvidia","base_url":"...","model":"..."},   // config.json tal cual
+              {"id":"custom:omniroute","kind":"endpoint","name":"OmniRoute",
+               "base_url":"https://mi-gateway.example/v1","needs_key":true,
+               "key_saved":false, "selectable":false, "note":"sin key"}],
+ "saved":{"provider":"nvidia","base_url":"...","model":"..."},   // config.json (con un endpoint, su URL)
  "effective":{"base_url":"...","model":"..."},                   // lo que usa la sesión
  "locks":{"base_url":false,"model":false,"api_key":true},   // definidos por CHAT_*
  "key_status":"(definido por CHAT_API_KEY) …abcd"}             // key_status(), enmascarado
 ```
 
-`providers` es la tabla de `providers()`, en orden, con el estado de `Session::provider_choices()` (el mismo del selector de `/model` en la TUI): `key_saved` si hay key en `credentials.json` para ese proveedor; `selectable` si `/model` puede pasar a él (key guardada, `CHAT_API_KEY`, servidor local o, en `custom`, la URL guardada); `note` es `""`, `"sin key"` o `"falta la URL"` (solo hay URL de `custom` si el proveedor guardado es `custom`). Nunca devuelve una key.
+`providers` es la lista de `Session::provider_choices()` (la de F2 y del selector de `/model` en la TUI, `ProviderSettings::provider_list` sin la fila de agregar): la tabla de `providers()` en orden (`kind: "builtin"`) y después los endpoints de `config.json` en su orden (`kind: "endpoint"`, con su `id` `custom:<id>`, su `name` y su `base_url`; `needs_key` es false si la URL es local). `key_saved` si hay key en `credentials.json` para ese proveedor (la llave es el id); `selectable` si `/model` puede pasar a él (key guardada, `CHAT_API_KEY` o servidor local); `note` es `""` o `"sin key"`. Nunca devuelve una key.
+
+**Endpoints** (`config.json` → `"endpoints"`, guía 7): cada uno con un `id` fijo (`[a-z0-9][a-z0-9-]{0,31}`, que nunca cambia), `name` (1 a 40 caracteres, único sin distinguir mayúsculas) y `base_url`; a lo más 20. Su proveedor es `custom:<id>` en todos lados (también la llave de su key en `credentials.json`). El id lo genera el servidor del nombre al crearlo (`make_endpoint_id`).
 
 **El borrador** (`draft`) de `check`, `save` y `models.list`:
 
 ```jsonc
-{"provider":"custom", "base_url":"https://mi-servidor", "model":"...", "api_key":"nvapi-…"?}
+{"provider":"custom:omniroute", "name":"OmniRoute"?, "base_url":"https://mi-gateway.example/v1",
+ "model":"...", "api_key":"nvapi-…"?}
 ```
 
-- Se aplica, en este orden, a un `ProviderSettings` nuevo: `select_provider(provider_index(provider))`, `set_base_url` (solo cambia algo en `custom`), `set_key` (si viene `api_key`) y `set_model`.
-- **Un campo fijado por `CHAT_*` que venga en el borrador se ignora**, igual que en F2, donde no se puede editar (la GUI lo sabe por `locks`). La `base_url` de un proveedor que no es `custom` también se ignora: se usa la de la tabla.
-- Sin `api_key` (o con `""`) se usa la guardada, igual que el campo vacío en F2.
-- `provider`, `base_url` y `model` son obligatorios. Un `provider` que no está en la tabla es `-32602` con `fields: ["draft.provider"]`: al leer `config.json` un id desconocido cae en `custom`, pero aquí es un error de la GUI. Los campos de más, de menos o de otro tipo también van como `draft.<campo>`.
+- `provider`: un id de la tabla; `custom:<id>` (o el id solo) para editar ese endpoint; o `custom:` para uno nuevo.
+- Se aplica, en este orden, a un `ProviderSettings` nuevo: `select_provider(find_provider(provider))`, `set_name` (si viene `name`; solo cambia algo en un endpoint), `set_base_url` (solo en un endpoint), `set_key` (si viene `api_key`) y `set_model`.
+- **Un campo fijado por `CHAT_*` que venga en el borrador se ignora**, igual que en F2, donde no se puede editar (la GUI lo sabe por `locks`). La `base_url` de un proveedor de la tabla también se ignora: se usa la de la tabla.
+- Sin `api_key` (o con `""`) se usa la guardada, igual que el campo vacío en F2. La key de un endpoint va por su id: cambiar su URL o su nombre no la pierde.
+- `provider`, `base_url` y `model` son obligatorios; `name`, opcional. Un `provider` que no está en la tabla ni es un endpoint guardado (ni `custom:`) es `-32602` con `fields: ["draft.provider"]`. Los campos de más, de menos o de otro tipo también van como `draft.<campo>`.
+- `validate()` agrega, en un endpoint: `Escribe un nombre para el endpoint.`, `El nombre del endpoint puede tener hasta 40 caracteres.`, `El nombre del endpoint tiene caracteres no válidos.`, `Ya hay un endpoint con ese nombre.`, `Ya tienes 20 endpoints; borra uno antes de agregar otro.`, `Con CHAT_BASE_URL definida no se puede agregar un endpoint.` y el de `validate_base_url`.
 
 **`settings.provider.check`** `→ {draft}` `← {error, hint, can_request_models, dirty}`
 
@@ -388,18 +395,22 @@ Si `config.json` o `credentials.json` no se pueden leer (JSON inválido, permiso
  "can_request_models":true, "dirty":true}
 ```
 
-**`settings.provider.save`** `→ {draft}` `← {ready}`
-- `Session::save_provider`: escribe `credentials.json` (si hubo key) y `config.json`, y reconstruye `ChatClient` y `RequestRunner`. La conversación abierta no cambia y recibe el aviso `Ahora se usa … de ….`
-- `ready`: si quedó configurado (el `ready` de `initialize`).
+**`settings.provider.save`** `→ {draft}` `← {ready, provider}`
+- `Session::save_provider`: escribe `credentials.json` (si hubo key) y `config.json`, y reconstruye `ChatClient` y `RequestRunner`. La conversación abierta no cambia y recibe el aviso `Ahora se usa … de ….` En un endpoint, actualiza su entrada de `endpoints` (o la agrega al final, con el id generado) y lo deja en uso; su key va a `custom:<id>`.
+- `ready`: si quedó configurado (el `ready` de `initialize`). `provider`: el id con que quedó guardado (`custom:<id>` con el id generado, si era nuevo).
 - Errores, en este orden: `-32602` (borrador), `-32002` (respuesta en curso), `-32005` con el error de `validate()` en `data.message`, `-32007` si falla la escritura.
 
+**`settings.endpoint.delete`** `→ {id}` `← {}`
+- `Session::delete_endpoint`: quita el endpoint (`custom:<id>` o el id solo) de `endpoints` en `config.json` y su key `custom:<id>` de `credentials.json`. Después, `settings.changed {section: "provider"}`. El aviso de la TUI (`Se borró el endpoint <nombre>.`) no va al historial.
+- Errores: `-32602` (falta `id` o no es cadena); `-32005` con `data.message`: `Cambia de proveedor antes de borrar este endpoint.` (el que está en uso) o `Ese endpoint ya no existe.`; `-32002` con una respuesta en curso; `-32007` si no se puede leer o escribir la configuración.
+
 **`settings.provider.switch`** `→ {provider?, model}` `← {ready}`
-- Lo mismo que `/model <proveedor> <modelo>` en la TUI (`Session::switch_model`); sin `provider`, el actual. Parte del formulario guardado, cambia proveedor y modelo y llama a `save_provider`: escribe `config.json` y nunca `credentials.json` (no recibe keys). No valida el modelo contra `/models`.
+- Lo mismo que `/model <proveedor> <modelo>` en la TUI (`Session::switch_model`); sin `provider`, el actual. `provider` es un id de la tabla, `custom:<id>` o el id de un endpoint solo (no choca con la tabla), sin distinguir mayúsculas. Parte del formulario guardado, cambia proveedor y modelo y llama a `save_provider`: escribe `config.json` y nunca `credentials.json` (no recibe keys). No valida el modelo contra `/models`.
 - Si cambió: `{ready}`, `settings.changed {section: "provider"}` y el `entry_added` del aviso `Ahora se usa … de ….` Si el proveedor y el modelo ya eran los actuales: `{ready}` sin evento.
-- Errores: `-32602` (falta `model` o un campo de otro tipo); `-32005` con `data.message`: `Falta la key de <proveedor>. Agrégala en F2 → Proveedor de IA.`, `El proveedor personalizado necesita su URL: configúralo en F2.`, `Proveedor desconocido: <x>. Escribe /model para ver la lista.`, `El modelo está fijado por CHAT_MODEL.`, `El proveedor está fijado por CHAT_BASE_URL.` (con `CHAT_BASE_URL` el mismo proveedor sí cambia de modelo) o el de `validate()` (modelo vacío); `-32002` con una respuesta en curso; `-32007` si no se puede leer o escribir la configuración.
+- Errores: `-32602` (falta `model` o un campo de otro tipo); `-32005` con `data.message`: `Falta la key de <proveedor>. Agrégala en F2 → Proveedor de IA.`, `Proveedor desconocido: <x>. Escribe /model para ver la lista.`, `El modelo está fijado por CHAT_MODEL.`, `El proveedor está fijado por CHAT_BASE_URL.` (con `CHAT_BASE_URL` el mismo proveedor sí cambia de modelo) o el de `validate()` (modelo vacío); `-32002` con una respuesta en curso; `-32007` si no se puede leer o escribir la configuración.
 
 **`models.list`** `→ {draft}` `← {models: ["..."]}` · *petición larga, cancelable*
-- `ModelsLoader` con `request_config` del borrador sobre la configuración vigente. Es la única petición cuya respuesta sale después, por un hilo de trabajo; todas las demás responden al momento.
+- `ModelsLoader` con `request_config` del borrador sobre la configuración vigente (el `provider` del borrador, como en `check`: también `custom:<id>` o el id solo). Es la única petición cuya respuesta sale después, por un hilo de trabajo; todas las demás responden al momento.
 - **Toda petición recibe exactamente una respuesta:** la lista; `-32005` con el texto de F2 (`[error de red] …`, `models_error_text`, sin la key) si el servidor falla, para que la GUI deje escribir el modelo a mano; o `-32800` si se canceló.
 - `-32005` con `Escribe una URL base válida y la API key para pedir los modelos.` si `can_request_models` es false, sin pedir nada (no cancela uno pendiente).
 - Una sola a la vez: otro `models.list` (que sí se pide) reemplaza al pendiente, que responde `-32800` en ese momento. Si el usuario cambia de proveedor, la GUI puede mandar otro directamente o `$/cancel` del anterior.
@@ -613,6 +624,7 @@ La primera entrada del asistente llega con `entry_added` (la crea el primer delt
 | `[Exportar]` / `/exportar` | `conversation.export` / `commands.run` |
 | Fuentes de `/buscar` | entrada `sources` |
 | F2 → Proveedor de IA (lista, filtro, a mano, `CHAT_*`) | `settings.provider.*`, `models.list` |
+| F2 → Proveedor de IA → "Agregar endpoint…" / [Borrar endpoint] | `settings.provider.save` con `custom:` / `settings.endpoint.delete` |
 | `/model <proveedor> <modelo>` | `settings.provider.switch` / `commands.run` (`kind: "model"`) |
 | Selector de `/model` (proveedores con su estado, modelos, `Usar «…»`) | `commands.run` (`kind: "model_picker"`) + `settings.provider.get` (`selectable`, `note`) + `models.list` con `{provider}` sin `api_key` + `settings.provider.switch` |
 | F2 → Instrucciones del sistema (contador, Restaurar) | `settings.system_prompt.*` |
