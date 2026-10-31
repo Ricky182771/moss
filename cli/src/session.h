@@ -71,8 +71,11 @@ struct SubmitOutcome {
         Started, ///< Se envió al modelo.
         Ignored, ///< Enter no hace nada (respuesta en curso, caja vacía).
         Status,  ///< Aviso para la línea de estado; el texto se queda en la caja.
-        Done,    ///< /guardar o /exportar: el resultado ya está en el historial.
+        Done,    ///< /guardar, /exportar o /model que cambió: el resultado ya está en el historial.
         Copy,    ///< /copiar: la interfaz copia block y llama report().
+        /// /model sin modelo: la interfaz abre su selector, en el paso de
+        /// modelo de picker_provider si lo hay; si no, en el de proveedor.
+        OpenModelPicker,
     };
     Type type = Type::Ignored;
     std::string status; ///< Status: el aviso.
@@ -84,7 +87,35 @@ struct SubmitOutcome {
     /// distinguir "respuesta en curso" de "caja vacía". nullopt con
     /// /copiar, /guardar y /exportar.
     std::optional<SendResult> sent;
-    ActionResult action; ///< Done: lo de save_block o export_conversation.
+    ActionResult action; ///< Done: lo de save_block, export_conversation o el aviso de /model.
+    std::optional<std::string> picker_provider; ///< OpenModelPicker: id del proveedor.
+};
+
+/// Un proveedor de la tabla para el selector de /model y el RPC. Nunca lleva
+/// la key: solo si hay una guardada.
+struct ProviderChoice {
+    std::string id;
+    std::string name;
+    bool current = false;   ///< Es el de config.json.
+    bool key_saved = false; ///< Hay key en credentials.json (credentials_key).
+    bool local = false;     ///< Servidor local: no necesita key.
+    bool selectable = false;
+    std::string note; ///< "", kNoKeyNote o kNoUrlNote (si no es selectable).
+};
+inline constexpr std::string_view kNoKeyNote = "sin key";
+inline constexpr std::string_view kNoUrlNote = "falta la URL";
+
+/// Lo que pasó con Session::switch_model.
+struct ModelSwitch {
+    enum class Status {
+        Switched,  ///< Cambió: message es el aviso que quedó en el historial.
+        Unchanged, ///< Ya era el actual: no se escribió nada.
+        Invalid,   ///< Proveedor desconocido, sin key, sin URL, CHAT_* o modelo inválido.
+        Busy,      ///< Hay una respuesta en curso (kWaitOrCancel).
+        Failed,    ///< No se pudo leer o escribir la configuración.
+    };
+    Status status = Status::Invalid;
+    std::string message;
 };
 
 /// Guardar un bloque o exportar sin pasar por el historial, como los
@@ -203,6 +234,23 @@ public:
     /// el error para el formulario (kWaitOrCancel con una respuesta en
     /// curso, sin escribir nada), o nullopt.
     [[nodiscard]] std::optional<std::string> save_provider(const ProviderSettings& form);
+
+    // --- /model (y settings.provider.switch del RPC) ---
+    /// CHAT_MODEL está definida: /model no puede cambiar nada.
+    [[nodiscard]] bool model_locked() const;
+    /// Cada proveedor de providers(), en orden, con su estado.
+    [[nodiscard]] Result<std::vector<ProviderChoice>> provider_choices() const;
+    /// Por qué no se puede pasar al proveedor id (los textos de /model), o
+    /// nullopt si se puede.
+    [[nodiscard]] std::optional<std::string> provider_problem(std::string_view id) const;
+    /// La configuración para pedir los modelos del proveedor id con su key
+    /// guardada, como F2 (request_config). Un error si provider_problem.
+    [[nodiscard]] Result<Config> models_config(std::string_view id) const;
+    /// Cambia al proveedor (nullopt: el actual) y al modelo con save_provider:
+    /// la misma validación, escritura y aviso que F2. Nunca toca
+    /// credentials.json ni la conversación abierta.
+    [[nodiscard]] ModelSwitch switch_model(const std::optional<std::string>& provider,
+                                           const std::string& model);
     [[nodiscard]] std::optional<std::string> save_system_prompt(
         const std::optional<std::string>& stored);
     /// validate_system_prompt y luego save_system_prompt con
@@ -228,6 +276,11 @@ private:
     [[nodiscard]] std::shared_ptr<SearchProvider> load_search(std::string& warning) const;
     /// /copiar, /guardar y /exportar.
     [[nodiscard]] SubmitOutcome run_local_command(const ParsedCommand& command);
+    [[nodiscard]] SubmitOutcome run_model_command(const ParsedCommand& command);
+    /// provider_form() con el proveedor id ya elegido (vacío: el guardado) y,
+    /// en problem, por qué no se puede usar para /model.
+    [[nodiscard]] Result<ProviderSettings> form_for(std::string_view id,
+                                                    std::optional<std::string>& problem) const;
 
     SessionEnvironment env_;
     Config config_; ///< La vigente; cambia al guardar la configuración.

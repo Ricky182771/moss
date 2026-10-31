@@ -44,6 +44,20 @@ ChatError config_error(std::string message) {
     return ChatError{ErrorKind::Config, 0, std::move(message), std::nullopt};
 }
 
+constexpr std::string_view kModelLockedMessage = "El modelo está fijado por CHAT_MODEL.";
+
+/// kNoUrlNote, kNoKeyNote o "" para el proveedor elegido en form.
+std::string_view provider_note(const ProviderSettings& form) {
+    const std::string& url = form.effective_base_url();
+    if (form.provider_info().id == kCustomProvider && url.empty()) {
+        return kNoUrlNote;
+    }
+    if (!form.key_locked() && !form.has_saved_key() && !is_local_base_url(url)) {
+        return kNoKeyNote;
+    }
+    return {};
+}
+
 } // namespace
 
 std::optional<std::string> gui_settings_problem(std::string_view json) {
@@ -116,6 +130,7 @@ CommandContext Session::command_context() {
     context.has_code_blocks = !code_blocks().blocks().empty();
     context.has_turns = conversation_.has_turns();
     context.busy = busy();
+    context.model_locked = model_locked();
     return context;
 }
 
@@ -137,6 +152,12 @@ SubmitOutcome Session::submit(std::string_view text) {
     case Type::ExportUsage:
         // No necesitan modelo: funcionan aunque falte la configuración.
         result = run_local_command(command);
+        result.command = command.type;
+        return result;
+    case Type::Model:
+    case Type::ModelUsage:
+        // Sin configurar también: sirve para elegir un proveedor con key.
+        result = run_model_command(command);
         result.command = command.type;
         return result;
     default:
@@ -274,6 +295,38 @@ SubmitOutcome Session::run_local_command(const ParsedCommand& command) {
     SubmitOutcome copy = outcome(SubmitOutcome::Type::Copy, {}, true);
     copy.block = *choice.block;
     return copy;
+}
+
+SubmitOutcome Session::run_model_command(const ParsedCommand& command) {
+    const auto status = [](std::string text) {
+        return outcome(SubmitOutcome::Type::Status, std::move(text));
+    };
+    if (command.type == ParsedCommand::Type::ModelUsage) {
+        return status(command.text);
+    }
+    if (model_locked()) {
+        return status(std::string{kModelLockedMessage});
+    }
+    if (busy()) {
+        return status(std::string{kWaitOrCancel});
+    }
+    if (command.model.has_value()) {
+        ModelSwitch change = switch_model(command.provider, *command.model);
+        if (change.status != ModelSwitch::Status::Switched) {
+            return status(std::move(change.message));
+        }
+        SubmitOutcome result = outcome(SubmitOutcome::Type::Done, {}, true);
+        result.action = {std::move(change.message), false};
+        return result;
+    }
+    if (command.provider.has_value()) {
+        if (std::optional<std::string> problem = provider_problem(*command.provider)) {
+            return status(std::move(*problem));
+        }
+    }
+    SubmitOutcome result = outcome(SubmitOutcome::Type::OpenModelPicker, {}, true);
+    result.picker_provider = command.provider;
+    return result;
 }
 
 FileOutcome Session::save_code_block(std::optional<int> number, std::string_view file_name) {
@@ -433,6 +486,119 @@ std::optional<std::string> Session::save_provider(const ProviderSettings& form) 
     connect();
     conversation_.add_notice("Ahora se usa " + model_ + " de " + form.provider_label() + ".");
     return std::nullopt;
+}
+
+bool Session::model_locked() const { return non_empty(env_.env, "CHAT_MODEL").has_value(); }
+
+Result<ProviderSettings> Session::form_for(std::string_view id,
+                                           std::optional<std::string>& problem) const {
+    Result<ProviderSettings> loaded = provider_form();
+    if (loaded.is_error() || id.empty()) {
+        return loaded;
+    }
+    ProviderSettings form = loaded.value();
+    std::string lower{id};
+    std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
+    const auto table = providers();
+    const auto it = std::find_if(table.begin(), table.end(),
+                                 [&lower](const ProviderInfo& info) { return info.id == lower; });
+    if (it == table.end()) {
+        problem = unknown_provider_message(id);
+        return form;
+    }
+    const auto index = static_cast<std::size_t>(it - table.begin());
+    if (index != form.provider() && form.base_url_locked()) {
+        problem = "El proveedor está fijado por CHAT_BASE_URL.";
+        return form;
+    }
+    form.select_provider(index);
+    const std::string_view note = provider_note(form);
+    if (note == kNoUrlNote) {
+        problem = "El proveedor personalizado necesita su URL: configúralo en F2.";
+    } else if (note == kNoKeyNote) {
+        problem = "Falta la key de " + form.provider_label() + ". Agrégala en F2 → Proveedor de IA.";
+    }
+    return form;
+}
+
+Result<std::vector<ProviderChoice>> Session::provider_choices() const {
+    const Result<ProviderSettings> loaded = provider_form();
+    if (loaded.is_error()) {
+        return loaded.error();
+    }
+    std::vector<ProviderChoice> choices;
+    const auto table = providers();
+    for (std::size_t i = 0; i < table.size(); ++i) {
+        ProviderSettings form = loaded.value();
+        form.select_provider(i);
+        ProviderChoice choice;
+        choice.id = std::string{table[i].id};
+        choice.name = std::string{table[i].name};
+        choice.current = i == loaded.value().provider();
+        choice.key_saved = form.has_saved_key();
+        choice.local = !form.effective_base_url().empty() &&
+                       is_local_base_url(form.effective_base_url());
+        choice.note = std::string{provider_note(form)};
+        choice.selectable = choice.note.empty();
+        choices.push_back(std::move(choice));
+    }
+    return choices;
+}
+
+std::optional<std::string> Session::provider_problem(std::string_view id) const {
+    std::optional<std::string> problem;
+    const Result<ProviderSettings> form = form_for(id, problem);
+    if (form.is_error()) {
+        return form.error().message;
+    }
+    return problem;
+}
+
+Result<Config> Session::models_config(std::string_view id) const {
+    std::optional<std::string> problem;
+    const Result<ProviderSettings> form = form_for(id, problem);
+    if (form.is_error()) {
+        return form.error();
+    }
+    if (problem.has_value()) {
+        return config_error(std::move(*problem));
+    }
+    return form.value().request_config(config_);
+}
+
+ModelSwitch Session::switch_model(const std::optional<std::string>& provider,
+                                  const std::string& model) {
+    using Status = ModelSwitch::Status;
+    if (model_locked()) {
+        return {Status::Invalid, std::string{kModelLockedMessage}};
+    }
+    std::optional<std::string> problem;
+    Result<ProviderSettings> loaded = form_for(provider.value_or(""), problem);
+    if (loaded.is_error()) {
+        return {Status::Failed, loaded.error().message};
+    }
+    if (problem.has_value()) {
+        return {Status::Invalid, std::move(*problem)};
+    }
+    if (busy()) {
+        return {Status::Busy, std::string{kWaitOrCancel}};
+    }
+    ProviderSettings form = loaded.value();
+    const bool same_provider = form.provider() == form.saved_provider();
+    (void)form.set_model(model); // CHAT_MODEL ya se descartó arriba.
+    if (configured() && same_provider && model == model_) {
+        return {Status::Unchanged, "Ya estás usando " + model + "."};
+    }
+    if (std::optional<std::string> error = form.validate()) {
+        return {Status::Invalid, std::move(*error)};
+    }
+    if (std::optional<std::string> error = save_provider(form)) {
+        return {Status::Failed, std::move(*error)};
+    }
+    // save_provider deja su aviso al último del historial.
+    return {Status::Switched, conversation_.entries().back().text};
 }
 
 std::optional<std::string> Session::save_system_prompt(const std::optional<std::string>& stored) {

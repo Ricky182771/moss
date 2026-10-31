@@ -583,13 +583,23 @@ void Dispatcher::settings(const std::string& method, const Json* params, const J
             fail(id, has_id, RpcError::StorageError, message_data(form.error().message));
             return;
         }
+        const Result<std::vector<cli::ProviderChoice>> choices = session_->provider_choices();
+        if (choices.is_error()) {
+            fail(id, has_id, RpcError::StorageError, message_data(choices.error().message));
+            return;
+        }
         const cli::ProviderSettings& f = form.value();
         Json providers = Json::array();
-        for (const cli::ProviderInfo& provider : cli::providers()) {
-            providers.push_back({{"id", std::string{provider.id}},
-                                 {"name", std::string{provider.name}},
-                                 {"base_url", std::string{provider.base_url}},
-                                 {"needs_key", provider.needs_key}});
+        const auto table = cli::providers();
+        for (std::size_t i = 0; i < table.size(); ++i) {
+            const cli::ProviderChoice& choice = choices.value()[i];
+            providers.push_back({{"id", std::string{table[i].id}},
+                                 {"name", std::string{table[i].name}},
+                                 {"base_url", std::string{table[i].base_url}},
+                                 {"needs_key", table[i].needs_key},
+                                 {"key_saved", choice.key_saved},
+                                 {"selectable", choice.selectable},
+                                 {"note", choice.note}});
         }
         reply(id, has_id,
               {{"providers", std::move(providers)},
@@ -604,6 +614,37 @@ void Dispatcher::settings(const std::string& method, const Json* params, const J
                  {"model", f.model_locked()},
                  {"api_key", f.key_locked()}}},
                {"key_status", f.key_status()}});
+    } else if (method == "settings.provider.switch") {
+        if (const auto bad = check_params(params, {{"provider", Param::Type::String, false},
+                                                   {"model"}})) {
+            fail(id, has_id, RpcError::InvalidParams, *bad);
+            return;
+        }
+        std::optional<std::string> provider;
+        if (const auto it = params->find("provider"); it != params->end()) {
+            provider = it->get<std::string>();
+        }
+        using Status = cli::ModelSwitch::Status;
+        const cli::ModelSwitch change =
+            session_->switch_model(provider, params->at("model").get<std::string>());
+        switch (change.status) {
+        case Status::Switched:
+            reply(id, has_id, {{"ready", session_->configured()}});
+            changed("provider");
+            break;
+        case Status::Unchanged:
+            reply(id, has_id, {{"ready", session_->configured()}});
+            break;
+        case Status::Invalid:
+            fail(id, has_id, RpcError::ValidationFailed, message_data(change.message));
+            break;
+        case Status::Busy:
+            fail(id, has_id, RpcError::Busy, message_data(change.message));
+            break;
+        case Status::Failed:
+            fail(id, has_id, RpcError::StorageError, message_data(change.message));
+            break;
+        }
     } else if (method == "settings.provider.check" || method == "settings.provider.save" ||
                method == "models.list") {
         if (const auto bad = check_params(params, {{"draft", Param::Type::Object}})) {
@@ -1211,12 +1252,24 @@ void Dispatcher::run_command(const std::string& text, const Json& id, bool has_i
         break;
     }
     case Type::Done:
+        if (outcome.command == cli::ParsedCommand::Type::Model) {
+            reply(id, has_id,
+                  {{"kind", "model"}, {"message", outcome.action.message}, {"clear", true}});
+            write_(notification("settings.changed", {{"section", "provider"}}));
+            break;
+        }
         reply(id, has_id,
               {{"kind", outcome.command == cli::ParsedCommand::Type::Save ? "save" : "export"},
                {"path", optional_string(outcome.action.path)},
                {"message", outcome.action.message},
                {"error", outcome.action.error},
                {"clear", outcome.clear}});
+        break;
+    case Type::OpenModelPicker:
+        reply(id, has_id,
+              {{"kind", "model_picker"},
+               {"provider", optional_string(outcome.picker_provider)},
+               {"clear", true}});
         break;
     case Type::Status:
     case Type::Started: // Sin sent no pasan.

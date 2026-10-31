@@ -2014,3 +2014,181 @@ TEST_CASE("RPC: el código de invitación no queda en CHAT_DEBUG_RPC", "[rpc][ad
     CHECK(written.find(R"("invite_code":"•••")") != std::string::npos);
 }
 #endif
+
+namespace {
+
+constexpr const char* kOpenAiKey = "sk-clave-ficticia-de-openai-5555";
+
+/// config.json en nvidia/m1 con key guardada de NVIDIA y de OpenAI.
+void save_two_keys(Rpc& rpc) {
+    chatbot::Credentials credentials;
+    credentials.keys["nvidia"] = kModelKey;
+    credentials.keys["openai"] = kOpenAiKey;
+    REQUIRE_FALSE(chatbot::save_credentials(rpc.credentials_path(), credentials).has_value());
+    REQUIRE_FALSE(chatbot::save_config_file(rpc.config_path(),
+                                            {"nvidia", "https://integrate.api.nvidia.com/v1", "m1"})
+                      .has_value());
+    rpc.config = rpc.load();
+}
+
+} // namespace
+
+TEST_CASE("RPC: settings.provider.get dice qué proveedores se pueden elegir",
+          "[rpc][settings][model]") {
+    Rpc rpc;
+    save_two_keys(rpc);
+    rpc.initialize();
+    rpc.call(2, "settings.provider.get");
+    const Json got = only(rpc);
+    const Json& providers = got["result"]["providers"];
+    const auto find = [&providers](const std::string& id) {
+        for (const Json& provider : providers) {
+            if (provider["id"] == id) {
+                return provider;
+            }
+        }
+        FAIL("sin " << id);
+        return Json{};
+    };
+    CHECK(find("nvidia")["key_saved"] == true);
+    CHECK(find("nvidia")["selectable"] == true);
+    CHECK(find("nvidia")["note"] == "");
+    CHECK(find("openai")["key_saved"] == true);
+    CHECK(find("ollama")["key_saved"] == false);
+    CHECK(find("ollama")["selectable"] == true);
+    CHECK(find("gemini")["selectable"] == false);
+    CHECK(find("gemini")["note"] == "sin key");
+    CHECK(find("custom")["note"] == "falta la URL");
+    const std::string line = got.dump();
+    CHECK(line.find(kModelKey) == std::string::npos);
+    CHECK(line.find(kOpenAiKey) == std::string::npos);
+}
+
+TEST_CASE("RPC: settings.provider.switch", "[rpc][settings][model]") {
+    Rpc rpc;
+    save_two_keys(rpc);
+    rpc.initialize();
+    SECTION("cambia: {ready}, settings.changed y el aviso en la conversación") {
+        rpc.call(2, "settings.provider.switch", {{"provider", "ollama"}, {"model", "qwen3:8b"}});
+        const std::vector<Json> got = rpc.take();
+        CHECK(summaries(got) == std::vector<std::string>{"#2 result", "settings.changed provider",
+                                                         "conversation.entry_added 0 notice"});
+        CHECK(got[0]["result"] == Json({{"ready", true}}));
+        CHECK(got[2]["params"]["entry"]["text"] == "Ahora se usa qwen3:8b de Ollama (local).");
+        CHECK(chatbot::load_config_file_values(rpc.config_path()).value().provider == "ollama");
+        // Sin provider: el actual.
+        rpc.call(3, "settings.provider.switch", {{"model", "llama3"}});
+        CHECK(summaries(rpc.take()) == std::vector<std::string>{"#3 result",
+                                                                "settings.changed provider",
+                                                                "conversation.entry_added 1 notice"});
+        CHECK(chatbot::load_config_file_values(rpc.config_path()).value().model == "llama3");
+        // Y de regreso, con la key guardada de NVIDIA.
+        rpc.call(4, "settings.provider.switch", {{"provider", "nvidia"}, {"model", "m1"}});
+        CHECK(summaries(rpc.take()).front() == "#4 result");
+    }
+    SECTION("el mismo modelo: {ready} sin evento") {
+        rpc.call(2, "settings.provider.switch", {{"provider", "nvidia"}, {"model", "m1"}});
+        CHECK(summaries(rpc.take()) == std::vector<std::string>{"#2 result"});
+    }
+    SECTION("errores: -32005 con el texto de /model y -32602 sin model") {
+        rpc.call(2, "settings.provider.switch", {{"provider", "gemini"}, {"model", "g"}});
+        check_error(only(rpc), -32005,
+                    "Falta la key de Google Gemini. Agrégala en F2 → Proveedor de IA.");
+        rpc.call(3, "settings.provider.switch", {{"provider", "custom"}, {"model", "g"}});
+        check_error(only(rpc), -32005,
+                    "El proveedor personalizado necesita su URL: configúralo en F2.");
+        rpc.call(4, "settings.provider.switch", {{"provider", "nope"}, {"model", "g"}});
+        check_error(only(rpc), -32005,
+                    "Proveedor desconocido: nope. Escribe /model para ver la lista.");
+        rpc.call(5, "settings.provider.switch", {{"provider", "ollama"}});
+        CHECK(only(rpc)["error"]["code"] == -32602);
+        CHECK(chatbot::load_config_file_values(rpc.config_path()).value().model == "m1");
+    }
+    SECTION("con una respuesta en curso: -32002") {
+        rpc.dispatcher.reset();
+        BlockingTransport* blocking = nullptr;
+        rpc.chat_transport = [&blocking] {
+            auto transport = std::make_unique<BlockingTransport>(BlockingTransport::Mode::Block);
+            blocking = transport.get();
+            return transport;
+        };
+        rpc.initialize();
+        rpc.call(2, "chat.send", {{"conversation", "c1"}, {"text", "hola"}});
+        REQUIRE(blocking->started.wait_for(kThreadTimeout));
+        rpc.out.clear();
+        rpc.call(3, "settings.provider.switch", {{"model", "m2"}});
+        check_error(only(rpc), -32002, std::string{chatbot::cli::kWaitOrCancel});
+        rpc.call(4, "chat.cancel", {{"conversation", "c1"}});
+        REQUIRE(rpc.finish());
+    }
+}
+
+TEST_CASE("RPC: CHAT_MODEL y CHAT_BASE_URL en settings.provider.switch",
+          "[rpc][settings][model]") {
+    Rpc rpc;
+    SECTION("CHAT_MODEL") {
+        rpc.env.values["CHAT_MODEL"] = "modelo-del-entorno";
+        save_two_keys(rpc);
+        rpc.initialize();
+        rpc.call(2, "settings.provider.switch", {{"model", "m2"}});
+        check_error(only(rpc), -32005, "El modelo está fijado por CHAT_MODEL.");
+    }
+    SECTION("CHAT_BASE_URL") {
+        rpc.env.values["CHAT_BASE_URL"] = "https://integrate.api.nvidia.com/v1";
+        save_two_keys(rpc);
+        rpc.initialize();
+        rpc.call(2, "settings.provider.switch", {{"provider", "openai"}, {"model", "m2"}});
+        check_error(only(rpc), -32005, "El proveedor está fijado por CHAT_BASE_URL.");
+    }
+}
+
+TEST_CASE("RPC: commands.run con /model", "[rpc][model]") {
+    Rpc rpc;
+    save_two_keys(rpc);
+    rpc.initialize();
+    const auto run = [&rpc](const Json& id, const std::string& text) {
+        rpc.call(id, "commands.run", {{"conversation", "c1"}, {"text", text}});
+    };
+    run(2, "/model");
+    CHECK(only(rpc)["result"] ==
+          Json({{"kind", "model_picker"}, {"provider", nullptr}, {"clear", true}}));
+    run(3, "/model OpenAI");
+    CHECK(only(rpc)["result"] ==
+          Json({{"kind", "model_picker"}, {"provider", "openai"}, {"clear", true}}));
+    run(4, "/model gemini");
+    CHECK(only(rpc)["result"] ==
+          Json({{"kind", "status"},
+                {"message", "Falta la key de Google Gemini. Agrégala en F2 → Proveedor de IA."},
+                {"clear", false}}));
+    run(5, "/model openai gpt-5");
+    const std::vector<Json> got = rpc.take();
+    CHECK(summaries(got) == std::vector<std::string>{"#5 result", "settings.changed provider",
+                                                     "conversation.entry_added 0 notice"});
+    CHECK(got[0]["result"] == Json({{"kind", "model"},
+                                    {"message", "Ahora se usa gpt-5 de OpenAI."},
+                                    {"clear", true}}));
+}
+
+TEST_CASE("RPC: models.list con {provider} sin api_key usa la key guardada de ese proveedor",
+          "[rpc][settings][model]") {
+    Rpc rpc;
+    save_two_keys(rpc);
+    // El transporte se destruye con su petición: lo que recibió se copia aquí.
+    const auto requests = std::make_shared<std::vector<chatbot::HttpRequest>>();
+    rpc.models_transport = [requests] {
+        auto transport = std::make_unique<chatbot_test::FakeTransport>();
+        transport->responses = {models_response(200, R"({"data":[{"id":"gpt-5"}]})")};
+        transport->on_send = [requests, raw = transport.get()] {
+            requests->push_back(raw->requests.back());
+        };
+        return transport;
+    };
+    rpc.initialize();
+    rpc.call(2, "models.list",
+             {{"draft", {{"provider", "openai"}, {"base_url", ""}, {"model", ""}}}});
+    REQUIRE(run_until_reply(rpc, 2));
+    CHECK(only(rpc)["result"].dump() == R"({"models":["gpt-5"]})");
+    REQUIRE(requests->size() == 1);
+    CHECK(requests->front().url == "https://api.openai.com/v1/models");
+    CHECK(requests->front().api_key == kOpenAiKey);
+}

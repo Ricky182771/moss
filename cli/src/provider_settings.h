@@ -51,6 +51,8 @@ public:
     // --- Proveedor ---
     [[nodiscard]] std::size_t provider() const { return provider_; }
     [[nodiscard]] const ProviderInfo& provider_info() const;
+    /// El proveedor de lo guardado (el de config.json).
+    [[nodiscard]] std::size_t saved_provider() const { return saved_provider_; }
     /// Cambia de proveedor: la URL base se rellena con la de la tabla (en
     /// "custom", la última escrita), la key escrita y el filtro se vacían, la
     /// lista de modelos vuelve a Idle y el modelo es el guardado si se
@@ -86,6 +88,8 @@ public:
     /// Texto junto al campo, siempre enmascarado: "(definido por
     /// CHAT_API_KEY) …abcd", "guardada: …abcd", "opcional en local" o "".
     [[nodiscard]] std::string key_status() const;
+    /// Hay key en credentials.json para el proveedor (y la URL, en "custom").
+    [[nodiscard]] bool has_saved_key() const { return !saved_key().empty(); }
 
     // --- Modelo ---
     [[nodiscard]] const std::string& model() const { return model_; }

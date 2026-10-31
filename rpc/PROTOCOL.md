@@ -16,6 +16,7 @@ Versión del protocolo: **1**.
 | `commands.list`, `commands.run` | 6.5 | Implementado |
 | `blocks.list`, `blocks.get`, `blocks.save` | 6.6 | Implementado |
 | `settings.provider.*`, `models.list`, `settings.system_prompt.*`, `settings.search.*`, `settings.gui.*` | 6.7 | Implementado |
+| `settings.provider.switch`; `key_saved`, `selectable` y `note` en `settings.provider.get`; `commands.run` con `kind` `model` y `model_picker` (`/model`) | 6.5, 6.7 | Implementado |
 | `addons.*`, `service.*` (Linux; en Windows `-32006`) | 6.8 | Implementado |
 | Eventos `conversation.entry_added`, `entry_delta`, `entry_updated`, `phase`, `saved`, `closed`; `chat.finished`; `conversations.changed` | 7 | Implementado |
 | Evento `settings.changed` (`provider`, `system_prompt`, `search`, `gui`) | 7 | Implementado |
@@ -311,12 +312,16 @@ Sale de `kCommands` y `command_availability`, así que la GUI puede tener su men
 {"kind":"save", "path":"/home/r/Descargas/moss/x.cpp", "message":"Guardado en ~/Descargas/moss/x.cpp",
  "error":false, "clear":true}                        // path null y error true si falló la escritura
 {"kind":"export", "path":"...", "message":"Conversación exportada a ...", "error":false, "clear":true}
+{"kind":"model", "message":"Ahora se usa qwen3:8b de Ollama (local).", "clear":true}   // /model que cambió
+{"kind":"model_picker", "provider":"ollama", "clear":true}   // /model sin modelo; provider null sin proveedor
 {"kind":"status", "message":"Uso: /copiar [número de bloque]", "clear":false}
 ```
 
 - **Texto para el modelo** (`message`, `search`): si no se envía, los mismos errores de JSON-RPC que `chat.send`, en el mismo orden: `-32004`, `-32002`, `-32005` vacío (`El mensaje está vacío.`; con `/buscar` sin consulta, el uso de la TUI: `Uso: /buscar <consulta>`) y `-32005` sin key de búsqueda. Si se envía, siguen los eventos de la sección 7 y un `chat.finished`.
 - **`status`:** lo que la TUI pone en la línea de estado dejando el texto en la caja, con el mismo texto: los usos (`/copiar x`), `Todavía no hay respuestas que exportar.`, un número de bloque que no existe, un nombre inválido, sin carpeta de descargas, `Espera a que termine la respuesta` (comandos locales con una respuesta en curso), etc. La GUI ya tiene el texto, así que no vuelve.
 - **`copy`:** el servidor **no** toca el portapapeles: la GUI copia `text` (con `Clipboard.setData`). Como la GUI siempre puede copiar, el aviso (`message`, con el de `incomplete_warning` si el bloque está incompleto) **se agrega al historial** como en la TUI, y llega como `conversation.entry_added` (`notice`) después de la respuesta.
+- **`model`:** `/model [proveedor] <modelo>` cambió, con `Session::switch_model` (lo mismo que `settings.provider.switch`). Después de la respuesta llegan `settings.changed {section: "provider"}` y el `entry_added` (`notice`) con `message`.
+- **`model_picker`:** `/model` o `/model <proveedor>`: la GUI abre su selector, en la lista de modelos de `provider` o, con `null`, en la de proveedores. Para la lista de proveedores, `settings.provider.get` (`selectable`, `note`); para la de modelos, `models.list` con el borrador `{provider, base_url: "", model: ""}` sin `api_key` (usa la key guardada de ese proveedor, como F2); para cambiar, `settings.provider.switch`. Un proveedor que no se puede elegir, `/model <modelo>` con el que ya está en uso (`Ya estás usando <modelo>.`), `CHAT_MODEL`, una respuesta en curso y los errores de uso (`Uso: /model [proveedor] [modelo]`, `Proveedor desconocido: x. Escribe /model para ver la lista.`) son `status`.
 - **`save` y `export`:** como en la TUI, el resultado ya está en el historial (`entry_added` con el aviso, o con el error si falló la escritura). `path` es la ruta completa del archivo, o `null` si no se escribió; `message` lleva la ruta abreviada con `~`.
 
 ### 6.6 Bloques de código
@@ -352,15 +357,17 @@ Si `config.json` o `credentials.json` no se pueden leer (JSON inválido, permiso
 
 ```jsonc
 {"providers":[{"id":"nvidia","name":"NVIDIA NIM",
-               "base_url":"https://integrate.api.nvidia.com/v1","needs_key":true}, ...,
-              {"id":"custom","name":"Personalizado…","base_url":"","needs_key":true}],
+               "base_url":"https://integrate.api.nvidia.com/v1","needs_key":true,
+               "key_saved":true, "selectable":true, "note":""}, ...,
+              {"id":"custom","name":"Personalizado…","base_url":"","needs_key":true,
+               "key_saved":false, "selectable":false, "note":"falta la URL"}],
  "saved":{"provider":"nvidia","base_url":"...","model":"..."},   // config.json tal cual
  "effective":{"base_url":"...","model":"..."},                   // lo que usa la sesión
  "locks":{"base_url":false,"model":false,"api_key":true},   // definidos por CHAT_*
  "key_status":"(definido por CHAT_API_KEY) …abcd"}             // key_status(), enmascarado
 ```
 
-`providers` es la tabla de `providers()`, en orden. Nunca devuelve una key.
+`providers` es la tabla de `providers()`, en orden, con el estado de `Session::provider_choices()` (el mismo del selector de `/model` en la TUI): `key_saved` si hay key en `credentials.json` para ese proveedor; `selectable` si `/model` puede pasar a él (key guardada, `CHAT_API_KEY`, servidor local o, en `custom`, la URL guardada); `note` es `""`, `"sin key"` o `"falta la URL"` (solo hay URL de `custom` si el proveedor guardado es `custom`). Nunca devuelve una key.
 
 **El borrador** (`draft`) de `check`, `save` y `models.list`:
 
@@ -385,6 +392,11 @@ Si `config.json` o `credentials.json` no se pueden leer (JSON inválido, permiso
 - `Session::save_provider`: escribe `credentials.json` (si hubo key) y `config.json`, y reconstruye `ChatClient` y `RequestRunner`. La conversación abierta no cambia y recibe el aviso `Ahora se usa … de ….`
 - `ready`: si quedó configurado (el `ready` de `initialize`).
 - Errores, en este orden: `-32602` (borrador), `-32002` (respuesta en curso), `-32005` con el error de `validate()` en `data.message`, `-32007` si falla la escritura.
+
+**`settings.provider.switch`** `→ {provider?, model}` `← {ready}`
+- Lo mismo que `/model <proveedor> <modelo>` en la TUI (`Session::switch_model`); sin `provider`, el actual. Parte del formulario guardado, cambia proveedor y modelo y llama a `save_provider`: escribe `config.json` y nunca `credentials.json` (no recibe keys). No valida el modelo contra `/models`.
+- Si cambió: `{ready}`, `settings.changed {section: "provider"}` y el `entry_added` del aviso `Ahora se usa … de ….` Si el proveedor y el modelo ya eran los actuales: `{ready}` sin evento.
+- Errores: `-32602` (falta `model` o un campo de otro tipo); `-32005` con `data.message`: `Falta la key de <proveedor>. Agrégala en F2 → Proveedor de IA.`, `El proveedor personalizado necesita su URL: configúralo en F2.`, `Proveedor desconocido: <x>. Escribe /model para ver la lista.`, `El modelo está fijado por CHAT_MODEL.`, `El proveedor está fijado por CHAT_BASE_URL.` (con `CHAT_BASE_URL` el mismo proveedor sí cambia de modelo) o el de `validate()` (modelo vacío); `-32002` con una respuesta en curso; `-32007` si no se puede leer o escribir la configuración.
 
 **`models.list`** `→ {draft}` `← {models: ["..."]}` · *petición larga, cancelable*
 - `ModelsLoader` con `request_config` del borrador sobre la configuración vigente. Es la única petición cuya respuesta sale después, por un hilo de trabajo; todas las demás responden al momento.
@@ -601,6 +613,8 @@ La primera entrada del asistente llega con `entry_added` (la crea el primer delt
 | `[Exportar]` / `/exportar` | `conversation.export` / `commands.run` |
 | Fuentes de `/buscar` | entrada `sources` |
 | F2 → Proveedor de IA (lista, filtro, a mano, `CHAT_*`) | `settings.provider.*`, `models.list` |
+| `/model <proveedor> <modelo>` | `settings.provider.switch` / `commands.run` (`kind: "model"`) |
+| Selector de `/model` (proveedores con su estado, modelos, `Usar «…»`) | `commands.run` (`kind: "model_picker"`) + `settings.provider.get` (`selectable`, `note`) + `models.list` con `{provider}` sin `api_key` + `settings.provider.switch` |
 | F2 → Instrucciones del sistema (contador, Restaurar) | `settings.system_prompt.*` |
 | F2 → Búsqueda web | `settings.search.*` |
 | F2 → Colores y Accesibilidad | **No aplica:** la GUI tiene su tema (`settings.gui.*`) |
