@@ -134,7 +134,8 @@ SettingsScreen::SettingsScreen(ModelsLoader& loader, const Palette& palette, OnS
     symbol_list_ = ftxui::Radiobox(symbol_list);
 
     ftxui::DropdownOption dropdown;
-    dropdown.open = &dropdown_open_;
+    // FTXUI 7.0.3 toma el estado de checkbox.checked, no de open.
+    dropdown.checkbox.checked = &dropdown_open_;
     dropdown.radiobox.entries = &provider_names_;
     dropdown.radiobox.selected = &provider_selected_;
     dropdown.radiobox.on_change = [this] {
