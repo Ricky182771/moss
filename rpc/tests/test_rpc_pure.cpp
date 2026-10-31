@@ -1,4 +1,4 @@
-// Pruebas puras de chatbot-rpc: LineReader, diff_entries, codificación al
+// Pruebas puras de moss-rpc: LineReader, diff_entries, codificación al
 // protocolo, check_params y la redacción de CHAT_DEBUG_RPC.
 
 #include "debug_log.h"

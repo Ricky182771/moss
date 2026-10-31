@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(chatbot
+project(moss
     VERSION 0.1.0
-    DESCRIPTION "Chatbot de terminal: núcleo C++ (hito 1)"
+    DESCRIPTION "Moss: asistente de terminal con núcleo C++"
     LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -54,7 +54,7 @@ option(CHATBOT_BUILD_TESTS "Compilar las pruebas (requiere Catch2 v3)" ON)
 # Addons (addons/, sección "Addons" de AGENTS.md): cada uno con su opción.
 # Telegram, encendido por defecto solo en Linux (Termux dice Android: ahí y
 # en Windows, apagado). Apagado, la app igual ve y configura un
-# chatbot-telegram copiado junto a ella o en el PATH. Como toda opción, se
+# moss-telegram copiado junto a ella o en el PATH. Como toda opción, se
 # queda en la caché de CMake: para cambiar el valor por defecto en una
 # carpeta ya configurada, bórrala o pasa -DCHATBOT_BUILD_TELEGRAM=ON una vez.
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
@@ -103,7 +103,7 @@ add_subdirectory(tools)
 if(CHATBOT_BUILD_TESTS)
     add_subdirectory(tests)
 endif()
-# chatbot-rpc (rpc/PROTOCOL.md): siempre, también en Windows y sin addons.
+# moss-rpc (rpc/PROTOCOL.md): siempre, también en Windows y sin addons.
 # Después de tests/: sus pruebas usan los helpers de tests/.
 add_subdirectory(rpc)
 
@@ -118,13 +118,13 @@ endif()
 chatbot_forbid_ui_dependencies(chatbot_core)
 chatbot_forbid_ui_dependencies(chatbot_markdown)
 chatbot_forbid_ui_dependencies(chatbot_addon_settings)
-# chatbot-rpc usa la lógica de la TUI (chatbot_cli_lib), pero nunca FTXUI ni
+# moss-rpc usa la lógica de la TUI (chatbot_cli_lib), pero nunca FTXUI ni
 # el dibujo (chatbot_cli_ui).
 chatbot_forbid_ui_dependencies(chatbot_rpc_lib chatbot_cli_lib)
-chatbot_forbid_ui_dependencies(chatbot-rpc chatbot_cli_lib)
+chatbot_forbid_ui_dependencies(moss-rpc chatbot_cli_lib)
 # Y al revés: de addons/, cli/ (y core y chatbot::markdown, nada) solo usa
 # chatbot::addon_settings, nunca chatbot::bot ni un addon.
 foreach(app_target chatbot_core chatbot_markdown chatbot_addon_settings chatbot_cli_lib
-                   chatbot_cli_ui chatbot chatbot_rpc_lib chatbot-rpc)
+                   chatbot_cli_ui moss chatbot_rpc_lib moss-rpc)
     chatbot_forbid_addon_dependencies(${app_target})
 endforeach()

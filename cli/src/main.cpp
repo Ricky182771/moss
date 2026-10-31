@@ -1,4 +1,4 @@
-// main.cpp — interfaz de terminal del chatbot.
+// main.cpp — interfaz de terminal de Moss.
 //
 // Pantalla completa con FTXUI: historial arriba, caja de entrada abajo. La
 // lógica sin FTXUI está en Session (session.h) y la petición corre en el
@@ -239,7 +239,7 @@ int main(int argc, char** argv) {
     // (también por un error) vuelve a la página de códigos que tenía. Se
     // declara primero para que se destruya al último, después de FTXUI.
     const chatbot::ConsoleUtf8Scope console_utf8;
-    // chatbot --help y chatbot <addon> [argumentos] (este se reemplaza por
+    // moss --help y moss <addon> [argumentos] (este se reemplaza por
     // el addon): antes de tocar la consola, la configuración o la pantalla.
     if (const std::optional<int> code =
             chatbot::cli::run_command_line(std::vector<std::string>(argv + 1, argv + argc))) {
@@ -389,7 +389,7 @@ int main(int argc, char** argv) {
          }});
     const ftxui::Component input = input_area;
 
-    // Carpeta de descargas (sin chatbot/) para [Exportar], o nullopt con el
+    // Carpeta de descargas (sin moss/) para [Exportar], o nullopt con el
     // motivo en la línea de estado.
     const auto download_base = [&]() -> std::optional<std::string> {
         std::optional<std::string> base =
@@ -683,7 +683,7 @@ int main(int argc, char** argv) {
         const bool hide_status = command_menu.is_open() && status.empty();
         input_area->set_max_rows(chatbot::cli::input_max_rows(ftxui::Terminal::Size().dimy));
         const std::string title =
-            "Chatbot CECyTE — " +
+            "Moss — " +
             (session.model().empty() ? std::string{"sin configurar"} : session.model()) + " — " +
             (conversation.title().empty() ? std::string{"Nueva conversación"}
                                           : chatbot::md::sanitize(conversation.title()));

@@ -109,8 +109,8 @@ struct AddonInstall {
     std::optional<int> config_version; ///< nullopt: no contestó un entero.
 };
 
-/// "No instalado: copia chatbot-telegram junto a chatbot o en el PATH." (en
-/// modo portable, solo "junto a chatbot"), "Incompatible: …" o "" si está
+/// "No instalado: copia moss-telegram junto a moss o en el PATH." (en
+/// modo portable, solo "junto a moss"), "Incompatible: …" o "" si está
 /// instalado y es compatible (la ruta se dibuja aparte).
 [[nodiscard]] std::string addon_install_problem(const addon_settings::AddonInfo& addon,
                                                 const AddonInstall& install, bool portable);

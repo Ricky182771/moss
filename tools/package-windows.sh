@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
-# Arma chatbot-windows-x64.zip desde un build release. Corre en la terminal
+# Arma moss-windows-x64.zip desde un build release. Corre en la terminal
 # "MSYS2 UCRT64" (la usa también la CI):
 #
 #   tools/package-windows.sh [--allow-missing-licenses] [build] [zip]
 #
 #   build  carpeta del build (por defecto, build/release)
-#   zip    ZIP de salida (por defecto, <build>/../chatbot-windows-x64.zip)
+#   zip    ZIP de salida (por defecto, <build>/../moss-windows-x64.zip)
 #
 # El ZIP lleva, sin carpeta de por medio:
-#   chatbot.exe, chatbot-rpc.exe (para la interfaz gráfica) y las DLL de
+#   moss.exe, moss-rpc.exe (para la interfaz gráfica) y las DLL de
 #     /ucrt64/bin que reporta ldd para cada uno;
 #   LICENSE.txt (el LICENSE del proyecto);
 #   AVISOS-TERCEROS.txt: las licencias de lo que va adentro, sacadas de los
 #     paquetes de MSYS2 (pacman -Qo dice de qué paquete es cada DLL) y de las
 #     fuentes que bajó FetchContent (FTXUI y md4c, enlazadas estáticas);
-#   LEEME.txt y chatbot.portable.ejemplo (tools/windows-dist/).
+#   LEEME.txt y moss.portable.ejemplo (tools/windows-dist/).
 # Si un paquete de MSYS2 no instala su licencia, los textos salen de
 # tools/windows-dist/licenses/<paquete sin prefijo>/ (del tarball oficial);
 # si la versión instalada no es la de su README.md, avisa sin fallar.
@@ -39,7 +39,7 @@ die() {
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 build=$(cd "${1:-$root/build/release}" && pwd) || die "no existe la carpeta del build"
-zip=${2:-$(dirname "$build")/chatbot-windows-x64.zip}
+zip=${2:-$(dirname "$build")/moss-windows-x64.zip}
 
 [[ ${MSYSTEM:-} == UCRT64 ]] || die "corre esto en la terminal MSYS2 UCRT64 (MSYSTEM=${MSYSTEM:-})"
 prefix=${MINGW_PREFIX:-/ucrt64}
@@ -47,7 +47,7 @@ for tool in ldd pacman cmake gcc; do
     command -v "$tool" > /dev/null || die "falta $tool"
 done
 
-exes=("$build/cli/chatbot.exe" "$build/cli/chatbot-rpc.exe")
+exes=("$build/cli/moss.exe" "$build/cli/moss-rpc.exe")
 for exe in "${exes[@]}"; do
     [[ -f $exe ]] || die "no existe $exe: compila antes con cmake --build --preset release"
 done
@@ -174,12 +174,12 @@ package_section() {
 }
 
 cat > "$notices" << EOF
-AVISOS DE TERCEROS - chatbot para Windows (x64)
+AVISOS DE TERCEROS - Moss para Windows (x64)
 
-chatbot.exe y chatbot-rpc.exe son software libre bajo la Licencia Pública
+moss.exe y moss-rpc.exe son software libre bajo la Licencia Pública
 General de GNU, versión 3 (ver LICENSE.txt). Los dos llevan enlazados de
 forma estática md4c, nlohmann/json y partes del runtime de GCC y de
-mingw-w64; chatbot.exe, además, FTXUI. Se distribuyen con las DLL de MSYS2
+mingw-w64; moss.exe, además, FTXUI. Se distribuyen con las DLL de MSYS2
 (UCRT64) que necesitan. Abajo está la licencia de cada uno, en qué
 ejecutables va, y su texto tal como lo instala su paquete o como viene en
 sus fuentes.
@@ -194,19 +194,19 @@ ftxui_src=$build/_deps/ftxui-src
 ftxui_version=$(sed -n 's/^ *VERSION \([0-9.]*\).*/\1/p' "$ftxui_src/CMakeLists.txt" 2> /dev/null |
     head -n 1 || true)
 section "FTXUI ${ftxui_version:-(versión desconocida)}" \
-    "Incluido como: enlazado estático en chatbot.exe (fuentes de FetchContent)"$'\n'"Con el parche del PR #1351 de FTXUI (https://github.com/ArthurSonzogni/FTXUI/pull/1351),"$'\n'"que solo cambia la lectura de la terminal en Linux y macOS: el código que se"$'\n'"compila para Windows es el de la versión publicada." \
+    "Incluido como: enlazado estático en moss.exe (fuentes de FetchContent)"$'\n'"Con el parche del PR #1351 de FTXUI (https://github.com/ArthurSonzogni/FTXUI/pull/1351),"$'\n'"que solo cambia la lectura de la terminal en Linux y macOS: el código que se"$'\n'"compila para Windows es el de la versión publicada." \
     "$(ls "$ftxui_src"/LICENSE 2> /dev/null || true)"
 
 md4c_src=$build/_deps/md4c-src
 section "md4c 0.6.0" \
-    "Incluido como: enlazado estático en chatbot.exe y chatbot-rpc.exe"$'\n'"(solo la biblioteca de parseo; fuentes de FetchContent)" \
+    "Incluido como: enlazado estático en moss.exe y moss-rpc.exe"$'\n'"(solo la biblioteca de parseo; fuentes de FetchContent)" \
     "$(ls "$md4c_src"/LICENSE* 2> /dev/null || true)"
 
 # nlohmann/json es solo headers: el paquete dueño del header.
 json_package=$(pacman -Qqo "$prefix/include/nlohmann/json.hpp" 2> /dev/null) ||
     die "no se encontró el paquete de nlohmann/json ($prefix/include/nlohmann/json.hpp)"
 package_section "$json_package" \
-    "compilado dentro de chatbot.exe y chatbot-rpc.exe (biblioteca de solo headers)"
+    "compilado dentro de moss.exe y moss-rpc.exe (biblioteca de solo headers)"
 
 # Runtime de GCC enlazado estático (libgcc.a, crtbegin/crtend y el código de
 # las plantillas de libstdc++): GPL 3 con la GCC Runtime Library Exception.
@@ -233,7 +233,7 @@ for candidate in "$gcc_package" $stdcxx_package; do
     fi
 done
 section "Runtime de GCC ($gcc_package $(package_version "$gcc_package"))" \
-    "Incluido como: partes enlazadas estáticas en chatbot.exe y chatbot-rpc.exe"$'\n'"Licencia según pacman: $(package_licenses "$gcc_package")"$'\n'"Textos tomados del paquete: $gcc_from" \
+    "Incluido como: partes enlazadas estáticas en moss.exe y moss-rpc.exe"$'\n'"Licencia según pacman: $(package_licenses "$gcc_package")"$'\n'"Textos tomados del paquete: $gcc_from" \
     "$gcc_files"
 if [[ -n $gcc_files ]] && ! grep -q 'COPYING\.RUNTIME' <<< "$gcc_files"; then
     missing+=("GCC Runtime Library Exception (COPYING.RUNTIME)")
@@ -243,7 +243,7 @@ fi
 # libmingwex).
 crt_package=$(pacman -Qqo "$prefix/lib/crt2.o") || die "no se encontró el paquete de crt2.o"
 package_section "$crt_package" \
-    "partes enlazadas estáticas en chatbot.exe y chatbot-rpc.exe (arranque y CRT de"$'\n'"mingw-w64)"
+    "partes enlazadas estáticas en moss.exe y moss-rpc.exe (arranque y CRT de"$'\n'"mingw-w64)"
 
 # Las DLL, agrupadas por paquete, cada una con los ejecutables que la usan.
 declare -A package_dlls=()
@@ -279,14 +279,14 @@ fi
 # --- Textos y ZIP ---------------------------------------------------------------
 
 cp "$root/LICENSE" "$stage/LICENSE.txt"
-cp "$root/tools/windows-dist/LEEME.txt" "$root/tools/windows-dist/chatbot.portable.ejemplo" \
+cp "$root/tools/windows-dist/LEEME.txt" "$root/tools/windows-dist/moss.portable.ejemplo" \
     "$stage/"
-for text in LICENSE.txt LEEME.txt AVISOS-TERCEROS.txt chatbot.portable.ejemplo; do
+for text in LICENSE.txt LEEME.txt AVISOS-TERCEROS.txt moss.portable.ejemplo; do
     sed -i 's/\r*$/\r/' "$stage/$text"
 done
 
-expected=(chatbot.exe chatbot-rpc.exe "${dlls[@]##*/}" LICENSE.txt AVISOS-TERCEROS.txt LEEME.txt
-          chatbot.portable.ejemplo)
+expected=(moss.exe moss-rpc.exe "${dlls[@]##*/}" LICENSE.txt AVISOS-TERCEROS.txt LEEME.txt
+          moss.portable.ejemplo)
 (cd "$stage" && cmake -E tar cf "$zip" --format=zip -- "${expected[@]}")
 
 # Que el ZIP traiga exactamente lo esperado, ni más ni menos.

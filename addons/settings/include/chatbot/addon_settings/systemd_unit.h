@@ -7,7 +7,7 @@
 
 /// La unidad de systemd de usuario de un addon, como la escribe la pantalla
 /// de configuración de la app (funciones puras). ExecStart arranca
-/// "chatbot <addon>", que pasa el control al addon con exec: systemd y las
+/// "moss <addon>", que pasa el control al addon con exec: systemd y las
 /// señales siguen viendo el mismo proceso.
 namespace chatbot::addon_settings {
 
@@ -15,13 +15,13 @@ namespace chatbot::addon_settings {
 /// ajena (por ejemplo, hecha a mano con el README): nunca se sobrescribe sin
 /// preguntar.
 inline constexpr std::string_view kUnitMarker =
-    "# Generado por chatbot (Configuración → Addons). No lo edites: se reescribe desde ahí.";
+    "# Generado por Moss (Configuración → Addons). No lo edites: se reescribe desde ahí.";
 
 /// Lo que cambia de una instalación a otra.
 struct UnitParams {
-    std::string chatbot_path; ///< Ruta absoluta de chatbot (executable_path()).
-    std::string addon;        ///< "telegram": el argumento de chatbot.
-    std::string description;  ///< "Bot de Telegram del chatbot de CECyTE".
+    std::string chatbot_path; ///< Ruta absoluta de moss (executable_path()).
+    std::string addon;        ///< "telegram": el argumento de moss.
+    std::string description;  ///< "Bot de Telegram de Moss".
     /// Las de la app, solo si son rutas absolutas: el systemd de usuario no
     /// ve las de la shell y, sin ellas, el servicio leería otro config.json.
     std::optional<std::string> xdg_config_home;
@@ -38,7 +38,7 @@ struct UnitParams {
 [[nodiscard]] std::string quote_environment(std::string_view name, std::string_view value);
 
 /// El texto completo de la unidad (empieza con kUnitMarker):
-/// Type=exec, ExecStart=<chatbot> <addon>, ExecReload=kill -HUP $MAINPID,
+/// Type=exec, ExecStart=<moss> <addon>, ExecReload=kill -HUP $MAINPID,
 /// Restart=on-failure, RestartSec=10, RestartPreventExitStatus=65 69 73 78, un
 /// Environment= por cada XDG_* absoluto y WantedBy=default.target.
 [[nodiscard]] std::string unit_text(const UnitParams& params);
@@ -48,7 +48,7 @@ enum class UnitState {
     Missing, ///< No hay archivo.
     Foreign, ///< No empieza con kUnitMarker: preguntar antes de reemplazarla.
     Current, ///< Es igual a unit_text(params).
-    Stale,   ///< Es de la app pero cambió (se movió chatbot o cambió un XDG_*).
+    Stale,   ///< Es de la app pero cambió (se movió moss o cambió un XDG_*).
 };
 
 /// existing: el contenido del archivo, o nullopt si no existe.

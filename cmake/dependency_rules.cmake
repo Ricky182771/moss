@@ -44,10 +44,10 @@ function(chatbot_collect_dependencies target out_var)
 endfunction()
 
 # Falla la configuración si target depende de cli/ (chatbot_cli_lib,
-# chatbot_cli_ui, el ejecutable chatbot) o de FTXUI. Los demás argumentos son
-# los targets de cli/ que sí puede usar (chatbot-rpc: chatbot_cli_lib).
+# chatbot_cli_ui, el ejecutable moss) o de FTXUI. Los demás argumentos son
+# los targets de cli/ que sí puede usar (moss-rpc: chatbot_cli_lib).
 function(chatbot_forbid_ui_dependencies target)
-    set(forbidden chatbot_cli_lib chatbot_cli_ui chatbot)
+    set(forbidden chatbot_cli_lib chatbot_cli_ui moss)
     list(REMOVE_ITEM forbidden ${ARGN})
     foreach(ftxui_target ftxui::screen ftxui::dom ftxui::component)
         if(TARGET ${ftxui_target})
@@ -64,7 +64,7 @@ function(chatbot_forbid_ui_dependencies target)
         if(dependency IN_LIST forbidden OR dependency MATCHES "^ftxui::")
             message(FATAL_ERROR
                 "${target} depende de ${dependency}: core, chatbot::markdown y los addons "
-                "nunca dependen de cli/ ni de FTXUI, y chatbot-rpc solo de chatbot_cli_lib "
+                "nunca dependen de cli/ ni de FTXUI, y moss-rpc solo de chatbot_cli_lib "
                 "(AGENTS.md, secciones 5 y \"Addons\").")
         endif()
     endforeach()

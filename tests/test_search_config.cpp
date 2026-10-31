@@ -149,8 +149,8 @@ TEST_CASE("load_search_api_key: carga del archivo si el entorno no está", "[sea
 TEST_CASE("search:tavily se conserva junto a las demás keys y nunca va en config.json",
           "[search_config]") {
     const chatbot_test::ScopedTempDir temp;
-    const std::string creds_path = (temp.path() / "chatbot" / "credentials.json").string();
-    const std::string config_path = (temp.path() / "chatbot" / "config.json").string();
+    const std::string creds_path = (temp.path() / "moss" / "credentials.json").string();
+    const std::string config_path = (temp.path() / "moss" / "config.json").string();
 
     // Primero la key de búsqueda, luego la del modelo, como lo hace main.cpp:
     // leer, cambiar una llave y volver a escribir.

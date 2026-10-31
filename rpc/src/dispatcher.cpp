@@ -25,7 +25,7 @@ namespace chatbot::rpc {
 
 namespace {
 
-constexpr std::string_view kServerName = "chatbot-rpc";
+constexpr std::string_view kServerName = "moss-rpc";
 constexpr std::string_view kEmptyMessage = "El mensaje está vacío.";
 constexpr std::string_view kAlreadyInitialized = "initialize ya se llamó.";
 constexpr std::string_view kAlreadyShutDown = "El servidor ya se apagó: solo queda exit.";
@@ -1029,7 +1029,7 @@ void Dispatcher::service(const std::string& method, const Json* params, const Js
     if (!std::filesystem::path{chatbot}.is_absolute() ||
         !std::filesystem::is_regular_file(chatbot, error)) {
         fail(id, has_id, RpcError::StorageError,
-             message_data("El servicio arranca chatbot, y no está junto a chatbot-rpc: " +
+             message_data("El servicio arranca moss, y no está junto a moss-rpc: " +
                           chatbot + "."));
         return;
     }

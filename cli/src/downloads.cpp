@@ -1,5 +1,6 @@
 #include "downloads.h"
 
+#include "chatbot/config.h"
 #include "chatbot/utf8.h"
 
 #include <algorithm>
@@ -265,7 +266,7 @@ std::string with_final_newline(std::string_view text) {
 }
 
 WriteResult ensure_download_dir(const std::string& base) {
-    const std::string dir = join_path(base, "chatbot");
+    const std::string dir = join_path(base, std::string{kAppName});
     // 0755 menos la umask del usuario en POSIX; la ACL de base en Windows.
     const CreateResult created = create_directory(dir);
     switch (created.status) {

@@ -122,7 +122,7 @@ TEST_CASE("copy_block y save_block avisan si el bloque está incompleto", "[bloc
     const ActionResult saved = chatbot::cli::save_block(code, "", dir.string(), "");
     CHECK_FALSE(saved.error);
     CHECK(saved.message ==
-          "Guardado en " + native_separators(dir.string() + "/chatbot/bloque-3.cpp") +
+          "Guardado en " + native_separators(dir.string() + "/moss/bloque-3.cpp") +
               ". Ojo: el bloque está incompleto (la respuesta se canceló).");
 }
 
@@ -142,26 +142,26 @@ TEST_CASE("save_block: nombre por defecto, propio, inválido y carpeta imposible
     ActionResult result = chatbot::cli::save_block(code, "", dir.string(), "");
     CHECK_FALSE(result.error);
     CHECK(result.message ==
-          "Guardado en " + native_separators(dir.string() + "/chatbot/bloque-2.py"));
-    CHECK(read_text(dir.string() + "/chatbot/bloque-2.py") == "print(1)\n");
+          "Guardado en " + native_separators(dir.string() + "/moss/bloque-2.py"));
+    CHECK(read_text(dir.string() + "/moss/bloque-2.py") == "print(1)\n");
 
     // Nunca sobrescribe; home se abrevia con ~ (en Windows main pasa home
     // vacía y la ruta va completa).
     result = chatbot::cli::save_block(code, "", dir.string(), dir.string());
     if (chatbot::current_os() == chatbot::Os::Posix) {
-        CHECK(result.message == "Guardado en ~/chatbot/bloque-2-2.py");
+        CHECK(result.message == "Guardado en ~/moss/bloque-2-2.py");
     } else {
         CHECK(result.message ==
-              "Guardado en " + native_separators(dir.string() + "/chatbot/bloque-2-2.py"));
+              "Guardado en " + native_separators(dir.string() + "/moss/bloque-2-2.py"));
     }
 
     result = chatbot::cli::save_block(code, "hola", dir.string(), "");
-    CHECK(result.message == "Guardado en " + native_separators(dir.string() + "/chatbot/hola.py"));
+    CHECK(result.message == "Guardado en " + native_separators(dir.string() + "/moss/hola.py"));
     // path es la ruta completa, aunque el aviso la abrevie con ~.
-    CHECK(result.path == native_separators(dir.string() + "/chatbot/hola.py"));
+    CHECK(result.path == native_separators(dir.string() + "/moss/hola.py"));
     result = chatbot::cli::save_block(code, "corto", dir.string(), dir.string(),
                                       chatbot::cli::Wording::Short);
-    CHECK(result.path == native_separators(dir.string() + "/chatbot/corto.py"));
+    CHECK(result.path == native_separators(dir.string() + "/moss/corto.py"));
 
     result = chatbot::cli::save_block(code, "../x", dir.string(), "");
     CHECK(result.error);
@@ -184,7 +184,7 @@ TEST_CASE("export_conversation: sin pares es un error; con pares escribe el Mark
     CHECK(result.error);
     CHECK(result.message == "Todavía no hay respuestas que exportar.");
     CHECK_FALSE(result.path.has_value());
-    CHECK_FALSE(fs::exists(dir.path() / "chatbot"));
+    CHECK_FALSE(fs::exists(dir.path() / "moss"));
 
     REQUIRE(conversation.submit("hola").has_value());
     conversation.append_delta("¡Hola!");
@@ -193,18 +193,18 @@ TEST_CASE("export_conversation: sin pares es un error; con pares escribe el Mark
     result = chatbot::cli::export_conversation(conversation, now, dir.string(), dir.string());
     CHECK_FALSE(result.error);
     CHECK(result.path ==
-          native_separators(dir.string() + "/chatbot/conversacion-20260101-000000-abcdef.md"));
+          native_separators(dir.string() + "/moss/conversacion-20260101-000000-abcdef.md"));
     if (chatbot::current_os() == chatbot::Os::Posix) {
-        CHECK(result.message == "Conversación exportada a ~/chatbot/conversacion-20260101-000000-"
+        CHECK(result.message == "Conversación exportada a ~/moss/conversacion-20260101-000000-"
                                 "abcdef.md");
     } else {
         CHECK(result.message ==
               "Conversación exportada a " +
                   native_separators(dir.string() +
-                                    "/chatbot/conversacion-20260101-000000-abcdef.md"));
+                                    "/moss/conversacion-20260101-000000-abcdef.md"));
     }
     const std::string text =
-        read_text(dir.string() + "/chatbot/conversacion-20260101-000000-abcdef.md");
+        read_text(dir.string() + "/moss/conversacion-20260101-000000-abcdef.md");
     CHECK(text.find("¡Hola!") != std::string::npos);
     CHECK(text.find("sistema") == std::string::npos);
 }
@@ -226,7 +226,7 @@ TEST_CASE("run_block_action: copia o guarda el bloque con ese número", "[block_
                                             fake.access({program("xclip")}), dir.string(), "",
         chatbot::cli::Symbols::Unicode);
     CHECK_FALSE(result.error);
-    CHECK(read_text(dir.string() + "/chatbot/bloque-1.cpp") == "int a;\n");
+    CHECK(read_text(dir.string() + "/moss/bloque-1.cpp") == "int a;\n");
     CHECK(fake.programs.size() == 1); // Guardar no copia.
 
     result = chatbot::cli::run_block_action(blocks, 1, BlockAction::Save,
@@ -315,11 +315,11 @@ TEST_CASE("avisos cortos de los botones, caso por caso", "[block_actions]") {
     ActionResult saved = chatbot::cli::save_block(code, "", dir.string(), dir.string(),
                                                   Wording::Short);
     CHECK_FALSE(saved.error);
-    CHECK(saved.message == "#1 guardado en " + shown("chatbot/bloque-1.cpp"));
+    CHECK(saved.message == "#1 guardado en " + shown("moss/bloque-1.cpp"));
     unfinished.reason = IncompleteReason::Cancelled;
     saved = chatbot::cli::save_block(unfinished, "", dir.string(), dir.string(), Wording::Short);
     CHECK(saved.message ==
-          "⚠ #1 incompleto (se canceló) · guardado en " + shown("chatbot/bloque-1-2.cpp"));
+          "⚠ #1 incompleto (se canceló) · guardado en " + shown("moss/bloque-1-2.cpp"));
 
     // Los comandos conservan los textos largos.
     CHECK(chatbot::cli::copy_block(code, fake.access({osc52(true)})).message ==

@@ -24,7 +24,7 @@
 namespace chatbot::cli {
 
 Result<Config> load_startup_config() {
-    // Modo portable (chatbot.portable junto al ejecutable): la configuración,
+    // Modo portable (moss.portable junto al ejecutable): la configuración,
     // la key y las conversaciones van a datos/. Si no se puede escribir ahí,
     // es un error; nunca se usa en silencio la carpeta del usuario.
     const std::optional<std::string>& portable_dir = process_portable_data_dir();
@@ -73,7 +73,7 @@ AddonsEnvironment addons_environment(ServiceWorker::Post post, std::string chatb
         return run_process(argv, options);
     };
     environment.portable = process_portable_data_dir().has_value();
-    // Junto a chatbot, que es quien hace exec del addon (la TUI: executable_dir).
+    // Junto a moss, que es quien hace exec del addon (la TUI: executable_dir).
     environment.locate = [dir = std::filesystem::path{chatbot_path}.parent_path().string(),
                           portable = environment.portable](const settings::AddonInfo& addon) {
         if (current_os() == Os::Windows) {
@@ -101,7 +101,7 @@ AddonsEnvironment addons_environment(ServiceWorker::Post post, std::string chatb
 }
 
 std::string sibling_chatbot_path(const std::string& executable) {
-    return (std::filesystem::path{executable}.parent_path() / "chatbot").string();
+    return (std::filesystem::path{executable}.parent_path() / kAppName).string();
 }
 
 } // namespace chatbot::cli

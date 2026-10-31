@@ -71,7 +71,7 @@ jobs:
       - name: Arranque sin API key
         run: |
           status=0
-          env -u CHAT_API_KEY ./build/${{ matrix.preset }}/cli/chatbot \
+          env -u CHAT_API_KEY ./build/${{ matrix.preset }}/cli/moss \
             < /dev/null > salida.txt 2> errores.txt || status=$?
           cat errores.txt
           if [ "$status" -ne 1 ]; then
@@ -81,9 +81,9 @@ jobs:
           grep -q "error de configuración" errores.txt
           grep -q "CHAT_API_KEY" errores.txt
 
-      # chatbot-rpc sin configuración (HOME vacío): initialize responde con
+      # moss-rpc sin configuración (HOME vacío): initialize responde con
       # "ready":false y shutdown + exit salen con 0. Nunca toca la red.
-      - name: Arranque de chatbot-rpc sin configuración
+      - name: Arranque de moss-rpc sin configuración
         run: |
           mkdir -p "$RUNNER_TEMP/rpc-home"
           status=0
@@ -92,7 +92,7 @@ jobs:
             '{"jsonrpc":"2.0","id":2,"method":"shutdown","params":{}}' \
             '{"jsonrpc":"2.0","method":"exit"}' \
             | env -u CHAT_API_KEY -u XDG_CONFIG_HOME -u XDG_DATA_HOME HOME="$RUNNER_TEMP/rpc-home" \
-              ./build/${{ matrix.preset }}/cli/chatbot-rpc > salida-rpc.txt 2> errores-rpc.txt \
+              ./build/${{ matrix.preset }}/cli/moss-rpc > salida-rpc.txt 2> errores-rpc.txt \
             || status=$?
           cat salida-rpc.txt errores-rpc.txt
           if [ "$status" -ne 0 ]; then
@@ -101,32 +101,32 @@ jobs:
           fi
           grep -q '"ready":false' salida-rpc.txt
 
-      # El bot, por "chatbot telegram" (lo busca junto a chatbot), sin red:
+      # El bot, por "moss telegram" (lo busca junto a moss), sin red:
       # --config-version; desactivado (sin sección) sale con 0; activado sin
       # token, con 78. HOME propio y sin las CHAT_* del bot.
       - name: Arranque del bot sin configuración ni token
         run: |
-          chatbot="$PWD/build/${{ matrix.preset }}/cli/chatbot"
-          test "$("$chatbot" telegram --config-version)" = 1
+          moss="$PWD/build/${{ matrix.preset }}/cli/moss"
+          test "$("$moss" telegram --config-version)" = 1
           export HOME="$PWD/casa"
           mkdir -p "$HOME"
           unset XDG_CONFIG_HOME XDG_DATA_HOME CHAT_TELEGRAM_TOKEN CHAT_API_KEY CHAT_SEARCH_API_KEY
           status=0
-          "$chatbot" telegram < /dev/null 2> errores.txt || status=$?
+          "$moss" telegram < /dev/null 2> errores.txt || status=$?
           cat errores.txt
           test "$status" -eq 0
           grep -q "desactivado" errores.txt
-          mkdir -p "$HOME/.config/chatbot"
+          mkdir -p "$HOME/.config/moss"
           echo '{"addons": {"telegram": {"version": 1, "enabled": true}}}' \
-            > "$HOME/.config/chatbot/config.json"
+            > "$HOME/.config/moss/config.json"
           status=0
-          "$chatbot" telegram < /dev/null 2> errores.txt || status=$?
+          "$moss" telegram < /dev/null 2> errores.txt || status=$?
           cat errores.txt
           test "$status" -eq 78
           grep -q "Falta el token de Telegram" errores.txt
 
   # Sin addons: con CHATBOT_BUILD_TELEGRAM=OFF la app compila y pasa sus
-  # pruebas sin addons/telegram ni addons/common, y "chatbot telegram" dice
+  # pruebas sin addons/telegram ni addons/common, y "moss telegram" dice
   # que no está instalado (69).
   no-addons:
     name: gcc / dev sin addons
@@ -153,13 +153,13 @@ jobs:
       - name: Pruebas
         run: ctest --preset dev --output-on-failure
 
-      - name: chatbot telegram sin el addon
+      - name: moss telegram sin el addon
         run: |
           status=0
-          PATH=/usr/bin:/bin ./build/dev/cli/chatbot telegram 2> errores.txt || status=$?
+          PATH=/usr/bin:/bin ./build/dev/cli/moss telegram 2> errores.txt || status=$?
           cat errores.txt
           test "$status" -eq 69
-          grep -q "No encontré chatbot-telegram" errores.txt
+          grep -q "No encontré moss-telegram" errores.txt
 
   # Windows con MSYS2 UCRT64 y GCC, con los mismos flags y -Werror. Solo dev y
   # release: asan y tsan son de Linux. Sin CHATBOT_STRICT_PERF: los tiempos de
@@ -210,17 +210,17 @@ jobs:
       - name: Pruebas
         run: ctest --preset ${{ matrix.preset }} --output-on-failure
 
-      # chatbot-rpc.exe con pipes de Windows de verdad (MSYS2 se los conecta
+      # moss-rpc.exe con pipes de Windows de verdad (MSYS2 se los conecta
       # al .exe nativo): ciclo de vida, sin \r, \r\n en la entrada, UTF-8, EOF
       # y stdout solo del protocolo (tools/check-rpc-pipes.sh). Una copia con
-      # chatbot.portable, para no tocar el AppData del runner.
-      - name: chatbot-rpc con pipes
+      # moss.portable, para no tocar el AppData del runner.
+      - name: moss-rpc con pipes
         run: |
           rm -rf rpc-prueba
           mkdir rpc-prueba
-          cp build/${{ matrix.preset }}/cli/chatbot-rpc.exe rpc-prueba/
-          touch rpc-prueba/chatbot.portable
-          tools/check-rpc-pipes.sh rpc-prueba/chatbot-rpc.exe windows
+          cp build/${{ matrix.preset }}/cli/moss-rpc.exe rpc-prueba/
+          touch rpc-prueba/moss.portable
+          tools/check-rpc-pipes.sh rpc-prueba/moss-rpc.exe windows
 
       # Sin CHAT_API_KEY debe salir con código 1 y el error de configuración.
       # stdin es NUL: GetConsoleMode falla y no se abre la interfaz. El
@@ -228,7 +228,7 @@ jobs:
       - name: Arranque sin API key
         run: |
           status=0
-          env -u CHAT_API_KEY timeout 60 ./build/${{ matrix.preset }}/cli/chatbot.exe \
+          env -u CHAT_API_KEY timeout 60 ./build/${{ matrix.preset }}/cli/moss.exe \
             < /dev/null > salida.txt 2> errores.txt || status=$?
           cat errores.txt
           if [ "$status" -ne 1 ]; then
@@ -238,19 +238,19 @@ jobs:
           grep -q "error de configuración" errores.txt
           grep -q "CHAT_API_KEY" errores.txt
 
-      # El ZIP de distribución (tools/package-windows.sh): chatbot.exe y
-      # chatbot-rpc.exe con las DLL de /ucrt64/bin que reporta ldd, LICENSE.txt,
-      # AVISOS-TERCEROS.txt, LEEME.txt y chatbot.portable.ejemplo. El script
+      # El ZIP de distribución (tools/package-windows.sh): moss.exe y
+      # moss-rpc.exe con las DLL de /ucrt64/bin que reporta ldd, LICENSE.txt,
+      # AVISOS-TERCEROS.txt, LEEME.txt y moss.portable.ejemplo. El script
       # falla si falta el texto de alguna licencia o si el ZIP no trae
       # exactamente esos archivos.
       - name: Empaquetar
         if: matrix.preset == 'release'
-        run: tools/package-windows.sh build/release build/chatbot-windows-x64.zip
+        run: tools/package-windows.sh build/release build/moss-windows-x64.zip
 
       # Desde la carpeta descomprimida y sin /ucrt64/bin en el PATH, como en
       # una PC sin MSYS2: sin key y sin terminal sale con 1 y el error de
-      # configuración; con chatbot.portable, igual, pero crea datos/ ahí.
-      # chatbot-rpc.exe: initialize, shutdown y exit → 0; con chatbot.portable,
+      # configuración; con moss.portable, igual, pero crea datos/ ahí.
+      # moss-rpc.exe: initialize, shutdown y exit → 0; con moss.portable,
       # tools/check-rpc-pipes.sh completo (portable:true y config en datos\).
       - name: Probar el ZIP
         if: matrix.preset == 'release'
@@ -259,12 +259,12 @@ jobs:
           rm -rf zip-prueba
           mkdir zip-prueba
           cd zip-prueba
-          cmake -E tar xf ../build/chatbot-windows-x64.zip
+          cmake -E tar xf ../build/moss-windows-x64.zip
           ls -l
           arrancar() {
             local status=0
             env -u CHAT_API_KEY -u CHAT_DATA_DIR PATH=/usr/bin:/c/Windows/System32:/c/Windows \
-              timeout 60 ./chatbot.exe < /dev/null > ../salida-zip.txt 2> ../errores-zip.txt ||
+              timeout 60 ./moss.exe < /dev/null > ../salida-zip.txt 2> ../errores-zip.txt ||
               status=$?
             cat ../errores-zip.txt
             if [ "$status" -ne 1 ]; then
@@ -281,18 +281,18 @@ jobs:
             '{"jsonrpc":"2.0","id":2,"method":"shutdown","params":{}}' \
             '{"jsonrpc":"2.0","method":"exit"}' |
             env -u CHAT_API_KEY -u CHAT_DATA_DIR PATH=/usr/bin:/c/Windows/System32:/c/Windows \
-              timeout 60 ./chatbot-rpc.exe 2> ../errores-rpc.txt | cat > ../salida-rpc.txt ||
+              timeout 60 ./moss-rpc.exe 2> ../errores-rpc.txt | cat > ../salida-rpc.txt ||
             status=$?
           cat ../errores-rpc.txt
           cut -c1-200 ../salida-rpc.txt
           if [ "$status" -ne 0 ]; then
-            echo "chatbot-rpc.exe: se esperaba el código de salida 0 y fue $status"
+            echo "moss-rpc.exe: se esperaba el código de salida 0 y fue $status"
             exit 1
           fi
           grep -q '"portable":false' ../salida-rpc.txt
           grep -q '"jsonrpc":"2.0","id":2,"result":{}' ../salida-rpc.txt
           test ! -e datos
-          cp chatbot.portable.ejemplo chatbot.portable
+          cp moss.portable.ejemplo moss.portable
           arrancar
           test -d datos
           if grep -q "Modo portable" ../errores-zip.txt; then
@@ -300,12 +300,12 @@ jobs:
             exit 1
           fi
           PATH=/usr/bin:/c/Windows/System32:/c/Windows \
-            ../tools/check-rpc-pipes.sh ./chatbot-rpc.exe windows
+            ../tools/check-rpc-pipes.sh ./moss-rpc.exe windows
 
       - name: Subir el artefacto
         if: matrix.preset == 'release'
         uses: actions/upload-artifact@v7
         with:
-          name: chatbot-windows-x64
-          path: build/chatbot-windows-x64.zip
+          name: moss-windows-x64
+          path: build/moss-windows-x64.zip
           if-no-files-found: error

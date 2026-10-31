@@ -10,7 +10,7 @@
 
 namespace chatbot::telegram {
 
-/// Códigos de salida de chatbot-telegram (0: apagado normal o desactivado).
+/// Códigos de salida de moss-telegram (0: apagado normal o desactivado).
 /// Lo inesperado (excepciones y errores que no se clasifican): la unidad de
 /// systemd sí reinicia con él.
 inline constexpr int kExitFailure = 1;

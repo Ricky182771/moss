@@ -11,7 +11,7 @@
 #include <vector>
 
 /// Programas externos: el portapapeles (wl-copy, xclip…), systemctl,
-/// loginctl, journalctl y chatbot-telegram --config-version. Sin shell:
+/// loginctl, journalctl y moss-telegram --config-version. Sin shell:
 /// posix_spawnp con los argumentos tal cual. CMake compila
 /// child_process_posix.cpp o child_process_windows.cpp (ahí solo lo mínimo
 /// para compilar: no se lanzan programas). Nunca desde el hilo de la

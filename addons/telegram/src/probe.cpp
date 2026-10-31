@@ -1,12 +1,12 @@
-// chatbot-telegram-probe: sonda manual (como tools/smoke). Manda a un chat
+// moss-telegram-probe: sonda manual (como tools/smoke). Manda a un chat
 // unos mensajes enriquecidos de prueba para ver en el celular cómo los
 // muestra Telegram: el signo de pesos, las fórmulas, los escapes con '\' y
 // con entidades, y una vista previa con streaming. Nunca corre en las
 // pruebas ni en la CI: solo a mano, con el token de un bot de prueba.
 //
-//   CHAT_TELEGRAM_TOKEN=... ./chatbot-telegram-probe --chat <tu ID>
+//   CHAT_TELEGRAM_TOKEN=... ./moss-telegram-probe --chat <tu ID>
 //
-// Tu ID: escríbele al bot mientras corre chatbot-telegram sin autorizarte;
+// Tu ID: escríbele al bot mientras corre moss-telegram sin autorizarte;
 // te contesta con él.
 
 #include "chatbot/telegram/api.h"
@@ -130,7 +130,7 @@ int main(int argc, char** argv) {
     }
     const char* token = std::getenv("CHAT_TELEGRAM_TOKEN");
     if (chat_id == 0 || token == nullptr || !chatbot::addon_settings::plausible_token(token)) {
-        std::cerr << "Uso: CHAT_TELEGRAM_TOKEN=<token> chatbot-telegram-probe --chat <tu ID>\n";
+        std::cerr << "Uso: CHAT_TELEGRAM_TOKEN=<token> moss-telegram-probe --chat <tu ID>\n";
         return 1;
     }
     BotApi api{token, [] { return std::make_unique<CurlTransport>(); }};

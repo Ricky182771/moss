@@ -1,4 +1,4 @@
-// La línea de comandos de chatbot: argumentos y búsqueda del addon (las
+// La línea de comandos de moss: argumentos y búsqueda del addon (las
 // funciones puras; el exec real lo prueba addon_launcher.cmake).
 
 #include "addon_launcher.h"
@@ -39,7 +39,7 @@ TEST_CASE("línea de comandos: interfaz, ayuda, addon y error de uso", "[addons]
     CHECK(parse_command_line({"--version"}).kind == CommandLine::Kind::Usage);
 }
 
-TEST_CASE("línea de comandos: el addon junto a chatbot, luego PATH; portable sin PATH",
+TEST_CASE("línea de comandos: el addon junto a moss, luego PATH; portable sin PATH",
           "[addons][lanzador]") {
     std::set<std::string> executables;
     std::vector<std::string> searched;
@@ -49,15 +49,15 @@ TEST_CASE("línea de comandos: el addon junto a chatbot, luego PATH; portable si
         return "/usr/bin/" + std::string{program};
     };
 
-    executables.insert("/opt/app/chatbot-telegram");
+    executables.insert("/opt/app/moss-telegram");
     CHECK(find_addon_executable(telegram(), "/opt/app", false, is_executable, search) ==
-          "/opt/app/chatbot-telegram");
+          "/opt/app/moss-telegram");
     CHECK(searched.empty());
 
     executables.clear();
     CHECK(find_addon_executable(telegram(), "/opt/app", false, is_executable, search) ==
-          "/usr/bin/chatbot-telegram");
-    CHECK(searched == std::vector<std::string>{"chatbot-telegram"});
+          "/usr/bin/moss-telegram");
+    CHECK(searched == std::vector<std::string>{"moss-telegram"});
 
     searched.clear();
     CHECK(find_addon_executable(telegram(), "/opt/app", true, is_executable, search) ==
@@ -67,24 +67,24 @@ TEST_CASE("línea de comandos: el addon junto a chatbot, luego PATH; portable si
 
 TEST_CASE("línea de comandos: mensajes y ayuda", "[addons][lanzador]") {
     CHECK(chatbot::cli::addon_not_found_message(telegram(), false) ==
-          "No encontré chatbot-telegram junto a chatbot ni en el PATH.");
+          "No encontré moss-telegram junto a moss ni en el PATH.");
     CHECK(chatbot::cli::addon_not_found_message(telegram(), true) ==
-          "No encontré chatbot-telegram junto a chatbot.");
+          "No encontré moss-telegram junto a moss.");
 
     const auto found = [](const chatbot::addon_settings::AddonInfo&) {
-        return std::optional<std::string>{"/opt/app/chatbot-telegram"};
+        return std::optional<std::string>{"/opt/app/moss-telegram"};
     };
     const auto missing = [](const chatbot::addon_settings::AddonInfo&) {
         return std::optional<std::string>{};
     };
     const std::string installed = chatbot::cli::usage_text(chatbot::Os::Posix, false, found);
-    CHECK(installed.find("telegram  Telegram: instalado en /opt/app/chatbot-telegram\n") !=
+    CHECK(installed.find("telegram  Telegram: instalado en /opt/app/moss-telegram\n") !=
           std::string::npos);
     CHECK(chatbot::cli::usage_text(chatbot::Os::Posix, false, missing)
-              .find("no instalado (copia chatbot-telegram junto a chatbot o en el PATH)") !=
+              .find("no instalado (copia moss-telegram junto a moss o en el PATH)") !=
           std::string::npos);
     CHECK(chatbot::cli::usage_text(chatbot::Os::Posix, true, missing)
-              .find("no instalado (copia chatbot-telegram junto a chatbot)") != std::string::npos);
+              .find("no instalado (copia moss-telegram junto a moss)") != std::string::npos);
 
     bool searched = false;
     const std::string windows = chatbot::cli::usage_text(

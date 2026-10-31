@@ -10,12 +10,12 @@
 #include <string_view>
 #include <vector>
 
-/// La línea de comandos de chatbot: sin argumentos, la interfaz; --help; y
-/// chatbot <addon> [argumentos], que busca el programa del addon (como git
+/// La línea de comandos de moss: sin argumentos, la interfaz; --help; y
+/// moss <addon> [argumentos], que busca el programa del addon (como git
 /// con sus subcomandos) y se reemplaza por él con exec. Sin FTXUI.
 namespace chatbot::cli {
 
-/// Códigos de salida de chatbot (los de sysexits.h donde aplica).
+/// Códigos de salida de moss (los de sysexits.h donde aplica).
 inline constexpr int kExitUsage = 2;        ///< Argumentos que no se entienden.
 inline constexpr int kExitUnavailable = 69; ///< EX_UNAVAILABLE: el addon no está instalado.
 
@@ -23,7 +23,7 @@ struct CommandLine {
     enum class Kind {
         Interface, ///< Sin argumentos: la interfaz de siempre.
         Help,      ///< --help o -h.
-        Addon,     ///< chatbot <addon> [argumentos].
+        Addon,     ///< moss <addon> [argumentos].
         Usage,     ///< Otra cosa: problem dice qué.
     };
     Kind kind = Kind::Interface;
@@ -39,9 +39,9 @@ struct CommandLine {
 using ExecutableCheck = std::function<bool(const std::string& path)>;
 using PathSearch = std::function<std::optional<std::string>(std::string_view program)>;
 
-/// Dónde está el programa del addon: primero junto a chatbot
+/// Dónde está el programa del addon: primero junto a moss
 /// (executable_dir) y, fuera del modo portable, en PATH. En modo portable
-/// solo junto a chatbot: así nunca se arranca un bot de otra instalación
+/// solo junto a moss: así nunca se arranca un bot de otra instalación
 /// con estos datos.
 [[nodiscard]] std::optional<std::string> find_addon_executable(
     const addon_settings::AddonInfo& addon, const std::string& executable_dir, bool portable,
@@ -51,7 +51,7 @@ using PathSearch = std::function<std::optional<std::string>(std::string_view pro
 /// portable de este proceso y PATH). En Windows, siempre nullopt.
 [[nodiscard]] std::optional<std::string> locate_addon(const addon_settings::AddonInfo& addon);
 
-/// "No encontré chatbot-telegram junto a chatbot ni en el PATH." (en modo
+/// "No encontré moss-telegram junto a moss ni en el PATH." (en modo
 /// portable, sin "ni en el PATH").
 [[nodiscard]] std::string addon_not_found_message(const addon_settings::AddonInfo& addon,
                                                   bool portable);

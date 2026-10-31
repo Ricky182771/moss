@@ -1,9 +1,9 @@
-// md_preview: dibuja un archivo markdown como lo muestra el chatbot, para
+// md_preview: dibuja un archivo markdown como lo muestra Moss, para
 // revisar el render sin la API.
 // Uso: md_preview [--width N] [--theme ID] [--background theme|terminal]
 //                  [--symbols unicode|simple] archivo.md
 // Con colores si la salida es una terminal; si no, texto plano. Sin --theme,
-// el tema por defecto del chatbot.
+// el tema por defecto de Moss.
 
 #include "markdown_view.h"
 #include "theme.h"

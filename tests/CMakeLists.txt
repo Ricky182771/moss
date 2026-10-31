@@ -126,25 +126,25 @@ if(NOT WIN32)
     add_dependencies(chatbot_ui_tests chatbot_paste_probe)
 endif()
 
-# Modo portable con el ejecutable real: copia chatbot junto a un
-# chatbot.portable y lo arranca sin key ni terminal (portable_startup.cmake).
+# Modo portable con el ejecutable real: copia moss junto a un
+# moss.portable y lo arranca sin key ni terminal (portable_startup.cmake).
 add_test(NAME chatbot_portable_writable
-    COMMAND ${CMAKE_COMMAND} -DCHATBOT=$<TARGET_FILE:chatbot>
+    COMMAND ${CMAKE_COMMAND} -DCHATBOT=$<TARGET_FILE:moss>
         -DWORK=${CMAKE_CURRENT_BINARY_DIR}/portable_writable -DMODE=writable
         -P ${CMAKE_CURRENT_SOURCE_DIR}/portable_startup.cmake)
 # Carpeta del programa de solo lectura: solo POSIX (en Windows manda la ACL).
 if(NOT WIN32)
     add_test(NAME chatbot_portable_readonly
-        COMMAND ${CMAKE_COMMAND} -DCHATBOT=$<TARGET_FILE:chatbot>
+        COMMAND ${CMAKE_COMMAND} -DCHATBOT=$<TARGET_FILE:moss>
             -DWORK=${CMAKE_CURRENT_BINARY_DIR}/portable_readonly -DMODE=readonly
             -P ${CMAKE_CURRENT_SOURCE_DIR}/portable_startup.cmake)
     set_tests_properties(chatbot_portable_readonly PROPERTIES SKIP_REGULAR_EXPRESSION "SKIP:")
 endif()
 
-# chatbot <addon> con el ejecutable real y un addon falso junto a él, en el
+# moss <addon> con el ejecutable real y un addon falso junto a él, en el
 # PATH y en modo portable (addon_launcher.cmake).
 add_test(NAME chatbot_addon_launcher
-    COMMAND ${CMAKE_COMMAND} -DCHATBOT=$<TARGET_FILE:chatbot>
+    COMMAND ${CMAKE_COMMAND} -DCHATBOT=$<TARGET_FILE:moss>
         -DWORK=${CMAKE_CURRENT_BINARY_DIR}/addon_launcher
         -P ${CMAKE_CURRENT_SOURCE_DIR}/addon_launcher.cmake)
 

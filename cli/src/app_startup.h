@@ -12,10 +12,10 @@
 
 namespace chatbot::cli {
 
-// Arranque común de la TUI (main.cpp) y de chatbot-rpc, para que las dos
+// Arranque común de la TUI (main.cpp) y de moss-rpc, para que las dos
 // interfaces carguen lo mismo de los mismos lugares.
 
-/// Modo portable (prepare_portable_data_dir si hay chatbot.portable) y
+/// Modo portable (prepare_portable_data_dir si hay moss.portable) y
 /// load_config con allow_missing_key_and_model. El error es el que la TUI
 /// imprime al salir (y el RPC devuelve en initialize). Que solo falte la key
 /// o el modelo no es error: lo dice validate_config.
@@ -29,15 +29,15 @@ namespace chatbot::cli {
 /// reloj y la carpeta de descargas.
 [[nodiscard]] SessionEnvironment app_session_environment();
 
-/// AddonsEnvironment con el sistema real (F2 → Addons y chatbot-rpc).
-/// chatbot_path: la ruta de chatbot, el ExecStart de la unidad; el addon se
+/// AddonsEnvironment con el sistema real (F2 → Addons y moss-rpc).
+/// chatbot_path: la ruta de moss, el ExecStart de la unidad; el addon se
 /// busca junto a él y, fuera del modo portable, en PATH. La TUI pasa
-/// executable_path(); chatbot-rpc, sibling_chatbot_path(): así las dos
+/// executable_path(); moss-rpc, sibling_chatbot_path(): así las dos
 /// escriben la misma unidad.
 [[nodiscard]] AddonsEnvironment addons_environment(ServiceWorker::Post post,
                                                    std::string chatbot_path);
 
-/// La ruta de chatbot en la carpeta de executable (la de chatbot-rpc).
+/// La ruta de moss en la carpeta de executable (la de moss-rpc).
 [[nodiscard]] std::string sibling_chatbot_path(const std::string& executable);
 
 } // namespace chatbot::cli

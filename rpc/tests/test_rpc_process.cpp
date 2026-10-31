@@ -1,4 +1,4 @@
-// chatbot-rpc de verdad, con pipes (solo POSIX): run_process le escribe por
+// moss-rpc de verdad, con pipes (solo POSIX): run_process le escribe por
 // stdin y lee su stdout. Con HOME, XDG_* y CHAT_* propios y sin
 // configuración, así que nunca toca la red ni la configuración del usuario.
 
@@ -62,7 +62,7 @@ constexpr const char* kInitialize =
 
 } // namespace
 
-TEST_CASE("chatbot-rpc sin configuración: initialize, chat.send, shutdown y exit",
+TEST_CASE("moss-rpc sin configuración: initialize, chat.send, shutdown y exit",
           "[rpc][proceso]") {
     const chatbot_test::ScopedTempDir dir;
     const std::string log = (dir.path() / "rpc.log").string();
@@ -103,7 +103,7 @@ TEST_CASE("chatbot-rpc sin configuración: initialize, chat.send, shutdown y exi
     CHECK(written.find("← {\"jsonrpc\":\"2.0\",\"id\":3,\"result\":{}}") != std::string::npos);
 }
 
-TEST_CASE("chatbot-rpc: EOF sale con 0 en menos de 3 s", "[rpc][proceso]") {
+TEST_CASE("moss-rpc: EOF sale con 0 en menos de 3 s", "[rpc][proceso]") {
     const chatbot_test::ScopedTempDir dir;
     chatbot::cli::ProcessOptions options;
     options.input = kInitialize;
@@ -120,7 +120,7 @@ TEST_CASE("chatbot-rpc: EOF sale con 0 en menos de 3 s", "[rpc][proceso]") {
     CHECK(messages[0]["result"]["conversation"] == "c1");
 }
 
-TEST_CASE("chatbot-rpc: exit sin shutdown sale con 1", "[rpc][proceso]") {
+TEST_CASE("moss-rpc: exit sin shutdown sale con 1", "[rpc][proceso]") {
     const chatbot_test::ScopedTempDir dir;
     chatbot::cli::ProcessOptions options;
     const std::string input = std::string{kInitialize} + R"({"jsonrpc":"2.0","method":"exit"})" "\n";

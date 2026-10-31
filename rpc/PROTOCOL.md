@@ -1,8 +1,8 @@
-# Protocolo de `chatbot-rpc`
+# Protocolo de `moss-rpc`
 
 Versión del protocolo: **1**.
 
-`chatbot-rpc` es la app del chatbot sin interfaz: habla JSON-RPC 2.0 por stdin/stdout, una línea por mensaje, y usa la misma lógica que la TUI (`chatbot::cli::Session`). Sirve para la interfaz gráfica de Flutter y para que alguien adapte otra interfaz sin reescribir nada en otro lenguaje. Lo que cambie el protocolo se documenta aquí en el mismo PR.
+`moss-rpc` es Moss sin interfaz: habla JSON-RPC 2.0 por stdin/stdout, una línea por mensaje, y usa la misma lógica que la TUI (`chatbot::cli::Session`). Sirve para la interfaz gráfica de Flutter y para que alguien adapte otra interfaz sin reescribir nada en otro lenguaje. Lo que cambie el protocolo se documenta aquí en el mismo PR.
 
 ## Estado
 
@@ -34,7 +34,7 @@ Versión del protocolo: **1**.
           stdin │ (una línea    │ stdout (una línea
                 │  por mensaje) │  por mensaje)       stderr → registro
 ┌───────────────▼───────────────┴──────────────┐
-│ chatbot-rpc                                  │
+│ moss-rpc                                  │
 │  hilo lector ──► cola ──► hilo principal     │
 │                  ▲        (despachador +     │
 │  RequestRunner ──┤         Session +         │
@@ -44,7 +44,7 @@ Versión del protocolo: **1**.
 └──────────────────────────────────────────────┘
 ```
 
-- **Ubicación:** `rpc/`, con `chatbot_rpc_lib` (todo menos `main.cpp`) y el ejecutable `chatbot-rpc`, que enlazan `chatbot_cli_lib`. No pueden depender de FTXUI, del dibujo de `cli/` ni de los addons, ni transitivamente (`chatbot_forbid_ui_dependencies`, `chatbot_forbid_addon_dependencies` y la revisión de `#include`).
+- **Ubicación:** `rpc/`, con `chatbot_rpc_lib` (todo menos `main.cpp`) y el ejecutable `moss-rpc`, que enlazan `chatbot_cli_lib`. No pueden depender de FTXUI, del dibujo de `cli/` ni de los addons, ni transitivamente (`chatbot_forbid_ui_dependencies`, `chatbot_forbid_addon_dependencies` y la revisión de `#include`).
 - **Hilos:**
   - **Lector:** lee stdin línea por línea y mete cada línea en la cola del hilo principal. Al llegar EOF mete un evento `Eof`.
   - **Principal:** saca de la cola, despacha, llama a `Session` y escribe todas las respuestas y eventos. Como todo lo que se escribe sale de este hilo, nunca se mezclan dos mensajes en una línea y el orden está garantizado.
@@ -67,11 +67,11 @@ Versión del protocolo: **1**.
 
 ### Windows
 
-- `chatbot-rpc.exe` es un **programa de consola** (sin `-mwindows`): desde CMD se ve su stderr. Viene en el ZIP junto a `chatbot.exe`.
+- `moss-rpc.exe` es un **programa de consola** (sin `-mwindows`): desde CMD se ve su stderr. Viene en el ZIP junto a `moss.exe`.
 - El cliente lo crea **sin ventana**. Dart con `Process.start` en modo normal (con pipes) ya lo hace: usa `CREATE_NO_WINDOW` y solo la quita con `ProcessStartMode.inheritStdio`. Otros clientes deben pasar `CREATE_NO_WINDOW` a `CreateProcessW`.
 - stdin y stdout en modo binario: cada mensaje termina en `\n`, sin `\r`, y es UTF-8 (sin páginas de códigos de por medio). Una entrada con `\r\n` también se acepta.
 - No se lanza desde `cmd /c` ni con `runInShell: true`: la shell de por medio cambia el manejo de comillas y de la consola, y al matarla queda vivo el servidor.
-- Si stdin es una consola (doble clic en el `.exe`, o abierto desde CMD sin pipes), escribe en stderr, una sola vez, que es para otras interfaces y que para platicar se abre `chatbot`, y sigue funcionando igual. En Linux, lo mismo cuando stdin es una terminal.
+- Si stdin es una consola (doble clic en el `.exe`, o abierto desde CMD sin pipes), escribe en stderr, una sola vez, que es para otras interfaces y que para platicar se abre `moss`, y sigue funcionando igual. En Linux, lo mismo cuando stdin es una terminal.
 
 ---
 
@@ -102,17 +102,17 @@ cliente                                  servidor
 // →
 {"jsonrpc":"2.0","id":1,"method":"initialize","params":{
   "protocol_version":1,
-  "client":{"name":"chatbot-gui","version":"0.1.0"}}}
+  "client":{"name":"moss-gui","version":"0.1.0"}}}
 // ←
 {"jsonrpc":"2.0","id":1,"result":{
   "protocol_version":1,
-  "server":{"name":"chatbot-rpc","version":"0.x"},
+  "server":{"name":"moss-rpc","version":"0.x"},
   "platform":"linux",                 // "linux" | "windows"
   "portable":false,
   "conversation":"c1",                // handle de la conversación abierta (siempre hay una)
-  "paths":{"config":"/home/r/.config/chatbot/config.json",
-           "conversations":"/home/r/.local/share/chatbot/conversations",
-           "downloads":"/home/r/Descargas/chatbot"},   // null si no se pudo resolver
+  "paths":{"config":"/home/r/.config/moss/config.json",
+           "conversations":"/home/r/.local/share/moss/conversations",
+           "downloads":"/home/r/Descargas/moss"},   // null si no se pudo resolver
   "ready":false,                      // hay proveedor, key (o servidor local) y modelo
   "problem":"Configura un proveedor para empezar.",    // null si ready
   "warnings":["Las instrucciones del sistema no son texto; se usan las predeterminadas."],
@@ -123,7 +123,7 @@ cliente                                  servidor
 - `ready: false` es el equivalente de la TUI abriendo F2 con `Configura un proveedor para empezar.`. La carga usa `allow_missing_key_and_model = true`, como la TUI.
 - `warnings` son los avisos de arranque que la TUI manda a la línea de estado, por ejemplo un system prompt que no es cadena. Los avisos de tema y símbolos son solo de la TUI y no aparecen aquí.
 - `capabilities` dice qué soporta este servidor y no cambia durante la sesión. `search: true`: `chat.send` acepta `search` (que haya key o no lo dice `app.status.has_search_key`). En Linux, `addons` trae los de `known_addons` (`["telegram"]`) y `service` es `"systemd"` (sección 6.8), aunque el addon no esté instalado; en Windows quedan en `[]` y `null`.
-- `paths.downloads` es la carpeta de `/guardar` y `/exportar`, con su `chatbot/` (no se crea al arrancar).
+- `paths.downloads` es la carpeta de `/guardar` y `/exportar`, con su `moss/` (no se crea al arrancar).
 
 ---
 
@@ -308,7 +308,7 @@ Sale de `kCommands` y `command_availability`, así que la GUI puede tener su men
 {"kind":"search", "clear":true}                      // /buscar <consulta> enviado
 {"kind":"copy", "number":3, "language":"cpp", "text":"...código...",
  "message":"Copiado el bloque #3 (cpp, 24 líneas).", "clear":true}
-{"kind":"save", "path":"/home/r/Descargas/chatbot/x.cpp", "message":"Guardado en ~/Descargas/chatbot/x.cpp",
+{"kind":"save", "path":"/home/r/Descargas/moss/x.cpp", "message":"Guardado en ~/Descargas/moss/x.cpp",
  "error":false, "clear":true}                        // path null y error true si falló la escritura
 {"kind":"export", "path":"...", "message":"Conversación exportada a ...", "error":false, "clear":true}
 {"kind":"status", "message":"Uso: /copiar [número de bloque]", "clear":false}
@@ -447,10 +447,10 @@ En Windows todos responden `-32006 Unsupported` y `capabilities` se queda en `ad
 Los parámetros `name` y `addon` solo aceptan un nombre de `known_addons` (`"telegram"`); otro da `-32602` con ese campo.
 
 **`addons.list`** `→ {}` `← {addons: [{name, installed, path, problem, config_version_ok}]}`
-- `installed` y `path` salen de buscar el programa junto a `chatbot` (el de la carpeta de `chatbot-rpc`) y, fuera del modo portable, en el `PATH` (`find_addon_executable`). No corre nada: `config_version_ok` es `null` hasta que `addons.check_install` (o `service.status`) lo pregunte, y entonces `problem` es el de `addon_install_problem` (`No instalado: …`, `Incompatible: …` o `""`).
+- `installed` y `path` salen de buscar el programa junto a `moss` (el de la carpeta de `moss-rpc`) y, fuera del modo portable, en el `PATH` (`find_addon_executable`). No corre nada: `config_version_ok` es `null` hasta que `addons.check_install` (o `service.status`) lo pregunte, y entonces `problem` es el de `addon_install_problem` (`No instalado: …`, `Incompatible: …` o `""`).
 
 **`addons.check_install`** `→ {name}` `← igual que un elemento de la lista` · *larga*
-- Corre `chatbot-telegram --config-version` (`parse_config_version`): `config_version_ok` ya es `true` o `false`. Un addon incompatible deja la sección en solo lectura.
+- Corre `moss-telegram --config-version` (`parse_config_version`): `config_version_ok` ya es `true` o `false`. Un addon incompatible deja la sección en solo lectura.
 
 **`addons.telegram.get`** `→ {}` `←`
 
@@ -494,7 +494,7 @@ Lee los archivos en cada llamada. Los campos de secretos van vacíos (vacío = s
 
 Todas son *largas* y corren en el `ServiceWorker` de `TelegramAddon` (`systemctl --user`, `loginctl`, `journalctl` con argumentos fijos y su tope de 5 s cada uno), una a la vez y en orden, junto con `check_install` e `invited.remove`.
 
-La unidad que escribe `chatbot-rpc` es **byte por byte** la de la TUI: su `ExecStart` es **la ruta de `chatbot`** (la TUI, que hace `exec` del addon), no la de `chatbot-rpc`. `chatbot-rpc` usa el `chatbot` de su misma carpeta (`sibling_chatbot_path`), y busca el addon junto a él. En el árbol de compilación también están juntos (`build/<preset>/cli/`). Si ese archivo no existe (o no se supo la ruta de `chatbot-rpc`), todas las `service.*` responden `-32007` con `El servicio arranca chatbot, y no está junto a chatbot-rpc: <ruta>.` Sin `HOME` no hay dónde poner la unidad: `-32006` con `Sin HOME no hay dónde instalar el servicio.`
+La unidad que escribe `moss-rpc` es **byte por byte** la de la TUI: su `ExecStart` es **la ruta de `moss`** (la TUI, que hace `exec` del addon), no la de `moss-rpc`. `moss-rpc` usa el `moss` de su misma carpeta (`sibling_chatbot_path`), y busca el addon junto a él. En el árbol de compilación también están juntos (`build/<preset>/cli/`). Si ese archivo no existe (o no se supo la ruta de `moss-rpc`), todas las `service.*` responden `-32007` con `El servicio arranca moss, y no está junto a moss-rpc: <ruta>.` Sin `HOME` no hay dónde poner la unidad: `-32006` con `Sin HOME no hay dónde instalar el servicio.`
 
 **`service.status`** `→ {addon}` `←`
 
@@ -558,7 +558,7 @@ Todas las `service.*` salvo `service.status`, y `invited.remove`, emiten `servic
 ## 8. Ejemplo completo
 
 ```jsonc
-→ {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocol_version":1,"client":{"name":"chatbot-gui","version":"0.1.0"}}}
+→ {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocol_version":1,"client":{"name":"moss-gui","version":"0.1.0"}}}
 ← {"jsonrpc":"2.0","id":1,"result":{"protocol_version":1,"ready":true,"platform":"linux","conversation":"c1", ...}}
 → {"jsonrpc":"2.0","id":2,"method":"conversation.get","params":{"conversation":"c1"}}
 ← {"jsonrpc":"2.0","id":2,"result":{"conversation":"c1","rev":0,"id":null,"title":"","phase":"idle","entries":[]}}
@@ -626,7 +626,7 @@ La primera entrada del asistente llega con `entry_added` (la crea el primer delt
 - `protocol_version` es un entero y empieza en 1.
 - **Sin cambio de versión:** métodos, eventos o campos opcionales nuevos. El cliente ignora lo que no conoce. Si un cliente necesita saber si algo existe, lo anuncia `capabilities`.
 - **Con cambio de versión:** quitar o renombrar algo, cambiar un tipo o cambiar el significado de un campo.
-- La GUI y `chatbot-rpc` se distribuyen juntos (mismo ZIP o carpeta), así que en la práctica la versión solo atrapa una instalación mezclada.
+- La GUI y `moss-rpc` se distribuyen juntos (mismo ZIP o carpeta), así que en la práctica la versión solo atrapa una instalación mezclada.
 
 ---
 
@@ -635,9 +635,9 @@ La primera entrada del asistente llega con `entry_added` (la crea el primer delt
 En el repositorio, `chatbot_rpc_tests` (sin red):
 
 1. **Puras:** `LineReader` (tope de 1 MiB, línea partida, `\r\n`, EOF), `diff_entries`, la codificación de `Entry`, `ChatError` y los errores, `check_params` y la redacción de `CHAT_DEBUG_RPC`.
-2. **`Dispatcher`** con la misma `Session` falsa que las pruebas de la TUI (`tests/session_fakes.hpp`) y un reloj falso: secuencias exactas de mensajes (el ejemplo de la sección 8, búsqueda, cancelar en cada fase, `Busy`, 429, `conversation.new`, guardado que falla, deltas agrupados, errores del protocolo), la configuración (`settings.*`, con y sin `CHAT_*` y con una respuesta en curso) y `models.list` con un transporte falso o bloqueante (lista, falla, cancelada, reemplazada, pendiente al `shutdown`); `addons.*` y `service.*` con procesos falsos (`tests/fake_system.hpp`, nunca `systemctl` de verdad): `get`, `check`, `save` (bien, con llaves descartadas, solo lectura, errores de campo), invitados con el servicio activo e inactivo, `status`, `apply` (unidad ajena, sin systemd, addon sin instalar, la unidad igual byte por byte a la de la TUI, sin `chatbot` junto a `chatbot-rpc`), `restart`/`disable`/`reload`, `$/cancel` de una de servicio, dos pendientes a la vez y `shutdown` con pendientes; ninguna respuesta ni evento trae la key ni los secretos del bot que se mandaron.
-3. **Proceso real** (solo POSIX): `chatbot-rpc` con pipes y un entorno limpio, sin configuración: `initialize`, `chat.send` → `-32004`, `shutdown`, `exit` → 0; EOF → 0 en menos de 3 s; `exit` sin `shutdown` → 1; toda línea de stdout es JSON-RPC 2.0; sin el aviso de stdin en terminal.
-4. **Windows, en la CI:** `tools/check-rpc-pipes.sh` sobre `chatbot-rpc.exe` con pipes de MSYS2, en una carpeta portable: el ciclo de vida, ningún `\r` en la salida, entrada con `\r\n`, UTF-8 de ida y vuelta con `settings.gui.*`, EOF y stdout solo del protocolo; y en el ZIP, sin MSYS2 en el `PATH`, con y sin `chatbot.portable`. También corre a mano en Linux.
+2. **`Dispatcher`** con la misma `Session` falsa que las pruebas de la TUI (`tests/session_fakes.hpp`) y un reloj falso: secuencias exactas de mensajes (el ejemplo de la sección 8, búsqueda, cancelar en cada fase, `Busy`, 429, `conversation.new`, guardado que falla, deltas agrupados, errores del protocolo), la configuración (`settings.*`, con y sin `CHAT_*` y con una respuesta en curso) y `models.list` con un transporte falso o bloqueante (lista, falla, cancelada, reemplazada, pendiente al `shutdown`); `addons.*` y `service.*` con procesos falsos (`tests/fake_system.hpp`, nunca `systemctl` de verdad): `get`, `check`, `save` (bien, con llaves descartadas, solo lectura, errores de campo), invitados con el servicio activo e inactivo, `status`, `apply` (unidad ajena, sin systemd, addon sin instalar, la unidad igual byte por byte a la de la TUI, sin `moss` junto a `moss-rpc`), `restart`/`disable`/`reload`, `$/cancel` de una de servicio, dos pendientes a la vez y `shutdown` con pendientes; ninguna respuesta ni evento trae la key ni los secretos del bot que se mandaron.
+3. **Proceso real** (solo POSIX): `moss-rpc` con pipes y un entorno limpio, sin configuración: `initialize`, `chat.send` → `-32004`, `shutdown`, `exit` → 0; EOF → 0 en menos de 3 s; `exit` sin `shutdown` → 1; toda línea de stdout es JSON-RPC 2.0; sin el aviso de stdin en terminal.
+4. **Windows, en la CI:** `tools/check-rpc-pipes.sh` sobre `moss-rpc.exe` con pipes de MSYS2, en una carpeta portable: el ciclo de vida, ningún `\r` en la salida, entrada con `\r\n`, UTF-8 de ida y vuelta con `settings.gui.*`, EOF y stdout solo del protocolo; y en el ZIP, sin MSYS2 en el `PATH`, con y sin `moss.portable`. También corre a mano en Linux.
 5. Las tres primeras corren también con `asan` y `tsan`.
 
 Probar a mano, sin GUI:
@@ -649,10 +649,10 @@ printf '%s\n' \
   '{"jsonrpc":"2.0","id":2,"method":"conversations.list","params":{}}' \
   '{"jsonrpc":"2.0","id":3,"method":"shutdown","params":{}}' \
   '{"jsonrpc":"2.0","method":"exit"}' \
-| ./build/dev/cli/chatbot-rpc | jq -c .
+| ./build/dev/cli/moss-rpc | jq -c .
 ```
 
-Para una sesión interactiva: `rlwrap ./build/dev/cli/chatbot-rpc 2>rpc.log`.
+Para una sesión interactiva: `rlwrap ./build/dev/cli/moss-rpc 2>rpc.log`.
 
 ---
 
@@ -688,7 +688,7 @@ Future<Peer> startServer(String exe) async {
   unawaited(peer.listen());
   await peer.sendRequest('initialize', {
     'protocol_version': 1,
-    'client': {'name': 'chatbot-gui', 'version': '0.1.0'},
+    'client': {'name': 'moss-gui', 'version': '0.1.0'},
   });
   return peer;
 }
@@ -703,7 +703,7 @@ Future<Peer> startServer(String exe) async {
 ## 14. Fuera de alcance de la versión 1
 
 - Renombrar conversaciones (aún no existe en la TUI; está en "Ideas para después").
-- Tool calling y "ChatBot Code".
+- Tool calling y "Moss Code".
 - Varias conversaciones abiertas y respuestas en paralelo (el handle ya va en cada evento para poder agregarlas sin cambiar de versión).
 - Avisar cambios hechos por **otro** proceso en la carpeta de conversaciones (otra TUI). La GUI puede volver a pedir `conversations.list` al recibir el foco.
 - Adjuntar archivos o imágenes.

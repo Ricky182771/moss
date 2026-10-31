@@ -1,5 +1,5 @@
 # Addon de Telegram: cliente de la Bot API (long polling), mensajes
-# enriquecidos con streaming, configuración y el ejecutable chatbot-telegram.
+# enriquecidos con streaming, configuración y el ejecutable moss-telegram.
 # Solo Linux por ahora (AGENTS.md, sección "Addons"). Depende de chatbot::bot,
 # chatbot::core y chatbot::markdown; nunca de cli/ ni de FTXUI.
 find_package(nlohmann_json 3.9 REQUIRED)
@@ -26,23 +26,23 @@ target_link_libraries(chatbot_telegram
     PRIVATE chatbot::markdown nlohmann_json::nlohmann_json)
 chatbot_set_warnings(chatbot_telegram)
 
-# El bot: "chatbot telegram" lo arranca (README, "Bot de Telegram").
-add_executable(chatbot-telegram src/main.cpp)
-target_link_libraries(chatbot-telegram PRIVATE chatbot::telegram)
-chatbot_set_warnings(chatbot-telegram)
+# El bot: "moss telegram" lo arranca (README, "Bot de Telegram").
+add_executable(moss-telegram src/main.cpp)
+target_link_libraries(moss-telegram PRIVATE chatbot::telegram)
+chatbot_set_warnings(moss-telegram)
 
 # Sonda manual (como tools/smoke): manda mensajes de prueba a un chat para
 # ver cómo los muestra Telegram. Nunca corre en las pruebas ni en la CI.
-add_executable(chatbot-telegram-probe src/probe.cpp)
-target_link_libraries(chatbot-telegram-probe PRIVATE chatbot::telegram)
-chatbot_set_warnings(chatbot-telegram-probe)
+add_executable(moss-telegram-probe src/probe.cpp)
+target_link_libraries(moss-telegram-probe PRIVATE chatbot::telegram)
+chatbot_set_warnings(moss-telegram-probe)
 
 set_property(GLOBAL APPEND PROPERTY CHATBOT_ADDON_TARGETS
-    chatbot_telegram chatbot-telegram chatbot-telegram-probe)
+    chatbot_telegram moss-telegram moss-telegram-probe)
 
-# Junto a chatbot: así "chatbot telegram" lo encuentra en el build.
-set_target_properties(chatbot-telegram chatbot-telegram-probe PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY $<TARGET_FILE_DIR:chatbot>)
+# Junto a moss: así "moss telegram" lo encuentra en el build.
+set_target_properties(moss-telegram moss-telegram-probe PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY $<TARGET_FILE_DIR:moss>)
 
 if(CHATBOT_BUILD_TESTS)
     add_subdirectory(tests)

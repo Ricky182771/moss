@@ -27,7 +27,7 @@ inline constexpr int kMaxNameSuffix = 99;
 /// nullopt si no hay HOME ni CHAT_DOWNLOAD_DIR.
 [[nodiscard]] std::optional<std::string> resolve_download_dir(const EnvLookup& env);
 
-/// Carpeta de descargas en Windows (función pura), sin "chatbot\", donde
+/// Carpeta de descargas en Windows (función pura), sin "moss\", donde
 /// HOME y XDG_* no cuentan:
 /// 1. CHAT_DOWNLOAD_DIR, si está definida y no vacía;
 /// 2. la carpeta Descargas que da Windows (KnownFolder::Downloads);
@@ -90,7 +90,7 @@ struct WriteResult {
     std::string error; ///< Vacío si salió bien.
 };
 
-/// Crea <base>/chatbot (chatbot::create_directory: 0755 menos la umask en
+/// Crea <base>/moss (chatbot::create_directory: 0755 menos la umask en
 /// POSIX) si no existe. Devuelve la ruta o el error.
 [[nodiscard]] WriteResult ensure_download_dir(const std::string& base);
 

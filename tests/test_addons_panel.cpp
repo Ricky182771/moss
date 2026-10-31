@@ -103,7 +103,7 @@ struct Harness {
     }
     [[nodiscard]] std::string data_dir() const { return (dir.path() / "telegram").string(); }
     [[nodiscard]] std::string unit_path() const {
-        return (dir.path() / "systemd" / "chatbot-telegram.service").string();
+        return (dir.path() / "systemd" / "moss-telegram.service").string();
     }
     [[nodiscard]] std::string invited_path() const {
         return settings::invited_file_path(data_dir());
@@ -129,7 +129,7 @@ struct Harness {
     }
 
     /// La unidad que escribe la app con este entorno (chatbot_path: ExecStart).
-    static std::string current_unit(std::string chatbot_path = "/home/ana/CB/build/chatbot") {
+    static std::string current_unit(std::string chatbot_path = "/home/ana/CB/build/moss") {
         const settings::AddonInfo& addon = *settings::find_addon("telegram");
         return settings::unit_text({std::move(chatbot_path), std::string{addon.name},
                                     std::string{addon.description}, std::nullopt, std::nullopt});
@@ -168,7 +168,7 @@ struct Harness {
         environment.data_dir = data_dir();
         environment.unit_path = unit_path();
         environment.uid = 1000;
-        environment.chatbot_path = "/home/ana/CB/build/chatbot";
+        environment.chatbot_path = "/home/ana/CB/build/moss";
         environment.env_defined = std::move(env_defined);
         environment.home = "/home/ana";
         settings.set_addons_environment(std::move(environment));
@@ -319,11 +319,11 @@ TEST_CASE("addons: cabe en 80×24 sin encimarse", "[ajustes][addons]") {
     h.open();
     h.go_to_addons();
     const ftxui::Screen screen = h.draw();
-    const Position installed = find(screen, "Instalado: ~/CB/build/chatbot-telegram");
+    const Position installed = find(screen, "Instalado: ~/CB/build/moss-telegram");
     const Position service = find(screen, "Servicio: activo · habilitado");
     const Position buttons = find(screen, "[ Reiniciar ] [ Actualizar estado ]");
     const Position linger = find(screen, "Sin linger: loginctl enable-linger \"$USER\"");
-    const Position journal = find(screen, "Registro: journalctl --user -u chatbot-telegram");
+    const Position journal = find(screen, "Registro: journalctl --user -u moss-telegram");
     const Position activated = find(screen, "[x] Activado");
     const Position save = find(screen, "[ Guardar ]");
     REQUIRE(installed.x >= 0);
@@ -373,11 +373,11 @@ TEST_CASE("addons: los botones responden al ratón", "[ajustes][addons][raton]")
     h.system.clear();
     REQUIRE(h.click("[ Actualizar estado ]"));
     REQUIRE(h.queue.run_until(
-        [&] { return h.system.called("systemctl --user is-active chatbot-telegram.service"); }));
+        [&] { return h.system.called("systemctl --user is-active moss-telegram.service"); }));
 
     REQUIRE(h.click("[ Reiniciar ]"));
     REQUIRE(h.wait_for_text("Bot reiniciado."));
-    CHECK(h.system.called("systemctl --user restart chatbot-telegram.service"));
+    CHECK(h.system.called("systemctl --user restart moss-telegram.service"));
 
     // [Generar] llena el código (válido, sin error debajo).
     const ftxui::Screen tall = h.draw(120, 60);
@@ -419,7 +419,7 @@ TEST_CASE("addons: [Reiniciar] sin Activado guardado no hace nada", "[ajustes][a
     h.system.clear();
     REQUIRE(h.click("[ Reiniciar ]", 160, 60));
     CHECK(h.shows(std::string{chatbot::cli::kRestartNeedsEnabled}));
-    CHECK_FALSE(h.system.called("systemctl --user restart chatbot-telegram.service"));
+    CHECK_FALSE(h.system.called("systemctl --user restart moss-telegram.service"));
 
     h.save(false);
     REQUIRE(h.wait_for_text("Configuración aplicada al bot."));
@@ -432,7 +432,7 @@ TEST_CASE("addons: [Reiniciar] sin Activado guardado no hace nada", "[ajustes][a
     h.system.clear();
     REQUIRE(h.click("[ Reiniciar ]", 160, 60));
     REQUIRE(h.wait_for_text("Bot reiniciado."));
-    CHECK(h.system.called("systemctl --user restart chatbot-telegram.service"));
+    CHECK(h.system.called("systemctl --user restart moss-telegram.service"));
 }
 
 TEST_CASE("addons: guardar escribe la sección y recarga el bot", "[ajustes][addons]") {
@@ -458,7 +458,7 @@ TEST_CASE("addons: guardar escribe la sección y recarga el bot", "[ajustes][add
     CHECK(h.section().at("version") == 1);
     // Ya corría, habilitado y con la unidad al día: solo se recarga.
     CHECK(h.service_actions() ==
-          std::vector<std::string>{"systemctl --user reload chatbot-telegram.service"});
+          std::vector<std::string>{"systemctl --user reload moss-telegram.service"});
     // Se quedó abierta y sin cambios: Esc cierra sin preguntar.
     CHECK(h.settings.is_open());
     REQUIRE(h.key(ftxui::Event::Escape));
@@ -475,7 +475,7 @@ TEST_CASE("addons: desactivar detiene el servicio", "[ajustes][addons]") {
     REQUIRE(h.click("[ Guardar ]"));
     REQUIRE(h.wait_for_text("Servicio desactivado."));
     CHECK(h.section().at("enabled") == false);
-    CHECK(h.system.called("systemctl --user disable --now chatbot-telegram.service"));
+    CHECK(h.system.called("systemctl --user disable --now moss-telegram.service"));
 }
 
 TEST_CASE("addons: con Activado, una unidad hecha a mano pregunta antes de reemplazarla",
@@ -514,7 +514,7 @@ TEST_CASE("addons: con Activado, una unidad hecha a mano pregunta antes de reemp
         CHECK(h.unit_on_disk() == Harness::current_unit());
         CHECK(h.service_actions() ==
               std::vector<std::string>{"systemctl --user daemon-reload",
-                                       "systemctl --user enable --now chatbot-telegram.service"});
+                                       "systemctl --user enable --now moss-telegram.service"});
     } else {
         REQUIRE(h.wait_for_text(answer == 'n'
                                     ? "Guardado. No se tocó el servicio existente."
@@ -540,7 +540,7 @@ TEST_CASE("addons: con Activado, guardar sin cambios arranca el servicio detenid
     REQUIRE(h.click("[ Guardar ]"));
     REQUIRE(h.wait_for_text("Guardado. Servicio activado."));
     CHECK(h.service_actions() ==
-          std::vector<std::string>{"systemctl --user enable --now chatbot-telegram.service"});
+          std::vector<std::string>{"systemctl --user enable --now moss-telegram.service"});
     CHECK(h.settings.is_open()); // Se queda abierta con el resultado.
 }
 
@@ -549,7 +549,7 @@ TEST_CASE("addons: con Activado, una unidad con ExecStart viejo se reescribe",
     const chatbot_test::NoColorGuard environment(nullptr);
     Harness h;
     h.write_config(enabled_section());
-    h.put_unit(Harness::current_unit("/carpeta/vieja/chatbot"));
+    h.put_unit(Harness::current_unit("/carpeta/vieja/moss"));
     h.open();
     h.go_to_addons();
     CHECK(h.shows("Activado, pero el servicio está desactualizado: guarda para actualizarlo."));
@@ -559,7 +559,7 @@ TEST_CASE("addons: con Activado, una unidad con ExecStart viejo se reescribe",
     CHECK(h.unit_on_disk() == Harness::current_unit());
     CHECK(h.service_actions() ==
           std::vector<std::string>{"systemctl --user daemon-reload",
-                                   "systemctl --user reload chatbot-telegram.service"});
+                                   "systemctl --user reload moss-telegram.service"});
 }
 
 TEST_CASE("addons: sin Activado, el servicio que corre se detiene al guardar",
@@ -576,7 +576,7 @@ TEST_CASE("addons: sin Activado, el servicio que corre se detiene al guardar",
     REQUIRE(h.click("[ Guardar ]"));
     REQUIRE(h.wait_for_text("Guardado. Servicio desactivado."));
     CHECK(h.service_actions() ==
-          std::vector<std::string>{"systemctl --user disable --now chatbot-telegram.service"});
+          std::vector<std::string>{"systemctl --user disable --now moss-telegram.service"});
 }
 
 TEST_CASE("addons: sin cambios y con el servicio como dice Activado, no se toca nada",
@@ -621,7 +621,7 @@ TEST_CASE("addons: cambiar el token pregunta si reiniciar", "[ajustes][addons]")
     CHECK(h.service_actions().empty());
     REQUIRE(h.key(ftxui::Event::Character(restart ? 'S' : 'N')));
     REQUIRE(h.wait_for_text(restart ? "Bot reiniciado." : "Configuración aplicada al bot."));
-    CHECK(h.system.called("systemctl --user restart chatbot-telegram.service") == restart);
+    CHECK(h.system.called("systemctl --user restart moss-telegram.service") == restart);
     // El token nunca se dibuja.
     const ftxui::Screen screen = h.draw(120, 60);
     CHECK(find(screen, "AAOtroToken").x < 0);
@@ -670,7 +670,7 @@ TEST_CASE("addons: Supr sobre un invitado lo quita al momento y recarga", "[ajus
     REQUIRE(h.wait_for_text("Se quitó 222222222."));
     CHECK(settings::load_invited(h.invited_path()).value() == std::vector<std::int64_t>{333333333});
     REQUIRE(h.queue.run_until(
-        [&] { return h.system.called("systemctl --user reload chatbot-telegram.service"); }));
+        [&] { return h.system.called("systemctl --user reload moss-telegram.service"); }));
     CHECK(find(h.draw(120, 60), "Invitados (1)").x >= 0);
     // Cancelar no lo deshace.
     REQUIRE(h.key(ftxui::Event::Escape));
@@ -684,7 +684,7 @@ TEST_CASE("addons: invitados.json dañado se dice en lugar de la lista", "[ajust
     std::filesystem::create_directories(h.data_dir());
     std::ofstream{h.invited_path()} << "{ roto";
     h.system.set_active(false);
-    h.system.answer("systemctl --user show -p ExecMainStatus,Result chatbot-telegram.service",
+    h.system.answer("systemctl --user show -p ExecMainStatus,Result moss-telegram.service",
                     exited(0, "ExecMainStatus=65\nResult=exit-code\n"));
     h.open();
     REQUIRE(h.click("Addons"));
@@ -759,7 +759,7 @@ TEST_CASE("addons: no instalado y variables de entorno", "[ajustes][addons]") {
     REQUIRE(h.click("Addons"));
     REQUIRE(h.wait_for_text("Servicio: activo"));
     const ftxui::Screen screen = h.draw(160, 60);
-    CHECK(find(screen, "No instalado: copia chatbot-telegram junto a chatbot o en el PATH.").x >=
+    CHECK(find(screen, "No instalado: copia moss-telegram junto a moss o en el PATH.").x >=
           0);
     CHECK(find(screen, "CHAT_API_KEY está definida en esta terminal").x >= 0);
     // Se puede configurar antes de instalarlo; el servicio no se toca.
@@ -768,7 +768,7 @@ TEST_CASE("addons: no instalado y variables de entorno", "[ajustes][addons]") {
     h.type("20");
     REQUIRE(h.click("[ Guardar ]", 160, 60));
     REQUIRE(h.wait_for_text("Guardado. No instalado"));
-    CHECK_FALSE(h.system.called("systemctl --user enable --now chatbot-telegram.service"));
+    CHECK_FALSE(h.system.called("systemctl --user enable --now moss-telegram.service"));
 }
 
 #endif

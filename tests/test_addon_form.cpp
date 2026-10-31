@@ -189,18 +189,18 @@ TEST_CASE("addons: estado de los secretos y nota del entorno", "[addons][formula
 TEST_CASE("addons: instalado, no instalado e incompatible", "[addons][estado]") {
     using chatbot::cli::AddonInstall;
     CHECK(chatbot::cli::addon_install_problem(telegram(), AddonInstall{}, false) ==
-          "No instalado: copia chatbot-telegram junto a chatbot o en el PATH.");
+          "No instalado: copia moss-telegram junto a moss o en el PATH.");
     CHECK(chatbot::cli::addon_install_problem(telegram(), AddonInstall{}, true) ==
-          "No instalado: copia chatbot-telegram junto a chatbot.");
-    CHECK(chatbot::cli::addon_install_problem(telegram(), AddonInstall{"/x/chatbot-telegram", 1},
+          "No instalado: copia moss-telegram junto a moss.");
+    CHECK(chatbot::cli::addon_install_problem(telegram(), AddonInstall{"/x/moss-telegram", 1},
                                               false)
               .empty());
-    CHECK(chatbot::cli::addon_install_problem(telegram(), AddonInstall{"/x/chatbot-telegram", 2},
+    CHECK(chatbot::cli::addon_install_problem(telegram(), AddonInstall{"/x/moss-telegram", 2},
                                               false) ==
-          "Incompatible: esta app usa la versión 1 de la configuración y chatbot-telegram "
+          "Incompatible: esta app usa la versión 1 de la configuración y moss-telegram "
           "entiende la 2.");
     CHECK(chatbot::cli::addon_install_problem(
-              telegram(), AddonInstall{"/x/chatbot-telegram", std::nullopt}, false)
+              telegram(), AddonInstall{"/x/moss-telegram", std::nullopt}, false)
               .starts_with("Incompatible: "));
 
     chatbot::cli::ProcessResult result;
@@ -230,24 +230,24 @@ TEST_CASE("addons: el resumen y el error del servicio", "[addons][estado]") {
     CHECK(chatbot::cli::service_summary(status) == "Servicio: activo · habilitado · hecho a mano");
 
     status.last_error = "telegram_token_invalido http=401";
-    CHECK(chatbot::cli::service_problem(status, "chatbot-telegram", "/d").empty()); // Corre.
+    CHECK(chatbot::cli::service_problem(status, "moss-telegram", "/d").empty()); // Corre.
     status.active = "failed";
-    CHECK(chatbot::cli::service_problem(status, "chatbot-telegram", "/d") ==
+    CHECK(chatbot::cli::service_problem(status, "moss-telegram", "/d") ==
           "Último error: telegram_token_invalido http=401");
     status.exit_status = 65;
-    CHECK(chatbot::cli::service_problem(status, "chatbot-telegram", "/d") ==
+    CHECK(chatbot::cli::service_problem(status, "moss-telegram", "/d") ==
           "invitados.json está dañado: /d/invitados.json. Arréglalo o quítalo de ahí.");
     status.exit_status = 73;
-    CHECK(chatbot::cli::service_problem(status, "chatbot-telegram", "/d") ==
+    CHECK(chatbot::cli::service_problem(status, "moss-telegram", "/d") ==
           "No se puede escribir en la carpeta de datos del bot: /d.");
     status.exit_status = 1;
-    CHECK(chatbot::cli::service_problem(status, "chatbot-telegram", "/d") ==
+    CHECK(chatbot::cli::service_problem(status, "moss-telegram", "/d") ==
           "Último error: telegram_token_invalido http=401");
     status.last_error.clear();
-    CHECK(chatbot::cli::service_problem(status, "chatbot-telegram", "/d") ==
+    CHECK(chatbot::cli::service_problem(status, "moss-telegram", "/d") ==
           "Salió con el código 1.");
     CHECK(chatbot::cli::journal_command(telegram()) ==
-          "journalctl --user -u chatbot-telegram -f");
+          "journalctl --user -u moss-telegram -f");
 }
 
 TEST_CASE("addons: el aviso cuando el servicio no está como dice Activado", "[addons][estado]") {

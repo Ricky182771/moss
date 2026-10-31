@@ -34,7 +34,7 @@ using chatbot::cli::TelegramAddon;
 
 constexpr const char* kToken = "123456789:AAFakeTokenForTestsOnly_abcdefghijk";
 constexpr const char* kOtherToken = "987654321:AAOtherFakeTokenForTests_abcdefghij";
-constexpr const char* kChatbot = "/home/ana/CB/build/chatbot";
+constexpr const char* kChatbot = "/home/ana/CB/build/moss";
 
 std::string read_file(const std::filesystem::path& path) {
     std::ifstream file{path, std::ios::binary};
@@ -53,7 +53,7 @@ struct Fixture {
     }
     [[nodiscard]] std::string data_dir() const { return (dir.path() / "telegram").string(); }
     [[nodiscard]] std::filesystem::path unit_path() const {
-        return dir.path() / "systemd" / "chatbot-telegram.service";
+        return dir.path() / "systemd" / "moss-telegram.service";
     }
 
     void write_config(const nlohmann::json& telegram) const {
@@ -233,7 +233,7 @@ TEST_CASE("TelegramAddon: quitar un invitado recarga solo si el servicio está a
     if (active) {
         CHECK(removal->message == "Se quitó 42. Configuración aplicada al bot.");
         CHECK(chatbot_test::service_actions(fixture.system) ==
-              std::vector<std::string>{"systemctl --user reload chatbot-telegram.service"});
+              std::vector<std::string>{"systemctl --user reload moss-telegram.service"});
     } else {
         CHECK(removal->message == "Se quitó 42.");
         CHECK(fixture.system.calls().empty());
@@ -254,7 +254,7 @@ TEST_CASE("TelegramAddon: aplicar usa lo guardado y pregunta por una unidad ajen
         std::optional<TelegramAddon::Applied> applied;
         addon.apply(false, false, [&](const TelegramAddon::Applied& done) { applied = done; });
         REQUIRE(fixture.queue.run_until([&] { return applied.has_value(); }));
-        CHECK(applied->skipped.starts_with("No instalado: copia chatbot-telegram"));
+        CHECK(applied->skipped.starts_with("No instalado: copia moss-telegram"));
         CHECK(chatbot_test::service_actions(fixture.system).empty());
         CHECK(addon.service().has_value());
     }
@@ -286,20 +286,20 @@ TEST_CASE("TelegramAddon: en Windows no hay addon ni procesos", "[addons]") {
     CHECK(fixture.system.calls().empty());
 }
 
-TEST_CASE("addons_environment: chatbot-rpc escribe la misma unidad que la TUI", "[addons]") {
-    // El ExecStart es chatbot, no chatbot-rpc: si no, la TUI vería la unidad
+TEST_CASE("addons_environment: moss-rpc escribe la misma unidad que la TUI", "[addons]") {
+    // El ExecStart es moss, no moss-rpc: si no, la TUI vería la unidad
     // de la GUI como vieja (stale) y la reescribiría cada vez. Solo Linux.
     if (chatbot::current_os() == chatbot::Os::Windows) {
         return;
     }
     const auto post = [](std::function<void()>) {};
-    const std::string dir = "/opt/chatbot";
-    CHECK(chatbot::cli::sibling_chatbot_path(dir + "/chatbot-rpc") == dir + "/chatbot");
-    const TelegramAddon tui{chatbot::cli::addons_environment(post, dir + "/chatbot")};
+    const std::string dir = "/opt/moss";
+    CHECK(chatbot::cli::sibling_chatbot_path(dir + "/moss-rpc") == dir + "/moss");
+    const TelegramAddon tui{chatbot::cli::addons_environment(post, dir + "/moss")};
     const TelegramAddon rpc{chatbot::cli::addons_environment(
-        post, chatbot::cli::sibling_chatbot_path(dir + "/chatbot-rpc"))};
+        post, chatbot::cli::sibling_chatbot_path(dir + "/moss-rpc"))};
     CHECK(settings::unit_text(rpc.unit_params()) == settings::unit_text(tui.unit_params()));
     const std::string unit = settings::unit_text(rpc.unit_params());
-    CHECK(unit.find("/opt/chatbot/chatbot") != std::string::npos);
-    CHECK(unit.find("chatbot-rpc") == std::string::npos);
+    CHECK(unit.find("/opt/moss/moss") != std::string::npos);
+    CHECK(unit.find("moss-rpc") == std::string::npos);
 }

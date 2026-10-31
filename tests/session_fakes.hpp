@@ -2,7 +2,7 @@
 // directorio temporal (config.json, credentials.json, conversaciones), el
 // entorno, el modelo (FakeTransport o un transporte propio) y Tavily (un
 // TavilySearch con FakeTransport). Lo usan test_session.cpp y las pruebas de
-// chatbot-rpc, así las dos prueban la misma Session.
+// moss-rpc, así las dos prueban la misma Session.
 
 #ifndef CHATBOT_TEST_SESSION_FAKES_HPP
 #define CHATBOT_TEST_SESSION_FAKES_HPP

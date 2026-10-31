@@ -846,9 +846,9 @@ TEST_CASE("configuración: el modo portable se ve al pie de Proveedor de IA",
     h.open("modelo-0");
     CHECK(find(h.draw(), "Modo portable").x < 0); // Sin modo portable, nada nuevo.
 
-    h.settings.set_portable_dir(std::string{"E:\\chatbot\\datos"});
+    h.settings.set_portable_dir(std::string{"E:\\moss\\datos"});
     auto screen = h.draw();
-    const Position line = find(screen, "Modo portable: datos en E:\\chatbot\\datos");
+    const Position line = find(screen, "Modo portable: datos en E:\\moss\\datos");
     REQUIRE(line.x >= 0);
     // Atenuada: con la tinta de los avisos.
     CHECK(screen.CellAt(line.x, line.y).foreground_color ==

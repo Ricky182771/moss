@@ -264,7 +264,7 @@ TEST_CASE("configuración: las rutas de este proceso son las de la app", "[teleg
     CHECK(paths.value().config == chatbot::default_config_path());
     CHECK(paths.value().credentials == chatbot::default_credentials_path());
 #ifndef _WIN32
-    CHECK(paths.value().config == "/cfg/chatbot/config.json");
-    CHECK(paths.value().data_dir == "/datos/chatbot/telegram");
+    CHECK(paths.value().config == "/cfg/moss/config.json");
+    CHECK(paths.value().data_dir == "/datos/moss/telegram");
 #endif
 }

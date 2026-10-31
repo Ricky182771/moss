@@ -1,7 +1,7 @@
-// chatbot-telegram: el bot de Telegram (long polling, sin webhook). Lee la
+// moss-telegram: el bot de Telegram (long polling, sin webhook). Lee la
 // configuración de la app (config.json → "addons" → "telegram" y
 // credentials.json), revisa el token con getMe, pone el menú de comandos y
-// atiende hasta SIGINT o SIGTERM. Se arranca con "chatbot telegram". Códigos
+// atiende hasta SIGINT o SIGTERM. Se arranca con "moss telegram". Códigos
 // de salida en settings.h. Solo Linux por ahora (AGENTS.md, sección "Addons").
 
 #include "chatbot/telegram/api.h"
@@ -42,9 +42,9 @@ using namespace chatbot;
 using namespace chatbot::telegram;
 
 constexpr std::string_view kUsage =
-    "Uso: chatbot telegram                    arranca el bot\n"
-    "     chatbot telegram --config-version   la versión de la configuración que entiende\n"
-    "     chatbot telegram --help             esta ayuda\n"
+    "Uso: moss telegram                    arranca el bot\n"
+    "     moss telegram --config-version   la versión de la configuración que entiende\n"
+    "     moss telegram --help             esta ayuda\n"
     "\n"
     "Lee la configuración de la app (config.json y credentials.json): se edita\n"
     "en Configuración (F2) → Addons. Ver la sección \"Bot de Telegram\" del README.\n";
@@ -58,7 +58,7 @@ std::string_view real_env(std::string_view name) {
 }
 
 int fail(std::string_view message, int code = kExitFailure) {
-    std::cerr << "chatbot-telegram: " << message << '\n';
+    std::cerr << "moss-telegram: " << message << '\n';
     return code;
 }
 
@@ -178,7 +178,7 @@ int run() {
 int main(int argc, char** argv) {
     signal(SIGPIPE, SIG_IGN);
     if (argc > 2) {
-        std::cerr << "chatbot-telegram: demasiados argumentos.\n\n" << kUsage;
+        std::cerr << "moss-telegram: demasiados argumentos.\n\n" << kUsage;
         return kExitFailure;
     }
     if (argc == 2) {
@@ -192,7 +192,7 @@ int main(int argc, char** argv) {
             std::cout << addon_settings::kTelegramConfigVersion << '\n';
             return 0;
         }
-        std::cerr << "chatbot-telegram: argumento desconocido: " << argument << "\n\n" << kUsage;
+        std::cerr << "moss-telegram: argumento desconocido: " << argument << "\n\n" << kUsage;
         return kExitFailure;
     }
     try {

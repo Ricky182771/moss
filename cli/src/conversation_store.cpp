@@ -295,10 +295,10 @@ std::optional<std::string> resolve_data_dir(const std::optional<std::string>& ch
         while (base.size() > 1 && base.back() == '/') {
             base.pop_back();
         }
-        return base + "/chatbot/conversations";
+        return base + "/" + std::string{kAppName} + "/conversations";
     }
     if (home.has_value() && !home->empty()) {
-        return *home + "/.local/share/chatbot/conversations";
+        return *home + "/.local/share/" + std::string{kAppName} + "/conversations";
     }
     return std::nullopt;
 }
@@ -316,7 +316,7 @@ std::optional<std::string> resolve_windows_data_dir(
     }
     for (const std::optional<std::string>* base : {&local_app_data, &localappdata}) {
         if (base->has_value() && !(*base)->empty()) {
-            return join_windows_path(**base, "chatbot\\conversations");
+            return join_windows_path(**base, std::string{kAppName} + "\\conversations");
         }
     }
     return std::nullopt;

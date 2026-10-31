@@ -1,12 +1,12 @@
-# Pruebas de chatbot-rpc, sin red: las puras, el Dispatcher con la Session de
+# Pruebas de moss-rpc, sin red: las puras, el Dispatcher con la Session de
 # session_fakes.hpp y, solo en POSIX, el ejecutable real con pipes. Usan los
 # helpers de tests/.
 add_executable(chatbot_rpc_tests test_rpc_pure.cpp test_rpc_dispatcher.cpp)
 if(NOT WIN32)
     target_sources(chatbot_rpc_tests PRIVATE test_rpc_process.cpp)
-    add_dependencies(chatbot_rpc_tests chatbot-rpc)
+    add_dependencies(chatbot_rpc_tests moss-rpc)
     target_compile_definitions(chatbot_rpc_tests PRIVATE
-        CHATBOT_RPC_EXECUTABLE="$<TARGET_FILE:chatbot-rpc>")
+        CHATBOT_RPC_EXECUTABLE="$<TARGET_FILE:moss-rpc>")
 endif()
 target_compile_features(chatbot_rpc_tests PRIVATE cxx_std_20)
 target_include_directories(chatbot_rpc_tests PRIVATE ${PROJECT_SOURCE_DIR}/tests)

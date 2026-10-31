@@ -44,7 +44,7 @@ std::string draw(std::string_view title, int width) { return draw_bar(title, wid
 
 TEST_CASE("título: prioridad sobre la ayuda a 40, 60 y 120 columnas", "[titulo]") {
     const int width = GENERATE(40, 60, 120);
-    const std::string title = "Chatbot CECyTE — m — Conversación";
+    const std::string title = "Moss — llama3.1-8b — Conversación";
     const std::string row = draw(title, width);
     CHECK(row.starts_with(title));
     CHECK(ftxui::string_width(row) == width);
@@ -60,7 +60,7 @@ TEST_CASE("título: prioridad sobre la ayuda a 40, 60 y 120 columnas", "[titulo]
 }
 
 TEST_CASE("título: primero el título, luego [Exportar] y al final la ayuda", "[titulo]") {
-    const std::string title = "Chatbot CECyTE — m — Conversación"; // 33 columnas.
+    const std::string title = "Moss — llama3.1-8b — Conversación"; // 33 columnas.
     // 33 + 1 + 10: el botón cabe justo, sin ayuda.
     Drawn bar = draw_bar(title, 44);
     CHECK(bar.text == title + " [Exportar]");
@@ -83,7 +83,7 @@ TEST_CASE("título: primero el título, luego [Exportar] y al final la ayuda", "
 }
 
 TEST_CASE("título: [Exportar] atenuado sin respuestas y con hover si hay", "[titulo]") {
-    const std::string title = "Chatbot";
+    const std::string title = "Moss";
     // "De la terminal": el texto de ejemplo es tenue y la selección, invertida.
     Drawn bar = draw_bar(title, 40, {false, true});
     REQUIRE_FALSE(bar.box.IsEmpty());
@@ -103,7 +103,7 @@ TEST_CASE("título: [Exportar] atenuado sin respuestas y con hover si hay", "[ti
 
 TEST_CASE("título: solo se recorta sin ayuda y respeta UTF-8", "[titulo]") {
     const int width = GENERATE(40, 60, 120);
-    std::string title = "Chatbot CECyTE — modelo — ";
+    std::string title = "Moss — modelo — ";
     for (int i = 0; i < 100; ++i) {
         title += "🙂é";
     }
@@ -119,8 +119,8 @@ TEST_CASE("título: [Exportar] activo y atenuado se distinguen en cada tema", "[
     for (const chatbot::cli::Theme& theme : chatbot::cli::themes()) {
         INFO("tema " << theme.id);
         const chatbot::cli::Palette palette(theme);
-        const Drawn on = draw_bar("Chatbot", 40, {true, false}, palette);
-        const Drawn off = draw_bar("Chatbot", 40, {false, false}, palette);
+        const Drawn on = draw_bar("Moss", 40, {true, false}, palette);
+        const Drawn off = draw_bar("Moss", 40, {false, false}, palette);
         const ftxui::Cell& a = on.screen.CellAt(on.box.x_min, 0);
         const ftxui::Cell& b = off.screen.CellAt(off.box.x_min, 0);
         CHECK((a.foreground_color != b.foreground_color || a.dim != b.dim));
@@ -129,6 +129,6 @@ TEST_CASE("título: [Exportar] activo y atenuado se distinguen en cada tema", "[
 
 TEST_CASE("barra de título: un título con saltos de línea queda en una fila",
           "[titulo][varias]") {
-    const Drawn drawn = draw_bar("Chatbot CECyTE — modelo — uno\ndos", 80);
+    const Drawn drawn = draw_bar("Moss — modelo — uno\ndos", 80);
     CHECK(drawn.text.find("uno dos") != std::string::npos);
 }

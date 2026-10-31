@@ -1,16 +1,16 @@
-# AGENTS.md — Reglas del proyecto Chatbot (terminal, núcleo en C++)
+# AGENTS.md — Reglas del proyecto Moss (terminal, núcleo en C++)
 
 > Lee este archivo completo antes de escribir cualquier código. Si una instrucción del usuario contradice algo de aquí, gana el usuario, pero avísale de la contradicción antes de continuar.
 
 ## 1. Qué es el proyecto
 
-Un chatbot tipo asistente general que corre en la terminal (pantalla completa, estilo OpenCode). Proyecto escolar en equipo, de alcance chico.
+Moss es un chatbot tipo asistente general que corre en la terminal (pantalla completa, estilo OpenCode). Proyecto escolar en equipo, de alcance chico.
 
 - **Núcleo (`core/`)**: biblioteca C++ con cliente HTTP, historial, configuración y manejo de errores. No sabe nada de terminales ni de interfaces.
 - **Markdown (`markdown/`)**: biblioteca `chatbot::markdown` (parseo con md4c, filtrado del texto, bloques de primer nivel con su rango en bytes). Sin FTXUI: la usan la interfaz y los addons.
 - **Interfaz (`cli/`)**: ejecutable con FTXUI. **No se toca hasta el hito 3.**
-- **RPC (`rpc/`)**: ejecutable `chatbot-rpc`, la app sin pantalla por JSON-RPC 2.0 sobre stdin/stdout, para la interfaz gráfica (Flutter) y otras interfaces. Usa la misma lógica que la TUI (`Session`), sin FTXUI ni addons. Protocolo en `rpc/PROTOCOL.md`.
-- **Addons (`addons/`)**: bots que usan el mismo núcleo (hoy, Telegram), compilados por defecto solo en Linux; la app los arranca (`chatbot telegram`) y los configura en F2 → Addons (sección 14). `core` no sabe que existen; de `addons/`, `cli/` solo usa `chatbot::addon_settings`.
+- **RPC (`rpc/`)**: ejecutable `moss-rpc`, la app sin pantalla por JSON-RPC 2.0 sobre stdin/stdout, para la interfaz gráfica (Flutter) y otras interfaces. Usa la misma lógica que la TUI (`Session`), sin FTXUI ni addons. Protocolo en `rpc/PROTOCOL.md`.
+- **Addons (`addons/`)**: bots que usan el mismo núcleo (hoy, Telegram), compilados por defecto solo en Linux; la app los arranca (`moss telegram`) y los configura en F2 → Addons (sección 14). `core` no sabe que existen; de `addons/`, `cli/` solo usa `chatbot::addon_settings`.
 - **Servidor**: API de NVIDIA NIM (plan gratuito), compatible con OpenAI: `POST {base_url}/chat/completions`.
 
 ## 2. Cómo debes comportarte
@@ -64,7 +64,7 @@ Detalle: guias/04-stack.md
 ## 5. Estructura de directorios
 
 ```text
-chatbot/
+moss/
 ├── .github/
 │   └── workflows/
 ├── cmake/
@@ -92,10 +92,10 @@ chatbot/
 └── guias/
 ```
 
-- `chatbot_core` (namespace `chatbot`) no depende de FTXUI ni addons, ni usa la terminal. `chatbot_markdown` (`chatbot::markdown`, namespace `chatbot::md`) no depende de core ni FTXUI; md4c en privado. El dibujo de markdown también usa `chatbot::md`.
+- `chatbot_core` (namespace `moss`) no depende de FTXUI ni addons, ni usa la terminal. `chatbot_markdown` (`chatbot::markdown`, namespace `chatbot::md`) no depende de core ni FTXUI; md4c en privado. El dibujo de markdown también usa `chatbot::md`.
 - `chatbot_cli_lib` solo depende de `chatbot::core`, `chatbot::markdown`, `chatbot::addon_settings` y nlohmann/json privado; sin FTXUI ni includes de `core/src`.
 - RPC solo depende de `chatbot_cli_lib` (con su `chatbot::addon_settings`, como `cli/`) y nlohmann/json; nunca FTXUI, `chatbot_cli_ui` ni addons (`chatbot::bot`, Telegram). Siempre se compila, también en Windows y sin addons. **Todo cambio de protocolo se documenta en `rpc/PROTOCOL.md` en el mismo PR**, incluida su tabla de estado.
-- `chatbot_cli_ui`: `chatbot_cli_lib`, `ftxui::dom` y `ftxui::screen`; dibuja sin terminal. Solo `chatbot` y `chatbot_ui_tests` enlazan `ftxui::component`.
+- `chatbot_cli_ui`: `chatbot_cli_lib`, `ftxui::dom` y `ftxui::screen`; dibuja sin terminal. Solo `moss` y `chatbot_ui_tests` enlazan `ftxui::component`.
 - **Lo nuevo que no dependa de FTXUI va en `Session`, no en `main.cpp`.** Solo desde el hilo de interfaz, con entorno inyectado. TUI y RPC comparten arranque. `Session` se destruye antes de `screen`.
 - Plataforma elegida por CMake, sin `#ifdef` en lógica; `<windows.h>` solo en `.cpp` de Windows. Strings UTF-8, llamadas Win32 W; escritura atómica común.
 - Colores solo en `Theme`/`Palette`, símbolos por su tabla; nunca sustituir símbolos del texto externo. La caché incluye `Palette::key()`. Texto externo por `md::sanitize`, URL además por `hyperlink_target`.
@@ -120,13 +120,13 @@ Detalle: guias/06-nucleo.md
 - **Entorno > archivo > valores por defecto.** Sin modelo por defecto; archivo ausente no es error. Keys solo en entorno o `credentials.json` por proveedor, **nunca `config.json`**; Tavily usa `search:tavily`.
 - POSIX: credenciales 0600, carpeta 0700; permisos abiertos son error `Config`. Windows usa ACL del perfil, sin comprobaciones POSIX. Guardado atómico, conservando claves ajenas y orden.
 - Rutas normales XDG o las del usuario; Windows usa AppData e ignora `HOME`/`XDG_*`. `CHAT_DATA_DIR` y `CHAT_DOWNLOAD_DIR` prevalecen.
-- Portable: `chatbot.portable` junto al ejecutable lleva los datos a `datos/`, gana sobre rutas del usuario, no sobre `CHAT_*`; descargas iguales. Probar escritura al arrancar: si falla, la TUI sale con el error `Config` y código 1, y `chatbot-rpc` responde `StartupFailed` (-32011) en `initialize`, sin salir; nunca volver en silencio a la carpeta del usuario.
+- Portable: `moss.portable` junto al ejecutable lleva los datos a `datos/`, gana sobre rutas del usuario, no sobre `CHAT_*`; descargas iguales. Probar escritura al arrancar: si falla, la TUI sale con el error `Config` y código 1, y `moss-rpc` responde `StartupFailed` (-32011) en `initialize`, sin salir; nunca volver en silencio a la carpeta del usuario.
 - `system_prompt` global, sin entorno ni copia por conversación: ausente usa el predeterminado, vacío omite `System`. UTF-8, máximo 8000 bytes, sin controles salvo salto/tabulador; guardar aplica desde el siguiente mensaje.
 - Apariencia sin entorno; valores desconocidos usan predeterminados con aviso. Símbolos siguen configurables con `NO_COLOR`.
 - Conversaciones versión 1: al menos un par user/assistant alternado completo, nunca `system` persistido. Guardar tras cada par, atómicamente, carpeta nueva 0700 y archivo 0600. Archivo ilegible o de versión desconocida se lista, nunca se sobrescribe ni borra. Cargar usa sistema vigente, búsqueda con nonce nuevo y fecha guardada.
 - Sin key de búsqueda, no enviar `/buscar` ni vaciar la caja. `CHAT_SEARCH_API_KEY` gana sobre credenciales, con la misma privacidad y validación.
-- `chatbot-rpc` escribe `config.json` y `credentials.json` **solo por `Session`** (y `addons.<addon>` por `TelegramAddon`), con los mismos guardados que F2.
-- Solo la app escribe `addons.<addon>` en `config.json`; Telegram ausente queda desactivado. Versión mayor: F2 y `chatbot-rpc` solo lectura; descartar llaves requiere confirmación (en el RPC, `-32008`); bot rechaza sección inválida. Secretos: §14.
+- `moss-rpc` escribe `config.json` y `credentials.json` **solo por `Session`** (y `addons.<addon>` por `TelegramAddon`), con los mismos guardados que F2.
+- Solo la app escribe `addons.<addon>` en `config.json`; Telegram ausente queda desactivado. Versión mayor: F2 y `moss-rpc` solo lectura; descartar llaves requiere confirmación (en el RPC, `-32008`); bot rechaza sección inválida. Secretos: §14.
 - Diagnósticos solo por entorno: `CHAT_DEBUG_SSE` nunca vuelca cabeceras, key ni petición; `CHAT_DEBUG_KEYS` nunca el texto de caracteres.
 
 Detalle: guias/07-configuracion.md
@@ -195,7 +195,7 @@ cmake --preset dev     && cmake --build --preset dev     && ctest --preset dev  
 cmake --preset release && cmake --build --preset release && ctest --preset release --output-on-failure
 ```
 
-- Comprobar también el loop real de FTXUI con `./build/tsan/cli/chatbot`, conversación y cancelación manuales, sin `WARNING: ThreadSanitizer` (API real solo con permiso).
+- Comprobar también el loop real de FTXUI con `./build/tsan/cli/moss`, conversación y cancelación manuales, sin `WARNING: ThreadSanitizer` (API real solo con permiso).
 - CI: GCC en los cuatro presets, Clang dev/release, dev sin addons, Windows dev/release; **sin keys ni API real**. TSan: `vm.mmap_rnd_bits=28`.
 - Latencia de cancelación **< 2 s en todos los presets**, incluido apagado y destructores. Las pruebas de tiempo siempre miden y reportan con `WARN`; los demás límites de rendimiento fallan solo con `CHATBOT_STRICT_PERF=1` (CI solo release). Las esperas funcionales entre hilos siempre son obligatorias.
 - No desactivar comprobaciones de dependencias/includes ni permitir licencias ausentes en el ZIP.
@@ -230,7 +230,7 @@ Para el hito 1, sin red, usando `FakeTransport`:
 - **No cambiar sin preguntar:** conversaciones solo en memoria con caducidad o `/nuevo`; acceso denegado por defecto, solo IDs permitidos o invitados por código; invitados guardados solo por ID; registros sin mensajes, consultas, nombres, código de invitación, token ni keys. Errores detallados solo con `log_error_details`, truncados y sin secretos.
 - Una respuesta por chat; tope diario por usuario y fecha local; concurrencia global con FIFO. Búsqueda fallida/vacía devuelve cupo. Historial solo pares completos; cancelación no guarda el par. Apagado cancela, descarta fila y une hilos en < 2 s.
 - Telegram: long polling, HTTPS de salida, chats privados, markdown saneado por lista blanca y respaldo plano partido a 4096; vista previa con Detener. Enteros de updates validados; token redactado en todo error, sin mostrar `redirect_url`.
-- Solo la app (la TUI o `chatbot-rpc`, con el mismo código) escribe configuración central, sin `telegram.json` ni `--config`. Bot solo lee entorno de secretos: token `CHAT_TELEGRAM_TOKEN` > `telegram`; modelo `CHAT_API_KEY` > `telegram:api_key` > app; búsqueda `CHAT_SEARCH_API_KEY` > `telegram:search_key` > `search:tavily`.
+- Solo la app (la TUI o `moss-rpc`, con el mismo código) escribe configuración central, sin `telegram.json` ni `--config`. Bot solo lee entorno de secretos: token `CHAT_TELEGRAM_TOKEN` > `telegram`; modelo `CHAT_API_KEY` > `telegram:api_key` > app; búsqueda `CHAT_SEARCH_API_KEY` > `telegram:search_key` > `search:tavily`.
 - Invitados: lectura/cambio/escritura bajo `flock`, atómica 0600, carpeta 0700; archivo dañado se conserva. SIGHUP inválido conserva configuración; token y concurrencia requieren reinicio; respuesta en curso conserva su runtime.
 - Systemd: no reemplazar unidad ajena sin preguntar; nunca ejecutar enable-linger. Guardar aplica el estado Activado. Preguntas con `yes_no_answer`; systemd no reinicia salidas 65/69/73/78.
 

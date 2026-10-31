@@ -1,4 +1,4 @@
-// chatbot-rpc: la app por JSON-RPC 2.0 sobre stdin/stdout, una línea por
+// moss-rpc: la app por JSON-RPC 2.0 sobre stdin/stdout, una línea por
 // mensaje (rpc/PROTOCOL.md). Aquí solo se arranca y se conectan los hilos y
 // stdio; lo que se responde lo decide el Dispatcher.
 //
@@ -147,7 +147,7 @@ std::vector<std::string> env_locks() {
 int main() {
     const int protocol = chatbot::rpc::take_protocol_stdout();
     if (protocol < 0) {
-        std::cerr << "chatbot-rpc: no se pudo preparar stdout para el protocolo\n";
+        std::cerr << "moss-rpc: no se pudo preparar stdout para el protocolo\n";
         return 1;
     }
     // Sin pipes (doble clic o desde una terminal) nadie le va a hablar: se
@@ -156,8 +156,9 @@ int main() {
     // la deja en 65001; en POSIX no hace nada.
     if (chatbot::stdin_is_terminal()) {
         const chatbot::ConsoleUtf8Scope utf8;
-        std::cerr << "chatbot-rpc es para otras interfaces (la gráfica); para platicar, abre "
-                     "chatbot.\nEscribe mensajes JSON-RPC, uno por línea, o cierra esta "
+        std::cerr << "moss-rpc es para otras interfaces (la gráfica); para platicar, abre "
+                  << (chatbot::current_os() == chatbot::Os::Windows ? "moss.exe" : "moss")
+                  << ".\nEscribe mensajes JSON-RPC, uno por línea, o cierra esta "
                      "ventana.\n";
     }
     chatbot::rpc::DebugLog log{std::string{chatbot::cli::process_env("CHAT_DEBUG_RPC")}};
@@ -173,7 +174,7 @@ int main() {
     info.conversations_path = chatbot::cli::default_data_dir();
     if (const std::optional<std::string> base =
             chatbot::cli::default_download_dir(chatbot::cli::environment_value)) {
-        info.downloads_path = (std::filesystem::path{*base} / "chatbot").string();
+        info.downloads_path = (std::filesystem::path{*base} / chatbot::kAppName).string();
     }
     info.env_locks = env_locks();
     if (config.is_error()) {
@@ -200,7 +201,7 @@ int main() {
                                                        config.value(), std::move(session_post),
                                                        std::move(on_finished));
     };
-    // El ExecStart de la unidad es chatbot (la TUI), no chatbot-rpc: el de
+    // El ExecStart de la unidad es moss (la TUI), no moss-rpc: el de
     // la misma carpeta, así la GUI y la TUI escriben la misma unidad.
     const auto make_addons = [](chatbot::cli::ServiceWorker::Post addons_post) {
         return std::make_unique<chatbot::cli::TelegramAddon>(chatbot::cli::addons_environment(
