@@ -38,8 +38,8 @@ struct AddonsEnvironment {
     std::optional<std::string> data_dir;  ///< default_addon_data_dir; nullopt: sin HOME.
     std::optional<std::string> unit_path; ///< default_unit_path; nullopt: sin HOME.
     std::optional<unsigned long> uid;     ///< current_user_id, para loginctl.
-    /// La ruta de chatbot (la TUI, que hace exec del addon): el ExecStart de
-    /// la unidad. En chatbot-rpc, el chatbot de su misma carpeta.
+    /// La ruta de moss (la TUI, que hace exec del addon): el ExecStart de
+    /// la unidad. En moss-rpc, el moss de su misma carpeta.
     std::string chatbot_path;
     std::optional<std::string> xdg_config_home; ///< Solo si es ruta absoluta.
     std::optional<std::string> xdg_data_home;   ///< Solo si es ruta absoluta.
@@ -50,7 +50,7 @@ struct AddonsEnvironment {
 };
 
 /// F2 → Addons → Telegram sin FTXUI, lo que comparten AddonsPanel y
-/// chatbot-rpc: lo guardado (la sección, los secretos y los invitados),
+/// moss-rpc: lo guardado (la sección, los secretos y los invitados),
 /// revisar y guardar un formulario, y el addon y su servicio, que corren en
 /// un ServiceWorker. No pregunta nada: dice qué hay que preguntar
 /// (discard_question, needs_restart, ServiceAction::Kind::Confirm) y quien

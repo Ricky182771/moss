@@ -123,7 +123,7 @@ TEST_CASE("run_process: regresa cuando el hijo sale aunque un nieto tenga la sal
 }
 
 TEST_CASE("run_process: no existe el programa", "[process]") {
-    CHECK(run_process({"programa-que-no-existe-chatbot"}).status ==
+    CHECK(run_process({"programa-que-no-existe-moss"}).status ==
           ProcessResult::Status::NotFound);
     CHECK(run_process({"/no/existe/x"}).status == ProcessResult::Status::NotFound);
     CHECK(run_process({}).status == ProcessResult::Status::Failed);
@@ -142,7 +142,7 @@ TEST_CASE("find_in_path: la ruta completa del programa", "[process]") {
     REQUIRE(sh.has_value());
     CHECK(std::filesystem::path{*sh}.is_absolute());
     CHECK(std::filesystem::path{*sh}.filename() == "sh");
-    CHECK_FALSE(find_in_path("programa-que-no-existe-chatbot").has_value());
+    CHECK_FALSE(find_in_path("programa-que-no-existe-moss").has_value());
     CHECK_FALSE(find_in_path("bin/sh").has_value()); // Con '/' no se busca.
     CHECK_FALSE(find_in_path("").has_value());
 }

@@ -13,9 +13,9 @@ namespace {
 
 settings::UnitParams params() {
     settings::UnitParams p;
-    p.chatbot_path = "/home/ana/CB-CECYTE/build/release/cli/chatbot";
+    p.chatbot_path = "/home/ana/moss/build/release/cli/moss";
     p.addon = "telegram";
-    p.description = "Bot de Telegram del chatbot de CECyTE";
+    p.description = "Bot de Telegram de Moss";
     return p;
 }
 
@@ -23,14 +23,14 @@ settings::UnitParams params() {
 
 TEST_CASE("unidad: el texto completo, sin Environment=", "[addon_settings][systemd]") {
     CHECK(settings::unit_text(params()) ==
-          "# Generado por chatbot (Configuración → Addons). No lo edites: se reescribe desde "
+          "# Generado por Moss (Configuración → Addons). No lo edites: se reescribe desde "
           "ahí.\n"
           "[Unit]\n"
-          "Description=Bot de Telegram del chatbot de CECyTE\n"
+          "Description=Bot de Telegram de Moss\n"
           "\n"
           "[Service]\n"
           "Type=exec\n"
-          "ExecStart=\"/home/ana/CB-CECYTE/build/release/cli/chatbot\" \"telegram\"\n"
+          "ExecStart=\"/home/ana/moss/build/release/cli/moss\" \"telegram\"\n"
           "ExecReload=kill -HUP $MAINPID\n"
           "Restart=on-failure\n"
           "RestartSec=10\n"
@@ -54,14 +54,14 @@ TEST_CASE("unidad: Environment= solo con XDG_* absolutos", "[addon_settings][sys
 
 TEST_CASE("unidad: escape de rutas con espacios, %, $, comillas y controles",
           "[addon_settings][systemd]") {
-    CHECK(settings::quote_exec_argument("/home/ana/Mis cosas/chatbot") ==
-          "\"/home/ana/Mis cosas/chatbot\"");
+    CHECK(settings::quote_exec_argument("/home/ana/Mis cosas/moss") ==
+          "\"/home/ana/Mis cosas/moss\"");
     CHECK(settings::quote_exec_argument("/a/100%/b") == "\"/a/100%%/b\"");
     CHECK(settings::quote_exec_argument("/a/$HOME/b") == "\"/a/$$HOME/b\"");
     CHECK(settings::quote_exec_argument("/a/\"x\"/b") == "\"/a/\\\"x\\\"/b\"");
     CHECK(settings::quote_exec_argument("/a\\b") == "\"/a\\\\b\"");
     CHECK(settings::quote_exec_argument("/a\nb\tc") == "\"/a\\x0ab\\x09c\"");
-    CHECK(settings::quote_exec_argument("/ñandú/chatbot") == "\"/ñandú/chatbot\"");
+    CHECK(settings::quote_exec_argument("/ñandú/moss") == "\"/ñandú/moss\"");
     // En Environment= no hay variables: $ queda igual; % sí es especificador.
     CHECK(settings::quote_environment("XDG_CONFIG_HOME", "/a b/$x/50%/\"q\"") ==
           "\"XDG_CONFIG_HOME=/a b/$x/50%%/\\\"q\\\"\"");
@@ -86,9 +86,9 @@ TEST_CASE("unidad: ajena, al día o vieja", "[addon_settings][systemd]") {
     CHECK(settings::classify_unit(std::string{settings::kUnitMarker} + " y algo\n", p) ==
           settings::UnitState::Foreign);
 
-    // Se movió la carpeta de chatbot: ExecStart viejo.
+    // Se movió la carpeta de moss: ExecStart viejo.
     settings::UnitParams moved = p;
-    moved.chatbot_path = "/opt/chatbot/chatbot";
+    moved.chatbot_path = "/opt/moss/moss";
     CHECK(settings::classify_unit(settings::unit_text(p), moved) == settings::UnitState::Stale);
     // Cambió XDG_CONFIG_HOME.
     settings::UnitParams xdg = p;

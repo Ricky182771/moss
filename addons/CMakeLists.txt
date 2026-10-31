@@ -5,7 +5,7 @@
 # Capa común de los bots (chatbot::bot): se compila con cualquier addon.
 add_subdirectory(common)
 
-# Telegram: cliente de la Bot API, mensajes enriquecidos y chatbot-telegram.
+# Telegram: cliente de la Bot API, mensajes enriquecidos y moss-telegram.
 if(CHATBOT_BUILD_TELEGRAM)
     add_subdirectory(telegram)
 endif()

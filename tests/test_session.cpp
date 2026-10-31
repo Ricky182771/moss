@@ -306,7 +306,7 @@ TEST_CASE("Session: /copiar, /guardar y /exportar", "[session]") {
     CHECK(copy.block.code == blocks.front().code);
     CHECK(copy.command == chatbot::cli::ParsedCommand::Type::Copy);
     CHECK_FALSE(copy.sent.has_value());
-    // Lo que hace chatbot-rpc: el aviso de la GUI al historial.
+    // Lo que hace moss-rpc: el aviso de la GUI al historial.
     h.session->report({chatbot::cli::copied_message(copy.block), false});
     CHECK(h.last_entry().kind == chatbot::cli::EntryKind::Notice);
     CHECK(h.last_entry().text == "Copiado el bloque #1 (cpp, 1 línea).");
@@ -320,10 +320,10 @@ TEST_CASE("Session: /copiar, /guardar y /exportar", "[session]") {
     CHECK(saved.clear);
     CHECK(saved.command == chatbot::cli::ParsedCommand::Type::Save);
     CHECK(saved.action.path ==
-          (h.dir.path() / "descargas" / "chatbot" / "suma.cpp").string());
+          (h.dir.path() / "descargas" / "moss" / "suma.cpp").string());
     CHECK(h.last_entry().text == saved.action.message);
     CHECK(h.last_entry().kind == chatbot::cli::EntryKind::Notice);
-    CHECK(std::filesystem::exists(h.dir.path() / "descargas" / "chatbot" / "suma.cpp"));
+    CHECK(std::filesystem::exists(h.dir.path() / "descargas" / "moss" / "suma.cpp"));
 
     // Error de escritura: la carpeta queda debajo de un archivo normal (igual
     // en POSIX y en Windows). El error va al historial y la caja no se vacía.
@@ -340,7 +340,7 @@ TEST_CASE("Session: /copiar, /guardar y /exportar", "[session]") {
     const SubmitOutcome exported = h.session->submit("/exportar");
     CHECK(exported.type == Type::Done);
     CHECK(exported.clear);
-    CHECK(std::filesystem::exists(h.dir.path() / "descargas" / "chatbot" /
+    CHECK(std::filesystem::exists(h.dir.path() / "descargas" / "moss" /
                                   ("conversacion-" + h.session->conversation().id() + ".md")));
 }
 
@@ -372,9 +372,9 @@ TEST_CASE("Session: los botones guardan y exportan sin tocar el historial", "[se
     got = h.session->save_code_block(1, "");
     CHECK(got.status == Status::Attempted);
     CHECK_FALSE(got.result.error);
-    CHECK(got.result.path == (h.dir.path() / "descargas" / "chatbot" / "bloque-1.cpp").string());
+    CHECK(got.result.path == (h.dir.path() / "descargas" / "moss" / "bloque-1.cpp").string());
     got = h.session->save_code_block(std::nullopt, "x.cpp"); // Sin número: el último.
-    CHECK(got.result.path == (h.dir.path() / "descargas" / "chatbot" / "x.cpp").string());
+    CHECK(got.result.path == (h.dir.path() / "descargas" / "moss" / "x.cpp").string());
     got = h.session->export_to_downloads();
     CHECK(got.status == Status::Attempted);
     CHECK(got.result.message.rfind("Conversación exportada a ", 0) == 0);

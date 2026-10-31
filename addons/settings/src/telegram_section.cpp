@@ -123,8 +123,8 @@ std::optional<std::string> TelegramSectionRead::problem() const {
     }
     if (newer()) {
         return "La sección \"addons.telegram\" de config.json es de la versión " +
-               std::to_string(*version) + " y este chatbot-telegram entiende la " +
-               std::to_string(kTelegramConfigVersion) + ": actualiza chatbot-telegram.";
+               std::to_string(*version) + " y este moss-telegram entiende la " +
+               std::to_string(kTelegramConfigVersion) + ": actualiza moss-telegram.";
     }
     if (!discarded.empty()) {
         return "La sección \"addons.telegram\" de config.json tiene llaves que no se entienden "

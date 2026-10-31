@@ -2,7 +2,7 @@
 #define CHATBOT_TEST_FAKE_SYSTEM_HPP
 
 // Procesos falsos para F2 → Addons, TelegramAddon y los addons.* de
-// chatbot-rpc: nunca corre systemctl, loginctl ni el addon de verdad.
+// moss-rpc: nunca corre systemctl, loginctl ni el addon de verdad.
 
 #include "service_control.h"
 
@@ -19,7 +19,7 @@
 namespace chatbot_test {
 
 /// El addon "instalado" que contesta --config-version.
-inline constexpr const char* kAddonExecutable = "/home/ana/CB/build/chatbot-telegram";
+inline constexpr const char* kAddonExecutable = "/home/ana/CB/build/moss-telegram";
 
 inline chatbot::cli::ProcessResult exited(int code, std::string out = {}, std::string err = {}) {
     chatbot::cli::ProcessResult result;
@@ -38,20 +38,20 @@ public:
     FakeSystem() {
         answers_[std::string{kAddonExecutable} + " --config-version"] = exited(0, "1\n");
         set_active(true);
-        answers_["systemctl --user is-enabled chatbot-telegram.service"] = exited(0, "enabled\n");
-        answers_["systemctl --user show -p ExecMainStatus,Result chatbot-telegram.service"] =
+        answers_["systemctl --user is-enabled moss-telegram.service"] = exited(0, "enabled\n");
+        answers_["systemctl --user show -p ExecMainStatus,Result moss-telegram.service"] =
             exited(0, "ExecMainStatus=0\nResult=success\n");
         answers_["loginctl show-user 1000 -p Linger --value"] = exited(0, "no\n");
     }
 
     void set_active(bool active) {
         const std::lock_guard<std::mutex> lock(mutex_);
-        answers_["systemctl --user is-active chatbot-telegram.service"] =
+        answers_["systemctl --user is-active moss-telegram.service"] =
             active ? exited(0, "active\n") : exited(3, "inactive\n");
     }
     void set_enabled(bool enabled) {
         const std::lock_guard<std::mutex> lock(mutex_);
-        answers_["systemctl --user is-enabled chatbot-telegram.service"] =
+        answers_["systemctl --user is-enabled moss-telegram.service"] =
             enabled ? exited(0, "enabled\n") : exited(1, "disabled\n");
     }
     void answer(const std::string& command, chatbot::cli::ProcessResult result) {

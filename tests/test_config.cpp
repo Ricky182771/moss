@@ -175,17 +175,17 @@ TEST_CASE("build_config_path: XDG_CONFIG_HOME presente y ausente", "[config][xdg
 
     // Presente y no vacío: manda XDG, incluso si HOME también existe.
     CHECK(build_config_path(std::nullopt, std::string{"/xdg/custom"}, std::string{"/home/usuario"})
-              .value() == "/xdg/custom/chatbot/config.json");
+              .value() == "/xdg/custom/moss/config.json");
     // Con barra final se normaliza.
     CHECK(build_config_path(std::nullopt, std::string{"/xdg/custom/"}, std::string{"/home/usuario"})
-              .value() == "/xdg/custom/chatbot/config.json");
+              .value() == "/xdg/custom/moss/config.json");
 
-    // Ausente: se usa $HOME/.config/chatbot/config.json.
+    // Ausente: se usa $HOME/.config/moss/config.json.
     CHECK(build_config_path(std::nullopt, std::nullopt, std::string{"/home/usuario"})
-              .value() == "/home/usuario/.config/chatbot/config.json");
+              .value() == "/home/usuario/.config/moss/config.json");
     // Presente pero vacío: cuenta como ausente.
     CHECK(build_config_path(std::nullopt, std::string{}, std::string{"/home/usuario"})
-              .value() == "/home/usuario/.config/chatbot/config.json");
+              .value() == "/home/usuario/.config/moss/config.json");
 
     // Sin XDG ni HOME: no hay ruta determinable.
     CHECK_FALSE(build_config_path(std::nullopt, std::nullopt, std::nullopt).has_value());
@@ -197,46 +197,46 @@ TEST_CASE("build_windows_config_path: AppData\\Roaming, si no APPDATA", "[config
 
     // La carpeta que da Windows manda, aunque APPDATA diga otra cosa.
     CHECK(build_windows_config_path(std::nullopt, roaming, std::string{"D:\\otra"}).value() ==
-          roaming + "\\chatbot\\config.json");
+          roaming + "\\moss\\config.json");
     // Con barra final (\ o /) no se repite el separador.
     CHECK(build_windows_config_path(std::nullopt, roaming + "\\", std::nullopt).value() ==
-          roaming + "\\chatbot\\config.json");
+          roaming + "\\moss\\config.json");
     CHECK(build_windows_config_path(std::nullopt, std::string{"C:/Users/Ana/AppData/Roaming/"},
                                     std::nullopt)
-              .value() == "C:/Users/Ana/AppData/Roaming\\chatbot\\config.json");
+              .value() == "C:/Users/Ana/AppData/Roaming\\moss\\config.json");
 
     // Si Windows no la dio (o vacía), la variable APPDATA.
     CHECK(build_windows_config_path(std::nullopt, std::nullopt, roaming).value() ==
-          roaming + "\\chatbot\\config.json");
+          roaming + "\\moss\\config.json");
     CHECK(build_windows_config_path(std::nullopt, std::string{}, roaming).value() ==
-          roaming + "\\chatbot\\config.json");
+          roaming + "\\moss\\config.json");
 
     // Sin ninguna: no hay ruta. HOME y XDG_* ni siquiera son parámetros.
     CHECK_FALSE(build_windows_config_path(std::nullopt, std::nullopt, std::nullopt).has_value());
     CHECK_FALSE(build_windows_config_path(std::nullopt, std::string{}, std::string{}).has_value());
 }
 
-TEST_CASE("portable_data_dir: datos/ junto al ejecutable solo con chatbot.portable",
+TEST_CASE("portable_data_dir: datos/ junto al ejecutable solo con moss.portable",
           "[config][portable]") {
     using chatbot::Os;
     using chatbot::portable_data_dir;
-    CHECK(chatbot::kPortableMarker == "chatbot.portable");
+    CHECK(chatbot::kPortableMarker == "moss.portable");
 
     // Linux: con el marcador, <carpeta>/datos; sin barras repetidas.
-    CHECK(portable_data_dir(std::string{"/opt/chatbot"}, true, Os::Posix) == "/opt/chatbot/datos");
-    CHECK(portable_data_dir(std::string{"/opt/chatbot/"}, true, Os::Posix) ==
-          "/opt/chatbot/datos");
+    CHECK(portable_data_dir(std::string{"/opt/moss"}, true, Os::Posix) == "/opt/moss/datos");
+    CHECK(portable_data_dir(std::string{"/opt/moss/"}, true, Os::Posix) ==
+          "/opt/moss/datos");
     CHECK(portable_data_dir(std::string{"/"}, true, Os::Posix) == "/datos");
     // Windows: con barra invertida, también si la carpeta trae / o \ al final.
-    CHECK(portable_data_dir(std::string{"E:\\chatbot"}, true, Os::Windows) == "E:\\chatbot\\datos");
-    CHECK(portable_data_dir(std::string{"E:\\chatbot\\"}, true, Os::Windows) ==
-          "E:\\chatbot\\datos");
-    CHECK(portable_data_dir(std::string{"C:\\Users\\Ñandú\\Escritorio\\chatbot"}, true,
-                            Os::Windows) == "C:\\Users\\Ñandú\\Escritorio\\chatbot\\datos");
+    CHECK(portable_data_dir(std::string{"E:\\moss"}, true, Os::Windows) == "E:\\moss\\datos");
+    CHECK(portable_data_dir(std::string{"E:\\moss\\"}, true, Os::Windows) ==
+          "E:\\moss\\datos");
+    CHECK(portable_data_dir(std::string{"C:\\Users\\Ñandú\\Escritorio\\moss"}, true,
+                            Os::Windows) == "C:\\Users\\Ñandú\\Escritorio\\moss\\datos");
 
     // Sin el marcador, o sin saber dónde está el ejecutable: no es portable.
-    CHECK_FALSE(portable_data_dir(std::string{"/opt/chatbot"}, false, Os::Posix).has_value());
-    CHECK_FALSE(portable_data_dir(std::string{"E:\\chatbot"}, false, Os::Windows).has_value());
+    CHECK_FALSE(portable_data_dir(std::string{"/opt/moss"}, false, Os::Posix).has_value());
+    CHECK_FALSE(portable_data_dir(std::string{"E:\\moss"}, false, Os::Windows).has_value());
     CHECK_FALSE(portable_data_dir(std::nullopt, true, Os::Posix).has_value());
     CHECK_FALSE(portable_data_dir(std::string{}, true, Os::Windows).has_value());
 }
@@ -245,16 +245,16 @@ TEST_CASE("build_config_path: el modo portable gana sobre XDG_CONFIG_HOME y HOME
           "[config][portable]") {
     using chatbot::build_config_path;
     const std::optional<std::string> portable =
-        chatbot::portable_data_dir(std::string{"/media/usb/chatbot"}, true, chatbot::Os::Posix);
+        chatbot::portable_data_dir(std::string{"/media/usb/moss"}, true, chatbot::Os::Posix);
     CHECK(build_config_path(portable, std::string{"/xdg"}, std::string{"/home/usuario"}) ==
-          "/media/usb/chatbot/datos/config.json");
+          "/media/usb/moss/datos/config.json");
     CHECK(build_config_path(portable, std::nullopt, std::nullopt) ==
-          "/media/usb/chatbot/datos/config.json");
-    // Sin chatbot.portable, las reglas de siempre.
+          "/media/usb/moss/datos/config.json");
+    // Sin moss.portable, las reglas de siempre.
     const std::optional<std::string> not_portable =
-        chatbot::portable_data_dir(std::string{"/media/usb/chatbot"}, false, chatbot::Os::Posix);
+        chatbot::portable_data_dir(std::string{"/media/usb/moss"}, false, chatbot::Os::Posix);
     CHECK(build_config_path(not_portable, std::string{"/xdg"}, std::string{"/home/usuario"}) ==
-          "/xdg/chatbot/config.json");
+          "/xdg/moss/config.json");
 }
 
 TEST_CASE("build_windows_config_path: el modo portable gana sobre AppData y APPDATA",
@@ -262,20 +262,20 @@ TEST_CASE("build_windows_config_path: el modo portable gana sobre AppData y APPD
     using chatbot::build_windows_config_path;
     const std::string roaming = "C:\\Users\\Ana\\AppData\\Roaming";
     const std::optional<std::string> portable =
-        chatbot::portable_data_dir(std::string{"E:\\chatbot"}, true, chatbot::Os::Windows);
+        chatbot::portable_data_dir(std::string{"E:\\moss"}, true, chatbot::Os::Windows);
     CHECK(build_windows_config_path(portable, roaming, roaming) ==
-          "E:\\chatbot\\datos\\config.json");
+          "E:\\moss\\datos\\config.json");
     CHECK(build_windows_config_path(portable, std::nullopt, std::nullopt) ==
-          "E:\\chatbot\\datos\\config.json");
+          "E:\\moss\\datos\\config.json");
     const std::optional<std::string> not_portable =
-        chatbot::portable_data_dir(std::string{"E:\\chatbot"}, false, chatbot::Os::Windows);
+        chatbot::portable_data_dir(std::string{"E:\\moss"}, false, chatbot::Os::Windows);
     CHECK(build_windows_config_path(not_portable, roaming, std::nullopt) ==
-          roaming + "\\chatbot\\config.json");
+          roaming + "\\moss\\config.json");
 }
 
-TEST_CASE("process_portable_data_dir: sin chatbot.portable junto a las pruebas no es portable",
+TEST_CASE("process_portable_data_dir: sin moss.portable junto a las pruebas no es portable",
           "[config][portable]") {
-    // Nadie pone chatbot.portable junto a chatbot_tests: las rutas del
+    // Nadie pone moss.portable junto a chatbot_tests: las rutas del
     // proceso de pruebas son las de siempre.
     CHECK_FALSE(chatbot::process_portable_data_dir().has_value());
     const std::optional<std::string> executable = chatbot::executable_dir();
@@ -335,11 +335,11 @@ TEST_CASE("prepare_portable_data_dir: carpeta de solo lectura da un error claro"
         const std::optional<chatbot::ChatError> error = chatbot::prepare_portable_data_dir(dir);
         REQUIRE(error.has_value());
         CHECK(error->kind == chatbot::ErrorKind::Config);
-        CHECK_THAT(error->message, Catch::Matchers::StartsWith("Modo portable (chatbot.portable"));
+        CHECK_THAT(error->message, Catch::Matchers::StartsWith("Modo portable (moss.portable"));
         CHECK_THAT(error->message, Catch::Matchers::ContainsSubstring(
                                        "no se pudo crear la carpeta de datos " + dir + ": "));
         CHECK(occurrences(error->message, dir) == 1); // La ruta, una sola vez.
-        CHECK_THAT(error->message, Catch::Matchers::ContainsSubstring("borra chatbot.portable"));
+        CHECK_THAT(error->message, Catch::Matchers::ContainsSubstring("borra moss.portable"));
         CHECK_FALSE(std::filesystem::exists(app / "datos"));
         chatbot_test::set_mode(app, 0755);
     }
@@ -375,9 +375,9 @@ TEST_CASE("missing_config_dir_message dice qué faltó en cada sistema", "[confi
 TEST_CASE("default_config_path usa el entorno real del proceso", "[config][xdg]") {
     const std::optional<std::string> path = chatbot::default_config_path();
     if (chatbot::current_os() == chatbot::Os::Windows) {
-        // En Windows: %APPDATA%\chatbot\config.json, sin mirar HOME.
+        // En Windows: %APPDATA%\moss\config.json, sin mirar HOME.
         REQUIRE(path.has_value());
-        REQUIRE_THAT(*path, Catch::Matchers::EndsWith("\\chatbot\\config.json"));
+        REQUIRE_THAT(*path, Catch::Matchers::EndsWith("\\moss\\config.json"));
         return;
     }
     // El proceso de pruebas corre con HOME definido; basta con que la función
@@ -387,11 +387,11 @@ TEST_CASE("default_config_path usa el entorno real del proceso", "[config][xdg]"
 
     if (xdg != nullptr && *xdg != '\0') {
         REQUIRE(path.has_value());
-        REQUIRE_THAT(*path, Catch::Matchers::ContainsSubstring("/chatbot/config.json"));
+        REQUIRE_THAT(*path, Catch::Matchers::ContainsSubstring("/moss/config.json"));
     } else if (home != nullptr && *home != '\0') {
         REQUIRE(path.has_value());
         REQUIRE_THAT(*path,
-                     Catch::Matchers::ContainsSubstring(".config/chatbot/config.json"));
+                     Catch::Matchers::ContainsSubstring(".config/moss/config.json"));
     } else {
         CHECK_FALSE(path.has_value());
     }

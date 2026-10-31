@@ -403,7 +403,7 @@ private:
             }
             switch (c) {
             // Telegram no respeta "\\<" ni "\\&" (deja ver la barra; lo
-            // confirmó chatbot-telegram-probe): esos dos van como entidad.
+            // confirmó moss-telegram-probe): esos dos van como entidad.
             case '<':
                 out_ += "&lt;";
                 break;

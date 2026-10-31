@@ -35,10 +35,10 @@ std::optional<std::string> resolve_addon_data_dir(std::string_view name,
         return *portable_dir + "/" + std::string{name};
     }
     if (const std::optional<std::string> base = absolute_base(xdg_data_home)) {
-        return *base + "/chatbot/" + std::string{name};
+        return *base + "/" + std::string{kAppName} + "/" + std::string{name};
     }
     if (home.has_value() && !home->empty()) {
-        return *home + "/.local/share/chatbot/" + std::string{name};
+        return *home + "/.local/share/" + std::string{kAppName} + "/" + std::string{name};
     }
     return std::nullopt;
 }

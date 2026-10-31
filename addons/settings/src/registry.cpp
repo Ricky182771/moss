@@ -8,8 +8,8 @@ namespace chatbot::addon_settings {
 namespace {
 
 constexpr std::array<AddonInfo, 1> kAddons{{
-    {"telegram", "Telegram", "chatbot-telegram", kTelegramConfigVersion,
-     "chatbot-telegram.service", "Bot de Telegram del chatbot de CECyTE"},
+    {"telegram", "Telegram", "moss-telegram", kTelegramConfigVersion,
+     "moss-telegram.service", "Bot de Telegram de Moss"},
 }};
 
 } // namespace

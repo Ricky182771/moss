@@ -15,10 +15,10 @@ namespace chatbot::addon_settings {
 /// invitados.json); no es configurable:
 /// - en modo portable (portable_dir, de chatbot::portable_data_dir),
 ///   <portable_dir>/<name>, aunque estén XDG_DATA_HOME o HOME;
-/// - si no, $XDG_DATA_HOME/chatbot/<name>, solo si es ruta absoluta (la
+/// - si no, $XDG_DATA_HOME/moss/<name>, solo si es ruta absoluta (la
 ///   especificación XDG manda ignorar las relativas), como las
 ///   conversaciones de la app;
-/// - si no, $HOME/.local/share/chatbot/<name>;
+/// - si no, $HOME/.local/share/moss/<name>;
 /// - nullopt si no hay nada.
 [[nodiscard]] std::optional<std::string> resolve_addon_data_dir(
     std::string_view name, const std::optional<std::string>& portable_dir,

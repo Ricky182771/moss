@@ -1,4 +1,4 @@
-// Registro de addons conocidos: chatbot <nombre> y F2 usan la misma tabla.
+// Registro de addons conocidos: moss <nombre> y F2 usan la misma tabla.
 
 #include "chatbot/addon_settings/registry.h"
 #include "chatbot/addon_settings/telegram_section.h"
@@ -13,9 +13,9 @@ TEST_CASE("registro: solo telegram, con su programa, versión y servicio",
     const settings::AddonInfo* telegram = settings::find_addon("telegram");
     REQUIRE(telegram != nullptr);
     CHECK(telegram->title == "Telegram");
-    CHECK(telegram->executable == "chatbot-telegram");
+    CHECK(telegram->executable == "moss-telegram");
     CHECK(telegram->config_version == settings::kTelegramConfigVersion);
-    CHECK(telegram->unit == "chatbot-telegram.service");
+    CHECK(telegram->unit == "moss-telegram.service");
     for (const char* other : {"", "Telegram", "telegram ", "whatsapp", "../telegram"}) {
         CHECK(settings::find_addon(other) == nullptr);
     }

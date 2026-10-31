@@ -175,7 +175,7 @@ TEST_CASE("list_models: reintenta un 503 y respeta la cancelación", "[proveedor
 
 TEST_CASE("credentials.json: ida y vuelta, permisos 0600 y carpeta 0700", "[proveedor][credenciales]") {
     const ScopedTempDir dir;
-    const std::filesystem::path path = dir.path() / "chatbot" / "credentials.json";
+    const std::filesystem::path path = dir.path() / "moss" / "credentials.json";
     chatbot::Credentials credentials;
     credentials.keys[chatbot::credentials_key("nvidia", "https://integrate.api.nvidia.com/v1")] =
         kSecret;
@@ -248,7 +248,7 @@ TEST_CASE("credentials.json con JSON inválido: error sin citar el contenido",
 
 TEST_CASE("load_config: CHAT_API_KEY gana; si no, la key del proveedor", "[proveedor][credenciales]") {
     const ScopedTempDir dir;
-    const std::filesystem::path config = dir.path() / "chatbot" / "config.json";
+    const std::filesystem::path config = dir.path() / "moss" / "config.json";
     write(config,
           R"({"provider":"nvidia","base_url":"https://integrate.api.nvidia.com/v1","model":"m"})",
           0644);
@@ -292,7 +292,7 @@ TEST_CASE("load_config: CHAT_API_KEY gana; si no, la key del proveedor", "[prove
 
 TEST_CASE("save_config_file conserva llaves y nunca escribe la key", "[proveedor][config]") {
     const ScopedTempDir dir;
-    const std::filesystem::path config = dir.path() / "chatbot" / "config.json";
+    const std::filesystem::path config = dir.path() / "moss" / "config.json";
     write(config,
           R"({"timeout_seconds": 90, "history_limit": 1000, "otra": {"a": [1, 2]}, "model": "viejo"})",
           0640);
@@ -341,7 +341,7 @@ TEST_CASE("save_config_file conserva llaves y nunca escribe la key", "[proveedor
 
 TEST_CASE("load_config para la interfaz: sin key ni modelo no es error", "[proveedor][config]") {
     const ScopedTempDir dir;
-    const std::filesystem::path config = dir.path() / "chatbot" / "config.json";
+    const std::filesystem::path config = dir.path() / "moss" / "config.json";
     FakeEnv env;
     const auto options = [&](bool allow) {
         chatbot::ConfigOptions result{
@@ -398,7 +398,7 @@ TEST_CASE("load_config_file_values lee config.json sin el entorno", "[proveedor]
 TEST_CASE("save_appearance guarda symbols; un valor vacío deja la llave como estaba",
           "[apariencia][config][simbolos]") {
     const ScopedTempDir dir;
-    const std::filesystem::path config = dir.path() / "chatbot" / "config.json";
+    const std::filesystem::path config = dir.path() / "moss" / "config.json";
 
     // Sin "symbols": vacío (cli/ lo toma como Automático).
     write(config, R"({"appearance": {"theme": "terminal", "background": "theme"}})", 0600);
@@ -431,7 +431,7 @@ TEST_CASE("save_appearance guarda symbols; un valor vacío deja la llave como es
 TEST_CASE("save_appearance conserva las demás llaves; load_appearance_values la lee",
           "[apariencia][config]") {
     const ScopedTempDir dir;
-    const std::filesystem::path config = dir.path() / "chatbot" / "config.json";
+    const std::filesystem::path config = dir.path() / "moss" / "config.json";
 
     // Sin archivo: vacíos, sin error; al guardar se crea.
     const auto missing = chatbot::load_appearance_values(config.string());

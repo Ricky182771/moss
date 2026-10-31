@@ -63,16 +63,16 @@ std::optional<std::string> locate_addon(const settings::AddonInfo& addon) {
 }
 
 std::string addon_not_found_message(const settings::AddonInfo& addon, bool portable) {
-    return "No encontré " + std::string{addon.executable} + " junto a chatbot" +
+    return "No encontré " + std::string{addon.executable} + " junto a moss" +
            (portable ? "." : " ni en el PATH.");
 }
 
 std::string usage_text(Os os, bool portable, const AddonLocator& locate) {
     std::string text =
         "Uso:\n"
-        "  chatbot                       abre el chat\n"
-        "  chatbot <addon> [argumentos]  arranca un addon\n"
-        "  chatbot --help                esta ayuda\n"
+        "  moss                       abre el chat\n"
+        "  moss <addon> [argumentos]  arranca un addon\n"
+        "  moss --help                esta ayuda\n"
         "\n"
         "Addons:\n";
     if (os == Os::Windows) {
@@ -83,7 +83,7 @@ std::string usage_text(Os os, bool portable, const AddonLocator& locate) {
         if (const std::optional<std::string> path = locate(addon)) {
             text += "instalado en " + *path + "\n";
         } else {
-            text += "no instalado (copia " + std::string{addon.executable} + " junto a chatbot" +
+            text += "no instalado (copia " + std::string{addon.executable} + " junto a moss" +
                     (portable ? "" : " o en el PATH") + ")\n";
         }
     }
@@ -100,25 +100,25 @@ std::optional<int> run_command_line(const std::vector<std::string>& args) {
         std::cout << usage_text(current_os(), portable, locate_addon);
         return 0;
     case CommandLine::Kind::Usage:
-        std::cerr << "chatbot: " << line.problem << "\n\n"
+        std::cerr << "moss: " << line.problem << "\n\n"
                   << usage_text(current_os(), portable, locate_addon);
         return kExitUsage;
     case CommandLine::Kind::Addon:
         break;
     }
     if (current_os() == Os::Windows) {
-        std::cerr << "chatbot: " << settings::kAddonsUnavailableOnWindows << '\n';
+        std::cerr << "moss: " << settings::kAddonsUnavailableOnWindows << '\n';
         return 1;
     }
     const std::optional<std::string> path = locate_addon(*line.addon);
     if (!path.has_value()) {
-        std::cerr << "chatbot: " << addon_not_found_message(*line.addon, portable) << '\n';
+        std::cerr << "moss: " << addon_not_found_message(*line.addon, portable) << '\n';
         return kExitUnavailable;
     }
     std::vector<std::string> argv{*path};
     argv.insert(argv.end(), line.arguments.begin(), line.arguments.end());
     const std::string error = exec_program(*path, argv);
-    std::cerr << "chatbot: no se pudo arrancar " << *path << ": " << error << '\n';
+    std::cerr << "moss: no se pudo arrancar " << *path << ": " << error << '\n';
     return 1;
 }
 

@@ -56,21 +56,25 @@ struct ConfigOptions {
     bool allow_missing_key_and_model = false;
 };
 
+/// Nombre de la app en sus carpetas (config, datos, addons, descargas) y en
+/// el marcador portable: siempre en minúsculas, también en Windows.
+inline constexpr std::string_view kAppName = "moss";
+
 /// Archivo que activa el modo portable si está junto al ejecutable (puede
 /// estar vacío; su contenido no se lee), como el .portable de Windows
 /// Terminal.
-inline constexpr std::string_view kPortableMarker = "chatbot.portable";
+inline constexpr std::string_view kPortableMarker = "moss.portable";
 
 /// Carpeta de datos del modo portable (función pura, también para las
 /// reglas de Windows en Linux): <executable_dir>/datos (con \ en Windows)
-/// si marker_exists (chatbot.portable está en executable_dir). Nullopt si no
+/// si marker_exists (moss.portable está en executable_dir). Nullopt si no
 /// hay marcador o no se conoce la carpeta del ejecutable. Ahí van
 /// config.json, credentials.json y conversations/; las descargas no cambian.
 [[nodiscard]] std::optional<std::string> portable_data_dir(
     const std::optional<std::string>& executable_dir, bool marker_exists, Os os);
 
 /// portable_data_dir de este proceso: executable_dir() y si existe
-/// chatbot.portable a su lado. Se revisa una sola vez, en la primera llamada,
+/// moss.portable a su lado. Se revisa una sola vez, en la primera llamada,
 /// para que todo el proceso use las mismas rutas aunque el archivo cambie.
 [[nodiscard]] const std::optional<std::string>& process_portable_data_dir();
 
@@ -84,8 +88,8 @@ inline constexpr std::string_view kPortableMarker = "chatbot.portable";
 
 /// Devuelve la ruta del archivo de configuración del entorno real: en modo
 /// portable, <process_portable_data_dir()>/config.json; si no,
-/// $XDG_CONFIG_HOME/chatbot/config.json, o ~/.config/chatbot/config.json
-/// si XDG_CONFIG_HOME no está. En Windows, %APPDATA%\chatbot\config.json
+/// $XDG_CONFIG_HOME/moss/config.json, o ~/.config/moss/config.json
+/// si XDG_CONFIG_HOME no está. En Windows, %APPDATA%\moss\config.json
 /// (la carpeta AppData\Roaming que da Windows o, si no, la variable
 /// APPDATA), sin mirar HOME ni XDG_*. Nullopt si no se puede determinar.
 [[nodiscard]] std::optional<std::string> default_config_path();

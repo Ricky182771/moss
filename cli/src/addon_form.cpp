@@ -258,7 +258,7 @@ std::string addon_install_problem(const settings::AddonInfo& addon, const AddonI
     const std::string executable{addon.executable};
     if (!install.path.has_value()) {
         return "No instalado: copia " + executable +
-               (portable ? " junto a chatbot." : " junto a chatbot o en el PATH.");
+               (portable ? " junto a moss." : " junto a moss o en el PATH.");
     }
     if (!install.config_version.has_value()) {
         return "Incompatible: " + executable +

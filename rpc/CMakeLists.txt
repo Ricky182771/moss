@@ -1,4 +1,4 @@
-# chatbot-rpc: la app por JSON-RPC 2.0 sobre stdin/stdout (PROTOCOL.md), para
+# moss-rpc: la app por JSON-RPC 2.0 sobre stdin/stdout (PROTOCOL.md), para
 # otras interfaces (la GUI de Flutter). Sin FTXUI ni addons: enlaza
 # chatbot_cli_lib, la misma lógica de la TUI (Session). chatbot_rpc_lib tiene
 # todo menos main.cpp, para probarlo sin procesos.
@@ -23,15 +23,15 @@ target_include_directories(chatbot_rpc_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/sr
 target_link_libraries(chatbot_rpc_lib PUBLIC chatbot_cli_lib nlohmann_json::nlohmann_json)
 chatbot_set_warnings(chatbot_rpc_lib)
 
-add_executable(chatbot-rpc src/main.cpp)
-target_link_libraries(chatbot-rpc PRIVATE chatbot_rpc_lib)
+add_executable(moss-rpc src/main.cpp)
+target_link_libraries(moss-rpc PRIVATE chatbot_rpc_lib)
 # server.version de initialize.
-target_compile_definitions(chatbot-rpc PRIVATE CHATBOT_VERSION="${PROJECT_VERSION}")
-chatbot_set_warnings(chatbot-rpc)
-chatbot_windows_manifest(chatbot-rpc)
-# Junto a chatbot, como en el ZIP: el servicio arranca ese chatbot y el addon
+target_compile_definitions(moss-rpc PRIVATE CHATBOT_VERSION="${PROJECT_VERSION}")
+chatbot_set_warnings(moss-rpc)
+chatbot_windows_manifest(moss-rpc)
+# Junto a moss, como en el ZIP: el servicio arranca ese moss y el addon
 # se busca junto a él (rpc/PROTOCOL.md, sección 6.8).
-set_target_properties(chatbot-rpc PROPERTIES RUNTIME_OUTPUT_DIRECTORY $<TARGET_FILE_DIR:chatbot>)
+set_target_properties(moss-rpc PROPERTIES RUNTIME_OUTPUT_DIRECTORY $<TARGET_FILE_DIR:moss>)
 
 if(CHATBOT_BUILD_TESTS)
     add_subdirectory(tests)

@@ -26,7 +26,7 @@ namespace chatbot::cli {
 /// F2 → Addons → Telegram (FTXUI): el estado del addon y de su servicio
 /// arriba, fijo, y debajo los campos (con barra si no caben) y los
 /// invitados. Lo guardado, guardar y el servicio están en TelegramAddon
-/// (sin FTXUI, lo comparte chatbot-rpc); aquí, el dibujo, el foco, los
+/// (sin FTXUI, lo comparte moss-rpc); aquí, el dibujo, el foco, los
 /// textos y las preguntas, que salen en la línea de estado de
 /// SettingsScreen. Se usa solo desde el hilo de la interfaz.
 class AddonsPanel {

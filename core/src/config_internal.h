@@ -13,8 +13,8 @@ namespace chatbot {
 /// sin mutar el entorno del proceso.
 /// - En modo portable (portable_dir, de portable_data_dir):
 ///   <portable_dir>/config.json, aunque estén XDG_CONFIG_HOME o HOME.
-/// - Con XDG_CONFIG_HOME presente y no vacío: $XDG_CONFIG_HOME/chatbot/config.json
-/// - Si no, con HOME: $HOME/.config/chatbot/config.json
+/// - Con XDG_CONFIG_HOME presente y no vacío: $XDG_CONFIG_HOME/moss/config.json
+/// - Si no, con HOME: $HOME/.config/moss/config.json
 /// - Si no hay nada: nullopt.
 /// Header interno (src/); no forma parte de la API pública.
 [[nodiscard]] std::optional<std::string> build_config_path(
@@ -27,7 +27,7 @@ namespace chatbot {
 /// según la shell):
 /// - en modo portable (portable_dir, de portable_data_dir):
 ///   <portable_dir>\config.json;
-/// - si no, <roaming_app_data>\chatbot\config.json, con la carpeta AppData\Roaming
+/// - si no, <roaming_app_data>\moss\config.json, con la carpeta AppData\Roaming
 ///   que da Windows (known_folder(KnownFolder::RoamingAppData));
 /// - si no la dio, con la variable APPDATA (appdata);
 /// - si no hay ninguna: nullopt.

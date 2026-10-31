@@ -12,7 +12,7 @@ namespace chatbot::cli {
 
 namespace {
 
-/// Escribe un archivo nuevo en <base>/chatbot: la ruta completa o el error.
+/// Escribe un archivo nuevo en <base>/moss: la ruta completa o el error.
 WriteResult write_download(const std::string& base, std::string_view name,
                            std::string_view content) {
     const WriteResult dir = ensure_download_dir(base);

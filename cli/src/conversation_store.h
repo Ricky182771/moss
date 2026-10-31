@@ -71,9 +71,9 @@ struct LoadResult {
 /// - chat_data_dir (CHAT_DATA_DIR) si está y no está vacío;
 /// - si no, en modo portable (portable_dir, de chatbot::portable_data_dir),
 ///   <portable_dir>/conversations;
-/// - si no, $XDG_DATA_HOME/chatbot/conversations, solo si es ruta absoluta
+/// - si no, $XDG_DATA_HOME/moss/conversations, solo si es ruta absoluta
 ///   (la especificación XDG manda ignorar rutas relativas);
-/// - si no, $HOME/.local/share/chatbot/conversations;
+/// - si no, $HOME/.local/share/moss/conversations;
 /// - nullopt si no hay nada.
 [[nodiscard]] std::optional<std::string> resolve_data_dir(
     const std::optional<std::string>& chat_data_dir,
@@ -85,7 +85,7 @@ struct LoadResult {
 /// XDG_* no cuentan:
 /// - chat_data_dir (CHAT_DATA_DIR) si está y no está vacío;
 /// - si no, en modo portable, <portable_dir>\conversations;
-/// - si no, <local_app_data>\chatbot\conversations, con la carpeta
+/// - si no, <local_app_data>\moss\conversations, con la carpeta
 ///   AppData\Local que da Windows (KnownFolder::LocalAppData);
 /// - si no la dio, con la variable LOCALAPPDATA (localappdata);
 /// - nullopt si no hay nada.

@@ -66,12 +66,12 @@ struct ClipboardAccess {
 /// incomplete_warning al final si hace falta.
 [[nodiscard]] std::string copied_message(const CodeBlock& block);
 
-/// Guarda el bloque en <download_base>/chatbot (que crea si falta) con
+/// Guarda el bloque en <download_base>/moss (que crea si falta) con
 /// file_name, o "bloque-<n>.<ext>" si está vacío (block_file_name), sin
 /// sobrescribir. Un file_name que no pasa validate_file_name es un error
 /// (los comandos lo revisan antes, para mostrarlo en la línea de estado).
 /// home abrevia la ruta del aviso con "~". Con Wording::Short: "#3 guardado
-/// en ~/Descargas/chatbot/bloque-3.cpp", con "⚠ #3 incompleto (...) · "
+/// en ~/Descargas/moss/bloque-3.cpp", con "⚠ #3 incompleto (...) · "
 /// delante si hace falta; los errores de escritura no cambian.
 [[nodiscard]] ActionResult save_block(const CodeBlock& block, std::string_view file_name,
                                       const std::string& download_base, const std::string& home,
@@ -89,7 +89,7 @@ struct ClipboardAccess {
                                             const std::string& home, Symbols symbols);
 
 /// Exporta los pares guardados de la conversación a Markdown en
-/// <download_base>/chatbot (export_markdown, export_file_name). Sin pares es
+/// <download_base>/moss (export_markdown, export_file_name). Sin pares es
 /// un error ("Todavía no hay respuestas que exportar.").
 [[nodiscard]] ActionResult export_conversation(const Conversation& conversation, std::time_t now,
                                                const std::string& download_base,

@@ -74,7 +74,7 @@ struct ServiceAction {
                                                        std::string_view property);
 
 /// La última línea de error del registro (journalctl -o cat): las del bot
-/// con nivel "error" y las fatales ("chatbot-telegram: …"). Sin la fecha y
+/// con nivel "error" y las fatales ("moss-telegram: …"). Sin la fecha y
 /// sin lo que va desde " detalle=", que puede traer texto de los alumnos.
 /// "" si no hay.
 [[nodiscard]] std::string last_error_line(std::string_view journal,

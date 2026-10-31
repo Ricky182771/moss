@@ -11,7 +11,7 @@
 #include <vector>
 
 /// La sección "addons" → "telegram" de config.json: la escribe la pantalla de
-/// configuración de la app (F2 → Addons) y la lee chatbot-telegram. El
+/// configuración de la app (F2 → Addons) y la lee moss-telegram. El
 /// proveedor, la URL base, las instrucciones del sistema, history_limit y
 /// timeout_seconds no van aquí: salen del resto de config.json, como en la
 /// app. Los secretos tampoco (secrets.h).

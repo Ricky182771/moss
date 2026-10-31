@@ -34,7 +34,7 @@ enum class Os { Posix, Windows };
 /// Como stdio_is_terminal, pero solo stdout.
 [[nodiscard]] bool stdout_is_terminal();
 
-/// Como stdio_is_terminal, pero solo stdin (chatbot-rpc abierto con doble
+/// Como stdio_is_terminal, pero solo stdin (moss-rpc abierto con doble
 /// clic o desde una terminal, sin pipes).
 [[nodiscard]] bool stdin_is_terminal();
 

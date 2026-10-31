@@ -278,11 +278,11 @@ TEST_CASE("carpeta de descargas, en orden de prioridad", "[downloads]") {
     }
 }
 
-TEST_CASE("ensure_download_dir crea chatbot/ con 0755 o menos", "[downloads]") {
+TEST_CASE("ensure_download_dir crea moss/ con 0755 o menos", "[downloads]") {
     const chatbot_test::ScopedTempDir dir;
     const chatbot::cli::WriteResult created = chatbot::cli::ensure_download_dir(dir.string());
     REQUIRE(created.error.empty());
-    CHECK(created.path == native_separators(dir.string() + "/chatbot"));
+    CHECK(created.path == native_separators(dir.string() + "/moss"));
 #ifndef _WIN32
     // La umask del usuario puede quitar permisos, nunca agregarlos.
     CHECK(within(mode_of(created.path), 0755U));
@@ -292,7 +292,7 @@ TEST_CASE("ensure_download_dir crea chatbot/ con 0755 o menos", "[downloads]") {
     CHECK(chatbot::cli::ensure_download_dir(dir.string()).error.empty());
 
     const chatbot_test::ScopedTempDir other;
-    write_text(other.path() / "chatbot", "no soy carpeta");
+    write_text(other.path() / "moss", "no soy carpeta");
     CHECK_FALSE(chatbot::cli::ensure_download_dir(other.string()).error.empty());
     CHECK_FALSE(
         chatbot::cli::ensure_download_dir((other.path() / "no-existe").string()).error.empty());
@@ -379,8 +379,8 @@ TEST_CASE("write_new_file no sigue enlaces simbólicos ni escribe en carpetas qu
 
 TEST_CASE("display_path abrevia HOME con ~", "[downloads]") {
     using chatbot::cli::display_path;
-    CHECK(display_path("/home/a/Descargas/chatbot/suma.cpp", "/home/a") ==
-          "~/Descargas/chatbot/suma.cpp");
+    CHECK(display_path("/home/a/Descargas/moss/suma.cpp", "/home/a") ==
+          "~/Descargas/moss/suma.cpp");
     CHECK(display_path("/home/ab/x", "/home/a") == "/home/ab/x");
     CHECK(display_path("/srv/x", "/home/a") == "/srv/x");
     CHECK(display_path("/srv/x", "") == "/srv/x");

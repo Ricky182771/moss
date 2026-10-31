@@ -36,7 +36,7 @@ void write(const std::filesystem::path& path, const std::string& content) {
 }
 
 std::filesystem::path config_in(const ScopedTempDir& dir) {
-    return dir.path() / "chatbot" / "config.json";
+    return dir.path() / "moss" / "config.json";
 }
 
 } // namespace

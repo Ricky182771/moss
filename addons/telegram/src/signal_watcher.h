@@ -21,7 +21,7 @@ namespace chatbot::telegram {
 /// curso y una recarga a la mitad. SIGHUP recarga la configuración en otro
 /// hilo, para que el de señales siga atendiendo SIGTERM mientras la recarga
 /// espera a Telegram; si la recarga pide apagar (enabled: false), apaga
-/// igual que SIGTERM. Interno de chatbot-telegram (está aquí para probarlo).
+/// igual que SIGTERM. Interno de moss-telegram (está aquí para probarlo).
 class SignalWatcher {
 public:
     /// false: hay que apagar el bot.

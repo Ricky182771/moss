@@ -68,7 +68,7 @@ TEST_CASE("local_time: hora local de un instante y vuelta con mktime", "[platafo
 TEST_CASE("write_file_atomic: ida y vuelta en una carpeta con ñ y acentos", "[plataforma]") {
     const chatbot_test::ScopedTempDir temp;
     // Rutas en UTF-8, como todo std::string del proyecto.
-    const fs::path dir = temp.path() / fs::path{u8"Configuración del niño áéíóú"} / "chatbot";
+    const fs::path dir = temp.path() / fs::path{u8"Configuración del niño áéíóú"} / "moss";
     const std::string path = (dir / fs::path{u8"señal.json"}).string();
 
     using chatbot::FilePrivacy;
@@ -191,8 +191,8 @@ TEST_CASE("stdin_is_terminal: un pipe no; una pseudoterminal sí", "[plataforma]
 
 TEST_CASE("join_windows_path no repite el separador", "[plataforma][windows]") {
     using chatbot::join_windows_path;
-    CHECK(join_windows_path("C:\\Users\\Ana", "chatbot") == "C:\\Users\\Ana\\chatbot");
-    CHECK(join_windows_path("C:\\Users\\Ana\\", "chatbot") == "C:\\Users\\Ana\\chatbot");
+    CHECK(join_windows_path("C:\\Users\\Ana", "moss") == "C:\\Users\\Ana\\moss");
+    CHECK(join_windows_path("C:\\Users\\Ana\\", "moss") == "C:\\Users\\Ana\\moss");
     CHECK(join_windows_path("C:/Users/Ana/", "a\\b") == "C:/Users/Ana\\a\\b");
     CHECK(join_windows_path("D:\\", "x") == "D:\\x");
 }

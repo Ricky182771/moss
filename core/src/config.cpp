@@ -257,10 +257,10 @@ std::optional<std::string> build_config_path(
         if (base.back() == '/') {
             base.pop_back();
         }
-        return base + "/chatbot/config.json";
+        return base + "/" + std::string{kAppName} + "/config.json";
     }
     if (home.has_value() && !home->empty()) {
-        return *home + "/.config/chatbot/config.json";
+        return *home + "/.config/" + std::string{kAppName} + "/config.json";
     }
     return std::nullopt;
 }
@@ -274,7 +274,7 @@ std::optional<std::string> build_windows_config_path(
     }
     for (const std::optional<std::string>* base : {&roaming_app_data, &appdata}) {
         if (base->has_value() && !(*base)->empty()) {
-            return join_windows_path(**base, "chatbot\\config.json");
+            return join_windows_path(**base, std::string{kAppName} + "\\config.json");
         }
     }
     return std::nullopt;

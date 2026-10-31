@@ -1,4 +1,4 @@
-// Pruebas del Dispatcher de chatbot-rpc: secuencias exactas de mensajes, sin
+// Pruebas del Dispatcher de moss-rpc: secuencias exactas de mensajes, sin
 // hilos propios ni stdio. La Session es la de test_session.cpp
 // (session_fakes.hpp); el post mete cada tarea en una TaskQueue que la
 // prueba vacía, y después de cada tarea se llama after_task, como main.
@@ -91,8 +91,8 @@ struct Rpc : chatbot_test::SessionFakes {
     std::function<std::unique_ptr<chatbot::Transport>()> models_transport = [] {
         return std::make_unique<chatbot_test::FakeTransport>();
     };
-    /// addons.* y service.*: procesos falsos; el addon "instalado" y chatbot
-    /// junto a chatbot-rpc, en la carpeta temporal.
+    /// addons.* y service.*: procesos falsos; el addon "instalado" y moss
+    /// junto a moss-rpc, en la carpeta temporal.
     chatbot_test::FakeSystem system;
     bool installed = true;
     chatbot::Os addons_os = chatbot::Os::Posix;
@@ -100,11 +100,11 @@ struct Rpc : chatbot_test::SessionFakes {
 
     [[nodiscard]] std::string bot_data_dir() const { return path("telegram"); }
     [[nodiscard]] std::string unit_path() const {
-        return (dir.path() / "systemd" / "chatbot-telegram.service").string();
+        return (dir.path() / "systemd" / "moss-telegram.service").string();
     }
-    /// Lo que main pasa: el chatbot de la carpeta de chatbot-rpc.
+    /// Lo que main pasa: el moss de la carpeta de moss-rpc.
     [[nodiscard]] std::string chatbot_path() const {
-        return chatbot::cli::sibling_chatbot_path(path("chatbot-rpc"));
+        return chatbot::cli::sibling_chatbot_path(path("moss-rpc"));
     }
 
     std::unique_ptr<chatbot::cli::TelegramAddon>
@@ -235,7 +235,7 @@ TEST_CASE("RPC: el ejemplo completo de PROTOCOL.md (sección 8)", "[rpc]") {
     rpc.responses = {stream_of({"¡Ho", "la! ¿En qué te ayudo?"})};
     rpc.start();
     rpc.line(R"({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocol_version":1,)"
-             R"("client":{"name":"chatbot-gui","version":"0.1.0"}}})");
+             R"("client":{"name":"moss-gui","version":"0.1.0"}}})");
     rpc.line(R"({"jsonrpc":"2.0","id":2,"method":"conversation.get","params":{"conversation":"c1"}})");
     rpc.line(R"({"jsonrpc":"2.0","id":3,"method":"chat.send","params":{"conversation":"c1","text":"hola"}})");
     REQUIRE(rpc.finish());
@@ -247,7 +247,7 @@ TEST_CASE("RPC: el ejemplo completo de PROTOCOL.md (sección 8)", "[rpc]") {
 
     const std::vector<Json> expected = {
         Json::parse(R"({"jsonrpc":"2.0","id":1,"result":{"protocol_version":1,
-            "server":{"name":"chatbot-rpc","version":"0.1.0"},"platform":"linux","portable":false,
+            "server":{"name":"moss-rpc","version":"0.1.0"},"platform":"linux","portable":false,
             "conversation":"c1","paths":{"config":"/tmp/config.json",
             "conversations":"/tmp/conversations","downloads":null},"ready":true,"problem":null,
             "warnings":[],"capabilities":{"search":true,"addons":["telegram"],"service":"systemd"}}})"),
@@ -1046,7 +1046,7 @@ TEST_CASE("RPC: commands.run", "[rpc]") {
                                                          "conversation.entry_added 3 notice"});
         const Json& saved = got[0]["result"];
         CHECK(saved["kind"] == "save");
-        CHECK(saved["path"] == (rpc.dir.path() / "descargas" / "chatbot" / "x.cpp").string());
+        CHECK(saved["path"] == (rpc.dir.path() / "descargas" / "moss" / "x.cpp").string());
         CHECK(saved["error"] == false);
         CHECK(saved["clear"] == true);
         CHECK(saved["message"] == got[1]["params"]["entry"]["text"]);
@@ -1134,7 +1134,7 @@ TEST_CASE("RPC: blocks.list, blocks.get, blocks.save y conversation.export", "[r
 
         rpc.download_base = rpc.path("descargas");
         std::filesystem::create_directory(*rpc.download_base);
-        const std::filesystem::path folder = rpc.dir.path() / "descargas" / "chatbot";
+        const std::filesystem::path folder = rpc.dir.path() / "descargas" / "moss";
         rpc.call(12, "blocks.save", {{"conversation", "c1"}, {"number", 1}});
         Json got = only(rpc); // Sin entry_added: no toca el historial.
         CHECK(got["result"]["path"] == (folder / "bloque-1.cpp").string());
@@ -1643,7 +1643,7 @@ TEST_CASE("RPC: addons.list y addons.check_install", "[rpc][addons]") {
     rpc.call(5, "addons.list");
     const Json missing = only(rpc)["result"]["addons"][0];
     CHECK(missing["installed"] == false);
-    CHECK(missing["problem"].get<std::string>().starts_with("No instalado: copia chatbot-telegram"));
+    CHECK(missing["problem"].get<std::string>().starts_with("No instalado: copia moss-telegram"));
 }
 
 TEST_CASE("RPC: addons.telegram.get y check", "[rpc][addons]") {
@@ -1796,7 +1796,7 @@ TEST_CASE("RPC: invitados", "[rpc][addons]") {
     if (active) {
         CHECK(got[0]["result"]["message"] == "Se quitó 42. Configuración aplicada al bot.");
         CHECK(chatbot_test::service_actions(rpc.system) ==
-              std::vector<std::string>{"systemctl --user reload chatbot-telegram.service"});
+              std::vector<std::string>{"systemctl --user reload moss-telegram.service"});
     } else {
         CHECK(got[0]["result"]["message"] == "Se quitó 42.");
         CHECK(rpc.system.calls().empty());
@@ -1830,7 +1830,7 @@ TEST_CASE("RPC: service.status y service.apply", "[rpc][addons]") {
         const std::vector<Json> got = long_call(rpc, 2, "service.apply", {{"addon", "telegram"}});
         REQUIRE(summaries(got) == std::vector<std::string>{"#2 result", "service.changed"});
         CHECK(got[0]["result"]["ok"] == true);
-        // La de test_addons_panel.cpp: ExecStart = el chatbot de la TUI.
+        // La de test_addons_panel.cpp: ExecStart = el moss de la TUI.
         const chatbot::addon_settings::AddonInfo& addon =
             *chatbot::addon_settings::find_addon("telegram");
         CHECK(unit_on_disk(rpc) ==
@@ -1851,7 +1851,7 @@ TEST_CASE("RPC: service.status y service.apply", "[rpc][addons]") {
         CHECK(unit_on_disk(rpc).starts_with(chatbot::addon_settings::kUnitMarker));
     }
     SECTION("sin systemd de usuario: -32006") {
-        rpc.system.answer("systemctl --user is-active chatbot-telegram.service",
+        rpc.system.answer("systemctl --user is-active moss-telegram.service",
                           chatbot_test::exited(1, "", "Failed to connect to bus: No medium found"));
         const std::vector<Json> got = long_call(rpc, 2, "service.apply", {{"addon", "telegram"}});
         check_error(got[0], -32006, std::string{chatbot::cli::kNoUserSystemd});
@@ -1864,11 +1864,11 @@ TEST_CASE("RPC: service.status y service.apply", "[rpc][addons]") {
         CHECK(got[0]["result"]["message"].get<std::string>().starts_with("No instalado: "));
         CHECK(chatbot_test::service_actions(rpc.system).empty());
     }
-    SECTION("sin chatbot junto a chatbot-rpc: -32007 sin correr nada") {
+    SECTION("sin moss junto a moss-rpc: -32007 sin correr nada") {
         std::filesystem::remove(rpc.chatbot_path());
         rpc.call(2, "service.status", {{"addon", "telegram"}});
         check_error(only(rpc), -32007,
-                    "El servicio arranca chatbot, y no está junto a chatbot-rpc: " +
+                    "El servicio arranca moss, y no está junto a moss-rpc: " +
                         rpc.chatbot_path() + ".");
         CHECK(rpc.system.calls().empty());
     }
@@ -1887,9 +1887,9 @@ TEST_CASE("RPC: service.restart, disable y reload", "[rpc][addons]") {
     got = long_call(rpc, 4, "service.disable", {{"addon", "telegram"}});
     CHECK(got[0]["result"].dump() == R"({"message":"Servicio desactivado.","ok":true})");
     CHECK(chatbot_test::service_actions(rpc.system) ==
-          std::vector<std::string>{"systemctl --user restart chatbot-telegram.service",
-                                   "systemctl --user reload chatbot-telegram.service",
-                                   "systemctl --user disable --now chatbot-telegram.service"});
+          std::vector<std::string>{"systemctl --user restart moss-telegram.service",
+                                   "systemctl --user reload moss-telegram.service",
+                                   "systemctl --user disable --now moss-telegram.service"});
 
     write_section(rpc, {{"version", 1}, {"enabled", false}});
     rpc.call(5, "service.restart", {{"addon", "telegram"}});
@@ -1900,7 +1900,7 @@ TEST_CASE("RPC: peticiones largas pendientes", "[rpc][addons]") {
     Rpc rpc;
     write_section(rpc, enabled_bot());
     write_bot_token(rpc);
-    const std::string restart = "systemctl --user restart chatbot-telegram.service";
+    const std::string restart = "systemctl --user restart moss-telegram.service";
 
     SECTION("$/cancel: -32800 al momento; la operación termina y avisa service.changed") {
         rpc.system.hold(restart);
@@ -1919,7 +1919,7 @@ TEST_CASE("RPC: peticiones largas pendientes", "[rpc][addons]") {
     SECTION("dos a la vez: models.list y service.status") {
         BlockingTransport* blocking = nullptr;
         models_block(rpc, blocking);
-        rpc.system.hold("systemctl --user is-active chatbot-telegram.service");
+        rpc.system.hold("systemctl --user is-active moss-telegram.service");
         rpc.initialize();
         rpc.call("m", "models.list", {{"draft", nvidia_draft()}});
         rpc.call("s", "service.status", {{"addon", "telegram"}});

@@ -1,5 +1,5 @@
 # Prueba del modo portable con el ejecutable real (cmake -P, sin shell):
-# copia chatbot a una carpeta nueva con chatbot.portable a su lado y lo
+# copia moss a una carpeta nueva con moss.portable a su lado y lo
 # arranca sin key y sin terminal (stdin desde un archivo vacío), con HOME en
 # una carpeta propia y sin CHAT_* ni XDG_*.
 #
@@ -29,7 +29,7 @@ set(home "${WORK}/home")
 file(MAKE_DIRECTORY "${app}" "${home}")
 file(COPY "${CHATBOT}" DESTINATION "${app}")
 get_filename_component(name "${CHATBOT}" NAME)
-file(TOUCH "${app}/chatbot.portable")
+file(TOUCH "${app}/moss.portable")
 file(WRITE "${WORK}/stdin.txt" "")
 
 if(MODE STREQUAL "readonly")
@@ -85,7 +85,7 @@ if(MODE STREQUAL "writable")
         message(FATAL_ERROR "Quedaron archivos en datos/: ${datos_entries}")
     endif()
 else()
-    if(NOT err MATCHES "Modo portable \\(chatbot.portable junto al ejecutable\\)")
+    if(NOT err MATCHES "Modo portable \\(moss.portable junto al ejecutable\\)")
         message(FATAL_ERROR "Se esperaba el error del modo portable")
     endif()
     string(FIND "${err}" "${app}/datos" path_at)
