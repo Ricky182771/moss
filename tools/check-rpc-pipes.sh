@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# chatbot-rpc con pipes de verdad (la CI de Windows lo corre sobre el .exe
+# moss-rpc con pipes de verdad (la CI de Windows lo corre sobre el .exe
 # nativo; también corre en Linux): ciclo de vida, saltos de línea, UTF-8, EOF
 # y stdout solo del protocolo.
 #
-# Uso: tools/check-rpc-pipes.sh <chatbot-rpc> <linux|windows>
+# Uso: tools/check-rpc-pipes.sh <moss-rpc> <linux|windows>
 #
-# Junto al ejecutable debe haber un chatbot.portable: así config.json y las
+# Junto al ejecutable debe haber un moss.portable: así config.json y las
 # conversaciones van a su datos/ y no se toca la configuración de la máquina.
 # En Windows no basta con cambiar APPDATA: SHGetKnownFolderPath gana sobre esa
 # variable.
@@ -14,8 +14,8 @@ export LC_ALL=C # grep compara bytes, no caracteres.
 
 rpc=$1
 platform=$2
-if [ ! -f "$(dirname "$rpc")/chatbot.portable" ]; then
-    echo "Falta chatbot.portable junto a $rpc"
+if [ ! -f "$(dirname "$rpc")/moss.portable" ]; then
+    echo "Falta moss.portable junto a $rpc"
     exit 2
 fi
 unset CHAT_API_KEY CHAT_BASE_URL CHAT_MODEL CHAT_SEARCH_API_KEY CHAT_DATA_DIR CHAT_DOWNLOAD_DIR
@@ -49,7 +49,7 @@ check_output() {
     fi
 }
 
-# rpc_piped <nombre>: chatbot-rpc con un pipe en stdin y otro en stdout (no
+# rpc_piped <nombre>: moss-rpc con un pipe en stdin y otro en stdout (no
 # archivos: en Windows ReadFile y WriteFile se portan distinto). El código de
 # salida queda en $work/<nombre>.status.
 rpc_piped() {
@@ -114,4 +114,4 @@ check_output eof
 grep -q '"jsonrpc":"2.0","id":1,"result":{' "$work/eof.out" || fail "eof: initialize sin respuesta"
 echo "ok: eof (código 0, $elapsed_ms ms después de cerrar stdin)"
 
-echo "chatbot-rpc con pipes: todo bien"
+echo "moss-rpc con pipes: todo bien"
