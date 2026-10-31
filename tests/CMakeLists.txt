@@ -8,6 +8,7 @@ add_executable(chatbot_tests
     test_clipboard.cpp
     test_code_blocks.cpp
     test_command_menu.cpp
+    test_model_picker.cpp
     test_command_parser.cpp
     test_commands.cpp
     test_config.cpp
@@ -90,6 +91,7 @@ add_executable(chatbot_ui_tests
     test_settings_screen.cpp
     test_addons_panel.cpp
     test_command_menu_view.cpp
+    test_model_picker_view.cpp
     test_history_view.cpp
     test_input_box.cpp
     test_input_style.cpp

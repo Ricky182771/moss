@@ -62,6 +62,7 @@ add_library(chatbot_cli_lib STATIC
     src/glyphs.cpp
     src/input_edit.cpp
     src/key_log.cpp
+    src/model_picker.cpp
     src/models_loader.cpp
     src/paste.cpp
     src/provider_settings.cpp
@@ -91,6 +92,7 @@ endif()
 # usan con ftxui::Screen.
 add_library(chatbot_cli_ui STATIC
     src/command_menu_view.cpp
+    src/model_picker_view.cpp
     src/history_view.cpp
     src/input_style.cpp
     src/list_style.cpp
