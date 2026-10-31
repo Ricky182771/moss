@@ -102,6 +102,9 @@ TEST_CASE("Selector de /model: proveedores con marca y estado", "[model_picker_v
     CHECK(rows[3].find("    openrouter") == 0);
     CHECK(contains(rows[3], "sin key"));
     CHECK(contains(rows[4], "local"));
+    // Un endpoint: su id sin "custom:", su nombre y su nota.
+    CHECK(rows[5].find("    lab ") == 0);
+    CHECK(contains(rows[5], "Servidor del lab"));
     CHECK(contains(rows[5], "sin key"));
     // El cursor en el actual; los que no se eligen, atenuados.
     CHECK(screen.CellAt(2, 2).background_color ==

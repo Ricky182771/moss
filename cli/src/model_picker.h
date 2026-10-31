@@ -83,6 +83,8 @@ public:
     [[nodiscard]] std::optional<std::string> finish(const ModelSwitch& change);
 
     [[nodiscard]] bool is_open() const { return open_; }
+    /// Los proveedores de open(), sin filtrar (la vista alinea sus columnas).
+    [[nodiscard]] const std::vector<ProviderChoice>& choices() const { return choices_; }
     [[nodiscard]] bool model_step() const { return model_step_; }
     /// Esc en el paso de modelo regresa al de proveedor (se llegó desde ahí).
     [[nodiscard]] bool can_go_back() const { return model_step_ && from_providers_; }

@@ -50,6 +50,14 @@ public:
     using OnSaveSearchKey = std::function<std::optional<std::string>(const std::string&)>;
     /// La pantalla se cerró (guardada o descartada).
     using OnClose = std::function<void()>;
+    /// Lo que devuelve OnDeleteEndpoint: el aviso (o el error) para la línea
+    /// de estado y, si se borró, el formulario con lo que quedó guardado.
+    struct EndpointDeleted {
+        std::string message;
+        std::optional<ProviderSettings> form;
+    };
+    /// Borra el endpoint id ("custom:<id>"), como Session::delete_endpoint.
+    using OnDeleteEndpoint = std::function<EndpointDeleted(const std::string& id)>;
 
     /// palette debe vivir más que la pantalla.
     SettingsScreen(ModelsLoader& loader, const Palette& palette, OnSave on_save,
@@ -69,6 +77,10 @@ public:
     /// que se muestra atenuada al pie de "Proveedor de IA". nullopt (por
     /// defecto): sin modo portable, no se muestra nada.
     void set_portable_dir(std::optional<std::string> dir) { portable_dir_ = std::move(dir); }
+    /// [Borrar endpoint]; sin llamarla, el botón no hace nada.
+    void set_on_delete_endpoint(OnDeleteEndpoint on_delete) {
+        on_delete_endpoint_ = std::move(on_delete);
+    }
     /// El sistema para "Addons" (una vez, al arrancar); sin llamarla, la
     /// categoría dice que no están disponibles.
     void set_addons_environment(AddonsEnvironment environment) {
@@ -81,9 +93,11 @@ public:
     void close();
 
     [[nodiscard]] bool is_open() const { return settings_.has_value(); }
-    /// Hay una pregunta (s/n) abierta (descartar o de Addons): todo evento
-    /// es de ella (yes_no.h).
-    [[nodiscard]] bool asking() const { return confirm_discard_ || addons_.question().has_value(); }
+    /// Hay una pregunta (s/n) abierta (descartar, borrar un endpoint o de
+    /// Addons): todo evento es de ella (yes_no.h).
+    [[nodiscard]] bool asking() const {
+        return confirm_discard_ || confirm_delete_ || addons_.question().has_value();
+    }
     /// El componente (para Container::Tab).
     [[nodiscard]] ftxui::Component component() const { return root_; }
     /// Da el foco al primer campo.
@@ -113,6 +127,14 @@ private:
     void save();
     /// Copia al formulario lo que cambió en settings_ (tras cambiar de proveedor).
     void sync_fields();
+    /// La lista del proveedor (provider_list), tras abrir, guardar o borrar.
+    void sync_providers();
+    /// [Borrar endpoint]: pregunta; en el que está en uso, el error de
+    /// Session sin preguntar.
+    void request_delete();
+    void delete_endpoint();
+    /// El endpoint elegido es el de config.json.
+    [[nodiscard]] bool endpoint_in_use() const;
     /// Tab y Shift+Tab: siguiente campo enfocable.
     void move_focus(int step);
     bool handle_event(const ftxui::Event& event);
@@ -140,6 +162,7 @@ private:
     OnSaveSystemPrompt on_save_system_prompt_;
     OnSaveSearchKey on_save_search_key_;
     OnClose on_close_;
+    OnDeleteEndpoint on_delete_endpoint_;
     std::optional<ProviderSettings> settings_;
     SearchSettings search_;
     Config base_;
@@ -147,6 +170,7 @@ private:
     std::string saved_prompt_;    ///< Las instrucciones vigentes al abrir (o al guardar).
     std::string status_;          ///< Aviso o error bajo el formulario.
     bool confirm_discard_ = false; ///< Se preguntó "¿Descartar los cambios?".
+    bool confirm_delete_ = false;  ///< Se preguntó "¿Borrar el endpoint …?".
     bool no_color_ = false;
     std::optional<std::string> portable_dir_; ///< set_portable_dir.
     AddonsPanel addons_;
@@ -161,8 +185,10 @@ private:
     std::vector<std::string> symbol_names_; ///< En el orden de kSymbolModes.
     int symbols_selected_ = 0;
     std::vector<std::string> provider_names_;
+    std::vector<std::string> provider_ids_; ///< Id de cada endpoint (atenuado); "" en los demás.
     int provider_selected_ = 0;
     bool dropdown_open_ = false;
+    std::string name_text_;
     std::string url_text_;
     std::string key_text_;
     std::string filter_text_;
@@ -176,6 +202,8 @@ private:
     ftxui::Component background_list_;
     ftxui::Component symbol_list_;
     ftxui::Component dropdown_;
+    ftxui::Component name_input_;
+    ftxui::Component delete_button_;
     ftxui::Component url_input_;
     ftxui::Component key_input_;
     ftxui::Component filter_input_;

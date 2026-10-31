@@ -395,7 +395,7 @@ int main(int argc, char** argv) {
          .placeholder = [&session](int columns) {
              return session.configured()
                         ? std::string{chatbot::cli::input_placeholder(columns)}
-                        : std::string{chatbot::cli::kSetupNotice} + " (F2)";
+                        : session.setup_problem() + " (F2)";
          }});
     const ftxui::Component input = input_area;
 
@@ -556,6 +556,20 @@ int main(int argc, char** argv) {
         });
 
     settings.set_portable_dir(chatbot::process_portable_data_dir());
+    settings.set_on_delete_endpoint([&](const std::string& id) {
+        chatbot::cli::SettingsScreen::EndpointDeleted result;
+        const chatbot::cli::EndpointDeletion deletion = session.delete_endpoint(id);
+        result.message = deletion.message;
+        if (deletion.status == chatbot::cli::EndpointDeletion::Status::Deleted) {
+            chatbot::Result<chatbot::cli::ProviderSettings> form = session.provider_form();
+            if (form.is_ok()) {
+                result.form = std::move(form).value();
+            } else {
+                result.message = form.error().message;
+            }
+        }
+        return result;
+    });
     settings.set_addons_environment(
         chatbot::cli::addons_environment(post, chatbot::executable_path().value_or("")));
 
@@ -1257,12 +1271,12 @@ int main(int argc, char** argv) {
     });
 
     if (incomplete.has_value()) {
-        // Falta la key o el modelo. Los avisos del tema y de las
-        // instrucciones, si hay, van también.
+        // Falta la key o el modelo (o el proveedor no existe). Los avisos
+        // del tema, de las instrucciones y de los endpoints, si hay, van
+        // también.
         const std::string notice = startup_warning.empty()
-                                       ? std::string{chatbot::cli::kSetupNotice}
-                                       : std::string{chatbot::cli::kSetupNotice} + " " +
-                                             startup_warning;
+                                       ? session.setup_problem()
+                                       : session.setup_problem() + " " + startup_warning;
         open_settings(notice);
         flash = notice; // Si no se pudo abrir, al menos el aviso.
     } else {

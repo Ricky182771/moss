@@ -49,6 +49,8 @@ struct Harness {
     chatbot_test::TaskQueue queue;
     chatbot::cli::Palette palette{chatbot::cli::resolve_appearance("", "")};
     std::optional<std::string> saved_model;
+    std::string saved_provider; ///< provider_id() del último guardado.
+    std::vector<chatbot::Endpoint> more_endpoints; ///< Después de "lab", en open().
     int appearance_saves = 0;
     std::optional<chatbot::cli::Appearance> saved_appearance; ///< La del último guardado.
     int prompt_saves = 0;
@@ -58,7 +60,7 @@ struct Harness {
     std::string saved_search_key; ///< Lo que recibió el último guardado de la key de búsqueda.
     int closes = 0;
     bool wait_models = true; ///< open() espera la lista de modelos.
-    std::string base_url = "http://localhost:8080/v1"; ///< La de open(), en "custom".
+    std::string base_url = "http://localhost:8080/v1"; ///< La de open(), en el endpoint "lab".
     chatbot::cli::ModelsLoader loader{
         [] {
             auto transport = std::make_unique<chatbot_test::FakeTransport>();
@@ -87,6 +89,7 @@ struct Harness {
         loader, palette,
         [this](const chatbot::cli::ProviderSettings& provider) -> std::optional<std::string> {
             saved_model = provider.model();
+            saved_provider = provider.provider_id();
             return std::nullopt;
         },
         [this](const chatbot::cli::Appearance& appearance) -> std::optional<std::string> {
@@ -114,8 +117,14 @@ struct Harness {
         config.base_url = base_url;
         config.model = model;
         config.history_limit_bytes = history_limit;
-        chatbot::cli::ProviderSettings provider({"custom", config.base_url, std::move(model)},
-                                                 {}, {});
+        chatbot::ConfigFileValues values;
+        values.provider = "custom:lab";
+        values.base_url = config.base_url;
+        values.model = std::move(model);
+        values.endpoints = {{"lab", "Servidor del lab", config.base_url}};
+        values.endpoints.insert(values.endpoints.end(), more_endpoints.begin(),
+                                more_endpoints.end());
+        chatbot::cli::ProviderSettings provider(values, {}, {});
         (void)provider.set_key(std::move(key));
         settings.open(std::move(provider), config,
                       chatbot::cli::resolve_appearance("catppuccin-mocha", "theme"),
@@ -997,4 +1006,177 @@ TEST_CASE("configuración: un \\t de config.json se ve como 4 espacios y se guar
     h.save();
     CHECK(h.prompt_saves == 1);
     CHECK(h.saved_prompt == std::string{"uno!\tdos"});
+}
+
+namespace {
+
+/// Abre la lista de proveedores, va a la fila up antes de la última
+/// ("Agregar endpoint…") y elige con Enter.
+void choose_provider(Harness& h, int up) {
+    REQUIRE(h.key(ftxui::Event::Tab)); // Al campo Proveedor.
+    REQUIRE(h.key(ftxui::Event::Return));
+    REQUIRE(h.key(ftxui::Event::End));
+    for (int i = 0; i < up; ++i) {
+        REQUIRE(h.key(ftxui::Event::ArrowUp));
+    }
+    REQUIRE(h.key(ftxui::Event::Return));
+}
+
+bool focused(const Harness& h, std::string_view field) {
+    for (const auto& [name, value] : h.settings.debug_focus()) {
+        if (name == field) {
+            return value;
+        }
+    }
+    return false;
+}
+
+} // namespace
+
+TEST_CASE("configuración: un endpoint con Nombre y [Borrar endpoint] cabe en 80×24 y angosta",
+          "[ajustes][endpoints]") {
+    const chatbot_test::NoColorGuard environment(nullptr);
+    for (const int width : {80, 60}) {
+        INFO("ancho " << width);
+        Harness h;
+        h.open("modelo-1");
+        const ftxui::Screen screen = h.draw(width, 24);
+        const Position name = find(screen, "Nombre");
+        REQUIRE(name.x >= 0);
+        CHECK(find(screen, "Proveedor ").y < name.y);
+        CHECK(find(screen, "URL base").y == name.y + 1);
+        CHECK(find(screen, "Servidor del lab").x >= 0);
+        CHECK(find(screen, "API key").x >= 0);
+        CHECK(find(screen, "Modelo ").x >= 0);
+        CHECK(find(screen, "[ Guardar ]").x >= 0);
+        {
+            const Position button = find(screen, "[ Borrar endpoi"); // A 60, recortado.
+            REQUIRE(button.x >= 0);
+            CHECK(button.y == find(screen, "API key").y + 1);
+            // El que está en uso, atenuado.
+            CHECK(screen.CellAt(button.x + 2, button.y).foreground_color ==
+                  chatbot::cli::to_ftxui(h.palette.theme().notice));
+        }
+    }
+}
+
+TEST_CASE("configuración: la lista de proveedores trae los endpoints y Agregar endpoint…",
+          "[ajustes][endpoints]") {
+    const chatbot_test::NoColorGuard environment(nullptr);
+    Harness h;
+    h.more_endpoints = {{"falso-b", "Falso B", "https://b.example/v1"}};
+    h.open("modelo-1");
+    REQUIRE(h.key(ftxui::Event::Tab));
+    REQUIRE(h.key(ftxui::Event::Return)); // Abierta.
+    REQUIRE(h.key(ftxui::Event::End));    // La lista se desplaza hasta el final.
+    const ftxui::Screen screen = h.draw(100, 40);
+    const Position lab = find(screen, "Servidor del lab");
+    const Position b = find(screen, "Falso B  falso-b"); // Con su id atenuado.
+    const Position add = find(screen, "Agregar endpoint…");
+    REQUIRE(lab.x >= 0);
+    REQUIRE(b.x >= 0);
+    REQUIRE(add.x >= 0);
+    CHECK(find(screen, "Ollama (local)").y < b.y);
+    CHECK(b.y < add.y);
+    CHECK(screen.CellAt(b.x + 9, b.y).foreground_color ==
+          chatbot::cli::to_ftxui(h.palette.theme().notice));
+}
+
+TEST_CASE("configuración: Agregar endpoint… deja los campos vacíos con el foco en Nombre",
+          "[ajustes][endpoints]") {
+    const chatbot_test::NoColorGuard environment(nullptr);
+    Harness h;
+    h.open("modelo-1");
+    choose_provider(h, 0); // "Agregar endpoint…".
+    CHECK(focused(h, "name"));
+    ftxui::Screen screen = h.draw(80, 24);
+    CHECK(find(screen, "nombre del endpoint").x >= 0); // El placeholder: vacío.
+    CHECK(find(screen, "https://mi-servidor/v1").x >= 0);
+    CHECK(find(screen, "[ Borrar endpoint ]").x < 0);
+    CHECK(find(screen, "[ Guardar ]").x >= 0);
+    for (const char* c : {"M", "i", " ", "G", "W"}) {
+        REQUIRE(h.key(ftxui::Event::Character(c)));
+    }
+    REQUIRE(h.key(ftxui::Event::Tab)); // A la URL.
+    for (const char c : std::string{"https://gw.example/v1"}) {
+        REQUIRE(h.key(ftxui::Event::Character(c)));
+    }
+    REQUIRE(h.key(ftxui::Event::Tab)); // A la key.
+    for (const char c : std::string{"sk-clave-del-gateway-0000"}) {
+        REQUIRE(h.key(ftxui::Event::Character(c)));
+    }
+    REQUIRE(h.key(ftxui::Event::Tab)); // Filtro.
+    REQUIRE(h.key(ftxui::Event::Tab)); // Actualizar.
+    REQUIRE(h.key(ftxui::Event::Tab)); // Modelo.
+    for (const char c : std::string{"qwen3"}) {
+        REQUIRE(h.key(ftxui::Event::Character(c)));
+    }
+    h.save();
+    CHECK(h.saved_provider == "custom:mi-gw");
+    CHECK(h.saved_model == "qwen3");
+}
+
+TEST_CASE("configuración: [Borrar endpoint] pregunta con s/n", "[ajustes][endpoints]") {
+    const chatbot_test::NoColorGuard environment(nullptr);
+    Harness h;
+    h.more_endpoints = {{"falso-b", "Falso B", "https://b.example/v1"}};
+    std::vector<std::string> deleted;
+    h.settings.set_on_delete_endpoint([&](const std::string& id) {
+        deleted.push_back(id);
+        chatbot::cli::SettingsScreen::EndpointDeleted result;
+        if (id == "custom:lab") {
+            result.message = "Cambia de proveedor antes de borrar este endpoint.";
+            return result;
+        }
+        result.message = "Se borró el endpoint Falso B.";
+        chatbot::ConfigFileValues values;
+        values.provider = "custom:lab";
+        values.model = "modelo-1";
+        values.endpoints = {{"lab", "Servidor del lab", h.base_url}};
+        result.form.emplace(values, chatbot::Credentials{}, chatbot::cli::SettingsEnv{});
+        return result;
+    });
+    h.open("modelo-1");
+    const auto press_delete = [&h] {
+        REQUIRE(h.key(ftxui::Event::Tab)); // Nombre.
+        REQUIRE(h.key(ftxui::Event::Tab)); // URL base.
+        REQUIRE(h.key(ftxui::Event::Tab)); // API key.
+        REQUIRE(h.key(ftxui::Event::Tab)); // [Borrar endpoint].
+        REQUIRE(h.key(ftxui::Event::Return));
+    };
+
+    SECTION("el que está en uso: el error, sin preguntar") {
+        REQUIRE(h.key(ftxui::Event::Tab));
+        press_delete();
+        CHECK_FALSE(h.settings.asking());
+        CHECK(deleted == std::vector<std::string>{"custom:lab"});
+        CHECK(find(h.draw(100), "Cambia de proveedor antes de borrar este endpoint.").x >= 0);
+    }
+    SECTION("otro: pregunta; Esc cancela con aviso, s lo borra") {
+        choose_provider(h, 1);
+        press_delete();
+        REQUIRE(h.settings.asking());
+        CHECK(find(h.draw(100), "¿Borrar el endpoint Falso B? (s/n)").x >= 0);
+        CHECK(h.key(ftxui::Event::Character("x"))); // Se ignora.
+        CHECK(h.key(ftxui::Event::Return));          // También.
+        REQUIRE(h.settings.asking());
+        REQUIRE(h.key(ftxui::Event::Escape));
+        CHECK_FALSE(h.settings.asking());
+        CHECK(deleted.empty());
+        CHECK(find(h.draw(100), "Cancelado: no se borró el endpoint.").x >= 0);
+        CHECK(h.settings.is_open());
+
+        REQUIRE(h.key(ftxui::Event::Return)); // El foco sigue en el botón.
+        REQUIRE(h.settings.asking());
+        REQUIRE(h.key(ftxui::Event::Character("n")));
+        CHECK_FALSE(h.settings.asking());
+        CHECK(deleted.empty());
+
+        REQUIRE(h.key(ftxui::Event::Return));
+        REQUIRE(h.key(ftxui::Event::Character("s")));
+        CHECK(deleted == std::vector<std::string>{"custom:falso-b"});
+        const ftxui::Screen screen = h.draw(100);
+        CHECK(find(screen, "Se borró el endpoint Falso B.").x >= 0);
+        CHECK(find(screen, "Servidor del lab").x >= 0); // De regreso al guardado.
+    }
 }
