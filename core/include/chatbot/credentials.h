@@ -12,15 +12,14 @@
 namespace chatbot {
 
 /// API keys guardadas por el usuario (credentials.json, sección 7): una por
-/// proveedor; para "custom", una por URL base. Nunca se escriben en
+/// proveedor (los endpoints, por su "custom:<id>"). Nunca se escriben en
 /// config.json, logs, volcados ni mensajes de error (sección 9).
 struct Credentials {
     std::map<std::string, std::string> keys; ///< Llave (ver credentials_key) → API key.
 };
 
-/// Llave de credentials.json: el id del proveedor, o "custom:" + la URL base
-/// sin "/" final para un endpoint personalizado.
-[[nodiscard]] std::string credentials_key(std::string_view provider, std::string_view base_url);
+/// Llave de credentials.json: el id del proveedor ("nvidia", "custom:<id>").
+[[nodiscard]] std::string credentials_key(std::string_view provider);
 
 /// Lee credentials.json. Que no exista no es un error (sin keys). En POSIX,
 /// si grupo u otros tienen algún permiso sobre el archivo, no se lee y se

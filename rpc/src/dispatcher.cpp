@@ -3,7 +3,7 @@
 #include "block_actions.h"
 #include "code_blocks.h"
 #include "commands.h"
-#include "providers.h"
+#include "chatbot/providers.h"
 #include "search_settings.h"
 #include "sidebar.h"
 
@@ -583,13 +583,22 @@ void Dispatcher::settings(const std::string& method, const Json* params, const J
             fail(id, has_id, RpcError::StorageError, message_data(form.error().message));
             return;
         }
+        const Result<std::vector<cli::ProviderChoice>> choices = session_->provider_choices();
+        if (choices.is_error()) {
+            fail(id, has_id, RpcError::StorageError, message_data(choices.error().message));
+            return;
+        }
         const cli::ProviderSettings& f = form.value();
         Json providers = Json::array();
-        for (const cli::ProviderInfo& provider : cli::providers()) {
-            providers.push_back({{"id", std::string{provider.id}},
-                                 {"name", std::string{provider.name}},
-                                 {"base_url", std::string{provider.base_url}},
-                                 {"needs_key", provider.needs_key}});
+        for (const cli::ProviderChoice& choice : choices.value()) {
+            providers.push_back({{"id", choice.id},
+                                 {"kind", choice.endpoint ? "endpoint" : "builtin"},
+                                 {"name", choice.name},
+                                 {"base_url", choice.base_url},
+                                 {"needs_key", choice.needs_key},
+                                 {"key_saved", choice.key_saved},
+                                 {"selectable", choice.selectable},
+                                 {"note", choice.note}});
         }
         reply(id, has_id,
               {{"providers", std::move(providers)},
@@ -604,6 +613,37 @@ void Dispatcher::settings(const std::string& method, const Json* params, const J
                  {"model", f.model_locked()},
                  {"api_key", f.key_locked()}}},
                {"key_status", f.key_status()}});
+    } else if (method == "settings.provider.switch") {
+        if (const auto bad = check_params(params, {{"provider", Param::Type::String, false},
+                                                   {"model"}})) {
+            fail(id, has_id, RpcError::InvalidParams, *bad);
+            return;
+        }
+        std::optional<std::string> provider;
+        if (const auto it = params->find("provider"); it != params->end()) {
+            provider = it->get<std::string>();
+        }
+        using Status = cli::ModelSwitch::Status;
+        const cli::ModelSwitch change =
+            session_->switch_model(provider, params->at("model").get<std::string>());
+        switch (change.status) {
+        case Status::Switched:
+            reply(id, has_id, {{"ready", session_->configured()}});
+            changed("provider");
+            break;
+        case Status::Unchanged:
+            reply(id, has_id, {{"ready", session_->configured()}});
+            break;
+        case Status::Invalid:
+            fail(id, has_id, RpcError::ValidationFailed, message_data(change.message));
+            break;
+        case Status::Busy:
+            fail(id, has_id, RpcError::Busy, message_data(change.message));
+            break;
+        case Status::Failed:
+            fail(id, has_id, RpcError::StorageError, message_data(change.message));
+            break;
+        }
     } else if (method == "settings.provider.check" || method == "settings.provider.save" ||
                method == "models.list") {
         if (const auto bad = check_params(params, {{"draft", Param::Type::Object}})) {
@@ -623,14 +663,38 @@ void Dispatcher::settings(const std::string& method, const Json* params, const J
         } else if (method == "models.list") {
             models_list(*form, id, has_id);
         } else if (!busy()) {
+            const std::string provider = form->provider_id(); // El id generado, si es nuevo.
             if (const std::optional<std::string> error = form->validate()) {
                 fail(id, has_id, RpcError::ValidationFailed, message_data(*error));
             } else if (const std::optional<std::string> failed = session_->save_provider(*form)) {
                 fail(id, has_id, RpcError::StorageError, message_data(*failed));
             } else {
-                reply(id, has_id, {{"ready", session_->configured()}});
+                reply(id, has_id, {{"ready", session_->configured()}, {"provider", provider}});
                 changed("provider");
             }
+        }
+    } else if (method == "settings.endpoint.delete") {
+        if (const auto bad = check_params(params, {{"id"}})) {
+            fail(id, has_id, RpcError::InvalidParams, *bad);
+            return;
+        }
+        using Status = cli::EndpointDeletion::Status;
+        const cli::EndpointDeletion deletion =
+            session_->delete_endpoint(params->at("id").get<std::string>());
+        switch (deletion.status) {
+        case Status::Deleted:
+            reply(id, has_id, Json::object());
+            changed("provider");
+            break;
+        case Status::Invalid:
+            fail(id, has_id, RpcError::ValidationFailed, message_data(deletion.message));
+            break;
+        case Status::Busy:
+            fail(id, has_id, RpcError::Busy, message_data(deletion.message));
+            break;
+        case Status::Failed:
+            fail(id, has_id, RpcError::StorageError, message_data(deletion.message));
+            break;
         }
     } else if (method == "settings.system_prompt.get") {
         if (const auto bad = check_params(params, {})) {
@@ -753,15 +817,20 @@ std::optional<cli::ProviderSettings> Dispatcher::provider_draft(const Json& para
                                                                 bool has_id) {
     const Json& draft = params.at("draft");
     std::optional<Json> bad = check_params(&draft, {{"provider"},
+                                                    {"name", Param::Type::String, false},
                                                     {"base_url"},
                                                     {"model"},
                                                     {"api_key", Param::Type::String, false}});
-    std::size_t index = 0;
+    const Result<cli::ProviderSettings> loaded = session_->provider_form();
+    if (loaded.is_error()) {
+        fail(id, has_id, RpcError::StorageError, message_data(loaded.error().message));
+        return std::nullopt;
+    }
+    std::optional<std::size_t> index;
     if (!bad.has_value()) {
-        const std::string provider = draft.at("provider").get<std::string>();
-        index = cli::provider_index(provider);
-        if (cli::providers()[index].id != provider) {
-            // Al leer config.json un id desconocido cae en custom; aquí es un error de la GUI.
+        // Un id de la tabla, "custom:<id>" (o el id solo) o "custom:" (uno nuevo).
+        index = loaded.value().find_provider(draft.at("provider").get<std::string>());
+        if (!index.has_value()) {
             bad = Json{{"fields", Json::array({"provider"})}};
         }
     }
@@ -773,15 +842,13 @@ std::optional<cli::ProviderSettings> Dispatcher::provider_draft(const Json& para
         fail(id, has_id, RpcError::InvalidParams, {{"fields", std::move(fields)}});
         return std::nullopt;
     }
-    const Result<cli::ProviderSettings> loaded = session_->provider_form();
-    if (loaded.is_error()) {
-        fail(id, has_id, RpcError::StorageError, message_data(loaded.error().message));
-        return std::nullopt;
-    }
     // Como F2: un campo fijado por CHAT_* (o la URL de un proveedor conocido)
     // no se edita, y sus setters no cambian nada.
     cli::ProviderSettings form = loaded.value();
-    form.select_provider(index);
+    form.select_provider(*index);
+    if (const auto name = draft.find("name"); name != draft.end()) {
+        (void)form.set_name(name->get<std::string>()); // Solo cambia algo en un endpoint.
+    }
     (void)form.set_base_url(draft.at("base_url").get<std::string>());
     if (const auto key = draft.find("api_key"); key != draft.end()) {
         (void)form.set_key(key->get<std::string>());
@@ -1122,7 +1189,7 @@ void Dispatcher::fail_send(cli::SendResult result, const Json& id, bool has_id,
     case cli::SendResult::Sent:
         break;
     case cli::SendResult::NotConfigured:
-        fail(id, has_id, RpcError::NotConfigured, message_data(cli::kSetupNotice));
+        fail(id, has_id, RpcError::NotConfigured, message_data(session_->setup_problem()));
         break;
     case cli::SendResult::Busy:
         fail(id, has_id, RpcError::Busy, message_data(cli::kWaitOrCancel));
@@ -1211,12 +1278,24 @@ void Dispatcher::run_command(const std::string& text, const Json& id, bool has_i
         break;
     }
     case Type::Done:
+        if (outcome.command == cli::ParsedCommand::Type::Model) {
+            reply(id, has_id,
+                  {{"kind", "model"}, {"message", outcome.action.message}, {"clear", true}});
+            write_(notification("settings.changed", {{"section", "provider"}}));
+            break;
+        }
         reply(id, has_id,
               {{"kind", outcome.command == cli::ParsedCommand::Type::Save ? "save" : "export"},
                {"path", optional_string(outcome.action.path)},
                {"message", outcome.action.message},
                {"error", outcome.action.error},
                {"clear", outcome.clear}});
+        break;
+    case Type::OpenModelPicker:
+        reply(id, has_id,
+              {{"kind", "model_picker"},
+               {"provider", optional_string(outcome.picker_provider)},
+               {"clear", true}});
         break;
     case Type::Status:
     case Type::Started: // Sin sent no pasan.
@@ -1293,7 +1372,7 @@ void Dispatcher::initialize(const Json* params, const Json& id, bool has_id) {
              {"conversations", optional_string(info_.conversations_path)},
              {"downloads", optional_string(info_.downloads_path)}}},
            {"ready", ready},
-           {"problem", ready ? Json(nullptr) : Json(std::string{cli::kSetupNotice})},
+           {"problem", ready ? Json(nullptr) : Json(session_->setup_problem())},
            {"warnings", session_->startup_warnings()},
            // Lo que soporta este servidor; no cambia durante la sesión.
            {"capabilities", capabilities}});
@@ -1371,7 +1450,7 @@ Json Dispatcher::snapshot() const {
 Json Dispatcher::status() const {
     const bool ready = session_->configured();
     return {{"ready", ready},
-            {"problem", ready ? Json(nullptr) : Json(std::string{cli::kSetupNotice})},
+            {"problem", ready ? Json(nullptr) : Json(session_->setup_problem())},
             {"busy", session_->busy()},
             {"conversation", handle_},
             {"env_locks", info_.env_locks},

@@ -1,6 +1,7 @@
 #include "command_parser.h"
 
 #include "commands.h"
+#include "chatbot/providers.h"
 
 #include <algorithm>
 #include <cctype>
@@ -46,9 +47,51 @@ std::optional<int> block_number(std::string_view word) {
     return value;
 }
 
-/// /copiar, /guardar y /exportar. input ya viene recortado. nullopt si no
-/// es ninguno de ellos (por ejemplo "/copiarx").
-std::optional<ParsedCommand> parse_block_command(std::string_view input) {
+/// El proveedor de word sin distinguir mayúsculas (ver parse_command), o
+/// nullopt.
+std::optional<std::string> provider_id(std::string_view word, const EndpointLookup& is_endpoint) {
+    std::string lower{word};
+    std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
+    if (provider_index(lower).has_value() || endpoint_id(lower).has_value()) {
+        return lower;
+    }
+    if (is_endpoint && is_endpoint(lower)) {
+        return endpoint_provider(lower);
+    }
+    return std::nullopt;
+}
+
+ParsedCommand parse_model_command(const std::vector<std::string_view>& args,
+                                  const EndpointLookup& is_endpoint) {
+    ParsedCommand command;
+    command.type = ParsedCommand::Type::Model;
+    if (args.size() > 2) {
+        command.type = ParsedCommand::Type::ModelUsage;
+        command.text = std::string{kModelUsage};
+        return command;
+    }
+    if (!args.empty()) {
+        command.provider = provider_id(args[0], is_endpoint);
+    }
+    if (args.size() == 2 && !command.provider.has_value()) {
+        command.type = ParsedCommand::Type::ModelUsage;
+        command.text = unknown_provider_message(args[0]);
+        return command;
+    }
+    if (args.size() == 2) {
+        command.model = std::string{args[1]};
+    } else if (args.size() == 1 && !command.provider.has_value()) {
+        command.model = std::string{args[0]};
+    }
+    return command;
+}
+
+/// /copiar, /guardar, /exportar y /model. input ya viene recortado. nullopt
+/// si no es ninguno de ellos (por ejemplo "/copiarx").
+std::optional<ParsedCommand> parse_block_command(std::string_view input,
+                                                const EndpointLookup& is_endpoint) {
     const std::size_t end = static_cast<std::size_t>(
         std::find_if(input.begin(), input.end(), is_space) - input.begin());
     const std::string_view name = input.substr(0, end);
@@ -60,7 +103,7 @@ std::optional<ParsedCommand> parse_block_command(std::string_view input) {
             command.block = block_number(args[0]);
         }
         if (args.size() > 1 || (args.size() == 1 && !command.block.has_value())) {
-            return ParsedCommand{ParsedCommand::Type::CopyUsage, "", std::nullopt, ""};
+            return ParsedCommand{ParsedCommand::Type::CopyUsage, "", std::nullopt, "", std::nullopt, std::nullopt};
         }
         return command;
     }
@@ -73,9 +116,12 @@ std::optional<ParsedCommand> parse_block_command(std::string_view input) {
             command.file_name = std::string{args[1]};
         }
         if (args.size() > 2 || (!args.empty() && !command.block.has_value())) {
-            return ParsedCommand{ParsedCommand::Type::SaveUsage, "", std::nullopt, ""};
+            return ParsedCommand{ParsedCommand::Type::SaveUsage, "", std::nullopt, "", std::nullopt, std::nullopt};
         }
         return command;
+    }
+    if (name == kModelCommand) {
+        return parse_model_command(args, is_endpoint);
     }
     if (name == kExportCommand) {
         command.type = args.empty() ? ParsedCommand::Type::Export
@@ -87,7 +133,11 @@ std::optional<ParsedCommand> parse_block_command(std::string_view input) {
 
 } // namespace
 
-ParsedCommand parse_command(std::string_view input) {
+std::string unknown_provider_message(std::string_view word) {
+    return "Proveedor desconocido: " + std::string{word} + ". Escribe /model para ver la lista.";
+}
+
+ParsedCommand parse_command(std::string_view input, const EndpointLookup& is_endpoint) {
     // Recortar espacios al inicio y al final.
     while (!input.empty() && std::isspace(static_cast<unsigned char>(input.front()))) {
         input.remove_prefix(1);
@@ -96,25 +146,25 @@ ParsedCommand parse_command(std::string_view input) {
         input.remove_suffix(1);
     }
 
-    if (std::optional<ParsedCommand> command = parse_block_command(input)) {
+    if (std::optional<ParsedCommand> command = parse_block_command(input, is_endpoint)) {
         return *std::move(command);
     }
 
     // Verificar si empieza con "/buscar".
     if (input.size() < kSearchCommand.size() ||
         input.substr(0, kSearchCommand.size()) != kSearchCommand) {
-        return {ParsedCommand::Type::Normal, std::string{input}, std::nullopt, ""};
+        return {ParsedCommand::Type::Normal, std::string{input}, std::nullopt, "", std::nullopt, std::nullopt};
     }
 
     // Si es exactamente "/buscar" sin más texto, es un comando vacío.
     if (input.size() == kSearchCommand.size()) {
-        return {ParsedCommand::Type::SearchEmpty, "", std::nullopt, ""};
+        return {ParsedCommand::Type::SearchEmpty, "", std::nullopt, "", std::nullopt, std::nullopt};
     }
 
     // Debe haber un espacio (o un salto de línea) después de "/buscar".
     if (!is_space(input[kSearchCommand.size()])) {
         // Es algo como "/buscarx", no es el comando.
-        return {ParsedCommand::Type::Normal, std::string{input}, std::nullopt, ""};
+        return {ParsedCommand::Type::Normal, std::string{input}, std::nullopt, "", std::nullopt, std::nullopt};
     }
 
     // Extraer la consulta (todo después de "/buscar ").
@@ -130,13 +180,13 @@ ParsedCommand parse_command(std::string_view input) {
 
     // Si la consulta quedó vacía después de recortar, es un comando vacío.
     if (query.empty()) {
-        return {ParsedCommand::Type::SearchEmpty, "", std::nullopt, ""};
+        return {ParsedCommand::Type::SearchEmpty, "", std::nullopt, "", std::nullopt, std::nullopt};
     }
 
     // Tavily recibe una sola línea: los saltos pasan a espacios.
     std::string text{query};
     std::replace(text.begin(), text.end(), '\n', ' ');
-    return {ParsedCommand::Type::Search, std::move(text), std::nullopt, ""};
+    return {ParsedCommand::Type::Search, std::move(text), std::nullopt, "", std::nullopt, std::nullopt};
 }
 
 }  // namespace chatbot::cli

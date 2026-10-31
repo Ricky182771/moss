@@ -89,13 +89,40 @@ TEST_CASE("modelo del bot: con los mismos archivos llega a la misma key que la a
     CHECK(files.app_key() == "nvapi-del-entorno");
 }
 
+TEST_CASE("modelo del bot: con un endpoint, su URL y su key", "[addon_settings][modelo]") {
+    AppFiles files;
+    files.write_config(R"({"provider": "custom:lab", "base_url": "https://ignorada/v1",
+                           "model": "qwen3",
+                           "endpoints": [{"id": "lab", "name": "Lab",
+                                          "base_url": "https://lab.example/v1"}]})");
+    files.write_keys({{"nvidia", "nvapi-de-la-app"}, {"custom:lab", "sk-del-endpoint-lab"}});
+    const auto bot = files.bot();
+    REQUIRE(bot.is_ok());
+    CHECK(bot.value().provider == "custom:lab");
+    CHECK(bot.value().base_url == "https://lab.example/v1");
+    CHECK(bot.value().api_key == "sk-del-endpoint-lab");
+    CHECK(bot.value().api_key == files.app_key());
+
+    // Si el endpoint ya no existe (o el proveedor es desconocido), el bot no arranca.
+    files.write_config(R"({"provider": "custom:otro", "model": "qwen3",
+                           "endpoints": [{"id": "lab", "name": "Lab",
+                                          "base_url": "https://lab.example/v1"}]})");
+    const auto missing = files.bot();
+    REQUIRE(missing.is_error());
+    CHECK(missing.error().message == "El endpoint otro no existe. Elige un proveedor en F2.");
+    files.write_config(R"({"provider": "custom", "model": "qwen3"})");
+    const auto unknown = files.bot();
+    REQUIRE(unknown.is_error());
+    CHECK(unknown.error().message ==
+          "Proveedor desconocido en config.json: custom. Elige uno en F2.");
+}
+
 TEST_CASE("modelo del bot: sin provider, ni la app ni el bot tienen key",
           "[addon_settings][modelo]") {
     AppFiles files;
     // Escrito a mano, sin "provider": load_config no busca en credentials.json.
     files.write_config(R"({"model": "m"})");
-    files.write_keys({{"nvidia", "nvapi-de-la-app"}, {"custom:https://integrate.api.nvidia.com/v1",
-                                                      "nvapi-custom"}});
+    files.write_keys({{"nvidia", "nvapi-de-la-app"}, {"custom:lab", "nvapi-del-endpoint"}});
     CHECK(files.app_key().empty());
     const auto bot = files.bot();
     REQUIRE(bot.is_error());

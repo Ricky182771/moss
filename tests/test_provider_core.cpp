@@ -177,9 +177,8 @@ TEST_CASE("credentials.json: ida y vuelta, permisos 0600 y carpeta 0700", "[prov
     const ScopedTempDir dir;
     const std::filesystem::path path = dir.path() / "moss" / "credentials.json";
     chatbot::Credentials credentials;
-    credentials.keys[chatbot::credentials_key("nvidia", "https://integrate.api.nvidia.com/v1")] =
-        kSecret;
-    credentials.keys[chatbot::credentials_key("custom", "https://mi-servidor/v1/")] = "otra";
+    credentials.keys[chatbot::credentials_key("nvidia")] = kSecret;
+    credentials.keys[chatbot::credentials_key("custom:lab")] = "otra";
     REQUIRE_FALSE(chatbot::save_credentials(path.string(), credentials).has_value());
 #ifndef _WIN32
     CHECK(mode_of(path) == 0600);
@@ -189,9 +188,8 @@ TEST_CASE("credentials.json: ida y vuelta, permisos 0600 y carpeta 0700", "[prov
     const auto loaded = chatbot::load_credentials(path.string());
     REQUIRE(loaded.is_ok());
     CHECK(loaded.value().keys.at("nvidia") == kSecret);
-    CHECK(loaded.value().keys.at("custom:https://mi-servidor/v1") == "otra");
-    CHECK(chatbot::credentials_key("custom", "https://mi-servidor/v1") ==
-          "custom:https://mi-servidor/v1");
+    CHECK(loaded.value().keys.at("custom:lab") == "otra");
+    CHECK(chatbot::credentials_key("custom:lab") == "custom:lab"); // La llave es el proveedor.
 
     // Sin archivo: sin keys, sin error.
     const auto missing = chatbot::load_credentials((dir.path() / "no-existe.json").string());
@@ -270,9 +268,12 @@ TEST_CASE("load_config: CHAT_API_KEY gana; si no, la key del proveedor", "[prove
     REQUIRE(from_env.is_ok());
     CHECK(from_env.value().api_key == "de-entorno");
 
-    // Proveedor personalizado: la key es la de su URL base.
-    write(config, R"({"provider":"custom","base_url":"https://mi-servidor/v1/","model":"m"})", 0644);
-    credentials.keys["custom:https://mi-servidor/v1"] = "de-mi-servidor";
+    // Un endpoint: la key es la de "custom:<id>".
+    write(config,
+          R"({"provider":"custom:lab","model":"m",)"
+          R"("endpoints":[{"id":"lab","name":"Lab","base_url":"https://mi-servidor/v1"}]})",
+          0644);
+    credentials.keys["custom:lab"] = "de-mi-servidor";
     REQUIRE_FALSE(chatbot::save_credentials((config.parent_path() / "credentials.json").string(),
                                             credentials)
                       .has_value());
@@ -381,13 +382,25 @@ TEST_CASE("load_config_file_values lee config.json sin el entorno", "[proveedor]
     CHECK(missing.value().provider.empty());
 
     write(config,
-          R"({"timeout_seconds":30,"provider":"custom","base_url":"http://localhost:8080/v1","model":7})",
+          R"({"timeout_seconds":30,"provider":"ollama","base_url":"http://localhost:8080/v1","model":7})",
           0644);
     const auto values = chatbot::load_config_file_values(config.string());
     REQUIRE(values.is_ok());
-    CHECK(values.value().provider == "custom");
+    CHECK(values.value().provider == "ollama");
     CHECK(values.value().base_url == "http://localhost:8080/v1");
     CHECK(values.value().model.empty()); // No es cadena.
+    CHECK(values.value().endpoints.empty());
+
+    // Con un endpoint, la URL es la suya, no la de primer nivel.
+    write(config,
+          R"({"provider":"custom:lab","base_url":"https://vieja/v1","model":"m",)"
+          R"("endpoints":[{"id":"lab","name":"Lab","base_url":"http://localhost:8000/v1"}]})",
+          0644);
+    const auto endpoint = chatbot::load_config_file_values(config.string());
+    REQUIRE(endpoint.is_ok());
+    CHECK(endpoint.value().base_url == "http://localhost:8000/v1");
+    REQUIRE(endpoint.value().endpoints.size() == 1);
+    CHECK(endpoint.value().endpoints[0].name == "Lab");
 
     write(config, "[1, 2]", 0644);
     const auto invalid = chatbot::load_config_file_values(config.string());
@@ -480,4 +493,213 @@ TEST_CASE("save_appearance conserva las demás llaves; load_appearance_values la
     CHECK(invalid.error().kind == chatbot::ErrorKind::Config);
     CHECK(chatbot::save_appearance(config.string(), {"terminal", "theme", ""}).has_value());
     CHECK(read(config) == "{roto");
+}
+
+namespace {
+
+/// config.json con endpoints (el texto JSON del arreglo) y ese proveedor.
+std::string with_endpoints(const std::string& provider, const std::string& endpoints,
+                           const std::string& extra = {}) {
+    return R"({"provider":")" + provider + R"(","model":"m",)" + extra + R"("endpoints":)" +
+           endpoints + "}";
+}
+
+} // namespace
+
+TEST_CASE("load_config: endpoints válidos, su URL y su key", "[proveedor][endpoints]") {
+    const ScopedTempDir dir;
+    const std::filesystem::path config = dir.path() / "moss" / "config.json";
+    write(config,
+          with_endpoints("custom:lab",
+                         R"([{"id":"omniroute","name":"OmniRoute","base_url":"https://gw.example/v1"},)"
+                         R"({"id":"lab","name":"Servidor del lab","base_url":"http://localhost:8000/v1"}])",
+                         R"("base_url":"https://ignorada/v1",)"),
+          0644);
+    chatbot::Credentials credentials;
+    credentials.keys["custom:lab"] = "key-del-lab";
+    credentials.keys["custom:omniroute"] = "key-de-omniroute";
+    REQUIRE_FALSE(chatbot::save_credentials((config.parent_path() / "credentials.json").string(),
+                                            credentials)
+                      .has_value());
+    FakeEnv env;
+    const auto loaded = load(env, config);
+    REQUIRE(loaded.is_ok());
+    CHECK(loaded.value().provider == "custom:lab");
+    CHECK(loaded.value().base_url == "http://localhost:8000/v1"); // La de primer nivel, no.
+    CHECK(loaded.value().api_key == "key-del-lab");
+    CHECK(loaded.value().provider_error.empty());
+    CHECK(loaded.value().warnings.empty());
+
+    // CHAT_BASE_URL gana sobre la del endpoint; la key sigue siendo la suya.
+    env.values["CHAT_BASE_URL"] = "https://otra.example/v1";
+    const auto env_url = load(env, config);
+    REQUIRE(env_url.is_ok());
+    CHECK(env_url.value().base_url == "https://otra.example/v1");
+    CHECK(env_url.value().api_key == "key-del-lab");
+}
+
+TEST_CASE("load_config: los endpoints inválidos se ignoran con un aviso", "[proveedor][endpoints]") {
+    const ScopedTempDir dir;
+    const std::filesystem::path config = dir.path() / "config.json";
+    const std::string good = R"({"id":"bueno","name":"Bueno","base_url":"https://b.example/v1"})";
+    struct Case {
+        std::string entry;
+        std::string reason;
+    };
+    const std::vector<Case> cases{
+        {R"("texto")", "no es un objeto"},
+        {R"({"name":"Sin id","base_url":"https://x/v1"})", "le falta"},
+        {R"({"id":5,"name":"Id número","base_url":"https://x/v1"})", "le falta"},
+        {R"({"id":"Mayus","name":"Mayúsculas","base_url":"https://x/v1"})", "el id no es válido"},
+        {R"({"id":"-guion","name":"Guion","base_url":"https://x/v1"})", "el id no es válido"},
+        {R"({"id":"nvidia","name":"De la tabla","base_url":"https://x/v1"})", "el id no es válido"},
+        {R"({"id":"custom","name":"Custom","base_url":"https://x/v1"})", "el id no es válido"},
+        {R"({"id":"bueno","name":"Otro","base_url":"https://x/v1"})", "el id bueno está repetido"},
+        {R"({"id":"otro","name":"BUENO","base_url":"https://x/v1"})", "el nombre de otro está repetido"},
+        {R"({"id":"otro","name":"","base_url":"https://x/v1"})", "el nombre de otro no es válido"},
+        {R"({"id":"otro","name":"Otro","base_url":"http://192.168.1.2/v1"})",
+         "la URL base de otro no es válida"},
+    };
+    for (const Case& c : cases) {
+        CAPTURE(c.entry);
+        write(config, with_endpoints("custom:bueno", "[" + good + "," + c.entry + "]"), 0644);
+        FakeEnv env;
+        const auto loaded = chatbot::load_config(chatbot::ConfigOptions{
+            env, [config] { return std::optional<std::string>{config.string()}; },
+            [&dir] { return std::optional<std::string>{(dir.path() / "credentials.json").string()}; },
+            true});
+        REQUIRE(loaded.is_ok());
+        CHECK(loaded.value().base_url == "https://b.example/v1"); // El resto sirve.
+        REQUIRE(loaded.value().warnings.size() == 1);
+        CHECK_THAT(loaded.value().warnings[0],
+                   Catch::Matchers::StartsWith("Se ignoró un endpoint de config.json: " + c.reason));
+        const auto values = chatbot::load_config_file_values(config.string());
+        REQUIRE(values.is_ok());
+        CHECK(values.value().endpoints.size() == 1);
+    }
+
+    // Más de 20: los que sobran se ignoran.
+    std::string many = "[";
+    for (int i = 0; i < 21; ++i) {
+        many += (i == 0 ? "" : ",") + std::string{R"({"id":"e)"} + std::to_string(i) +
+                R"(","name":"E)" + std::to_string(i) + R"(","base_url":"https://x/v1"})";
+    }
+    write(config, with_endpoints("nvidia", many + "]"), 0644);
+    FakeEnv env;
+    const auto loaded = chatbot::load_config(chatbot::ConfigOptions{
+        env, [config] { return std::optional<std::string>{config.string()}; },
+        [&dir] { return std::optional<std::string>{(dir.path() / "credentials.json").string()}; },
+        true});
+    REQUIRE(loaded.is_ok());
+    REQUIRE(loaded.value().warnings.size() == 1);
+    CHECK_THAT(loaded.value().warnings[0], Catch::Matchers::ContainsSubstring("ya hay 20"));
+    CHECK(chatbot::load_config_file_values(config.string()).value().endpoints.size() == 20);
+}
+
+TEST_CASE("load_config: proveedor desconocido o endpoint que no existe", "[proveedor][endpoints]") {
+    const ScopedTempDir dir;
+    const std::filesystem::path config = dir.path() / "config.json";
+    const auto load_ui = [&] {
+        FakeEnv env;
+        return chatbot::load_config(chatbot::ConfigOptions{
+            env, [config] { return std::optional<std::string>{config.string()}; },
+            [&dir] { return std::optional<std::string>{(dir.path() / "credentials.json").string()}; },
+            true});
+    };
+    const std::string lab = R"([{"id":"lab","name":"Lab","base_url":"https://lab/v1"}])";
+
+    write(config, with_endpoints("custom:otro", lab), 0644);
+    auto missing = load_ui();
+    REQUIRE(missing.is_ok()); // La app arranca sin configurar.
+    CHECK(missing.value().provider_error == "El endpoint otro no existe. Elige un proveedor en F2.");
+    const auto error = chatbot::validate_config(missing.value());
+    REQUIRE(error.has_value());
+    CHECK(error->kind == ErrorKind::Config);
+    CHECK(error->message == missing.value().provider_error);
+
+    // Cualquier id que no es de la tabla ni "custom:<id>": también el "custom" solo.
+    for (const std::string provider : {"custom", "lab", "no-existe"}) {
+        CAPTURE(provider);
+        write(config, R"({"provider":")" + provider + R"(","base_url":"http://192.168.0.9/v1",)" +
+                          R"("model":"m","endpoints":)" + lab + "}",
+              0644);
+        const auto unknown = load_ui();
+        REQUIRE(unknown.is_ok()); // La base_url de primer nivel ni se lee.
+        CHECK(unknown.value().provider_error ==
+              "Proveedor desconocido en config.json: " + provider + ". Elige uno en F2.");
+        CHECK(chatbot::validate_config(unknown.value()).has_value());
+    }
+}
+
+TEST_CASE("save_config_file escribe endpoints y quita la base_url con un endpoint",
+          "[proveedor][endpoints]") {
+    const ScopedTempDir dir;
+    const std::filesystem::path config = dir.path() / "config.json";
+    write(config, R"({"theme_x": 1, "base_url": "https://vieja/v1", "otra": [1]})", 0644);
+    chatbot::ConfigFileValues values;
+    values.provider = "custom:lab";
+    values.base_url = "https://ignorada/v1";
+    values.model = "qwen3";
+    values.endpoints = {{"omniroute", "OmniRoute", "https://gw.example/v1"},
+                        {"lab", "Servidor del lab", "http://localhost:8000/v1"}};
+    REQUIRE_FALSE(chatbot::save_config_file(config.string(), values).has_value());
+    std::string text = read(config);
+    CHECK(text.find("base_url\": \"https://vieja") == std::string::npos);
+    CHECK(text.find("ignorada") == std::string::npos);
+    CHECK(text.find("\"theme_x\": 1") < text.find("\"otra\""));
+    CHECK(text.find("omniroute") < text.find("\"lab\"")); // En su orden.
+    const auto loaded = chatbot::load_config_file_values(config.string());
+    REQUIRE(loaded.is_ok());
+    CHECK(loaded.value().provider == "custom:lab");
+    CHECK(loaded.value().base_url == "http://localhost:8000/v1");
+    REQUIRE(loaded.value().endpoints.size() == 2);
+    CHECK(loaded.value().endpoints[1].name == "Servidor del lab");
+
+    // Con uno de la tabla vuelve la base_url; sin endpoints se quita la llave.
+    values.provider = "nvidia";
+    values.base_url = "https://integrate.api.nvidia.com/v1";
+    values.endpoints.clear();
+    REQUIRE_FALSE(chatbot::save_config_file(config.string(), values).has_value());
+    text = read(config);
+    CHECK(text.find("\"base_url\": \"https://integrate.api.nvidia.com/v1\"") != std::string::npos);
+    CHECK(text.find("endpoints") == std::string::npos);
+    CHECK(text.find("\"otra\"") != std::string::npos);
+}
+
+TEST_CASE("endpoints: ids generados, nombres y validación", "[proveedor][endpoints]") {
+    using chatbot::make_endpoint_id;
+    const std::vector<chatbot::Endpoint> none;
+    CHECK(make_endpoint_id("OmniRoute", none) == "omniroute");
+    CHECK(make_endpoint_id("Servidor del laboratorio", none) == "servidor-del-laboratorio");
+    CHECK(make_endpoint_id("Pingüino Ñandú (café)", none) == "pinguino-nandu-cafe");
+    CHECK(make_endpoint_id("  --¡Hola!--  ", none) == "hola");
+    CHECK(make_endpoint_id("日本", none) == "endpoint");
+    CHECK(make_endpoint_id("", none) == "endpoint");
+    CHECK(make_endpoint_id("NVIDIA", none) == "nvidia-2"); // Choca con la tabla.
+    CHECK(make_endpoint_id("Custom", none) == "custom-2");
+    const std::vector<chatbot::Endpoint> taken{{"lab", "Lab", "https://a/v1"},
+                                               {"lab-2", "Lab 2", "https://b/v1"}};
+    CHECK(make_endpoint_id("LAB", taken) == "lab-3");
+    const std::string longest(40, 'a');
+    CHECK(make_endpoint_id(longest, none) == std::string(32, 'a'));
+    const std::vector<chatbot::Endpoint> long_taken{{std::string(32, 'a'), "A", "https://a/v1"}};
+    CHECK(make_endpoint_id(longest, long_taken) == std::string(30, 'a') + "-2");
+
+    CHECK(chatbot::valid_endpoint_id("a"));
+    CHECK(chatbot::valid_endpoint_id("9-lab"));
+    CHECK_FALSE(chatbot::valid_endpoint_id(""));
+    CHECK_FALSE(chatbot::valid_endpoint_id(std::string(33, 'a')));
+    CHECK_FALSE(chatbot::valid_endpoint_id("ollama"));
+    CHECK_FALSE(chatbot::valid_endpoint_id("lab_1"));
+
+    CHECK_FALSE(chatbot::endpoint_name_problem("Servidor del lab").has_value());
+    CHECK_FALSE(chatbot::endpoint_name_problem(std::string(40, 'x')).has_value());
+    CHECK_FALSE(chatbot::endpoint_name_problem("ñ" + std::string(39, 'x')).has_value());
+    CHECK(chatbot::endpoint_name_problem("") == "Escribe un nombre para el endpoint.");
+    CHECK(chatbot::endpoint_name_problem(std::string(41, 'x')).has_value());
+    CHECK(chatbot::endpoint_name_problem("a\tb").has_value());
+    CHECK(chatbot::endpoint_name_problem("a\xC2\x85").has_value()); // C1.
+    CHECK(chatbot::endpoint_name_problem("\xFF").has_value());
+    CHECK(chatbot::same_endpoint_name("Árbol", "áRBOL"));
+    CHECK_FALSE(chatbot::same_endpoint_name("Lab", "Lab 2"));
 }

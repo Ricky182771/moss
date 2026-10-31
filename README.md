@@ -139,6 +139,8 @@ Hay una capa común de los bots (`addons/common/`: acceso solo para usuarios aut
 
 La forma más fácil es la pantalla de configuración: ábrela con **F2** o con la fila `⚙ Configuración` de la barra. Si al arrancar falta la key o el modelo, Moss la abre solo con el aviso `Configura un proveedor para empezar.` (mientras tanto, la caja de entrada no envía nada). Ahí eliges el proveedor, escribes la API key (se ve como `•••`) y eliges el modelo de la lista que devuelve el servidor (`GET {URL base}/models`). Con el filtro, ↑/↓ mueven el resaltado y Enter elige; si la lista falla (por ejemplo, Anthropic no documenta ese endpoint), el error aparece en la lista y puedes escribir el modelo a mano. Tab y Shift+Tab cambian de campo; Guardar aplica los cambios sin reiniciar y Esc o Cancelar cierran sin guardar (si hay cambios, pregunta `¿Descartar los cambios? (s/n)`: solo **s** o **n** la contestan y **Esc** la cancela). No se abre mientras hay una respuesta en curso.
 
+El modelo y el proveedor también se pueden cambiar desde la caja con `/model` (ver [Cambiar de modelo con /model](#cambiar-de-modelo-con-model)), entre los proveedores que ya tienen key guardada.
+
 | Proveedor | URL base | Lista de modelos |
 |---|---|---|
 | NVIDIA NIM | `https://integrate.api.nvidia.com/v1` | sí |
@@ -153,15 +155,41 @@ La forma más fácil es la pantalla de configuración: ábrela con **F2** o con 
 | xAI (Grok) | `https://api.x.ai/v1` | no confirmada |
 | Cerebras | `https://api.cerebras.ai/v1` | no confirmada |
 | Ollama (local) | `http://localhost:11434/v1` | sí (sin key) |
-| Personalizado… | la que escribas | — |
+
+Después de la tabla vienen tus [endpoints personalizados](#endpoints-personalizados) y, al final, `Agregar endpoint…`.
 
 "No confirmada" no quiere decir que falle: Moss la pide igual y, si falla, te deja escribir el modelo.
 
-**URL base de un servidor personalizado:** normalmente termina en `/v1` (`https://mi-servidor/v1`, no `https://mi-servidor`). Moss no sigue redirecciones: si el servidor responde con una (301, 302…), el error dice a dónde redirige y, si puede, qué URL base usar.
+#### Endpoints personalizados
 
-**Dónde se guarda la key:** en `~/.config/moss/credentials.json` (o `$XDG_CONFIG_HOME/moss/credentials.json`; en Windows, `%APPDATA%\moss\credentials.json`; en [modo portable](#modo-portable), `datos/credentials.json` junto al ejecutable), una por proveedor (y una por URL en los personalizados). El archivo se escribe con permisos 0600 y su carpeta con 0700. Si alguien le abre los permisos (grupo u otros), Moss no lo lee y te pide correr `chmod 600` sobre él (en Windows no: ahí lo protege la carpeta de tu perfil). Al guardar, una key que empieza con `$`, trae espacios o saltos de línea, o mide menos de 20 caracteres no se guarda: suele ser el nombre de una variable (`$NIMKEY`) o una key cortada al copiarla. La key nunca va en `config.json`, en los volcados de depuración ni en las conversaciones guardadas. No copies `credentials.json` al repositorio (está en `.gitignore`).
+Para un servidor que no está en la tabla (un gateway como OmniRoute, LiteLLM, vLLM, llama.cpp…), da de alta un endpoint en **F2 → Proveedor de IA**:
 
-**Servidor local (Ollama, llama.cpp…):** elige `Ollama (local)` o `Personalizado…` con una URL como `http://localhost:8080/v1`. Solo se acepta `http://` para `localhost`, `127.0.0.1` o `[::1]` (cualquier puerto), y ahí la key es opcional; cualquier otro servidor necesita `https://`, para que la key y la conversación no viajen sin cifrar.
+1. En **Proveedor**, elige `Agregar endpoint…` (la última fila). El foco pasa a **Nombre**.
+2. Escribe un **Nombre** (hasta 40 caracteres, sin repetir), la **URL base** y, si el servidor la pide, la **API key**.
+3. Pulsa **Actualizar** para pedir la lista de modelos (o escribe el modelo a mano) y **Guardar**. El endpoint queda en uso.
+
+Puedes tener hasta 20, guardados todos a la vez en `config.json` (`"endpoints"`), y cambiar entre ellos igual que entre los de la tabla, en F2 o con [`/model`](#cambiar-de-modelo-con-model). Cada uno tiene un **id** que Moss saca del nombre al crearlo (`Servidor del lab` → `servidor-del-lab`; si choca, `-2`, `-3`…) y que no cambia nunca: en la lista se ve atenuado junto al nombre, y es lo que escribes en `/model`. Su key se guarda en `credentials.json` como `custom:<id>`, así que cambiar el nombre o la URL no la pierde.
+
+Con un endpoint elegido, el botón **[Borrar endpoint]** lo quita junto con su key, después de preguntar `¿Borrar el endpoint <nombre>? (s/n)`. El que está en uso no se puede borrar (el botón se ve atenuado): cámbiate antes a otro proveedor.
+
+```json
+{
+    "provider": "custom:omniroute",
+    "model": "qwen3",
+    "endpoints": [
+        {"id": "omniroute", "name": "OmniRoute", "base_url": "https://mi-gateway.example/v1"},
+        {"id": "lab", "name": "Servidor del lab", "base_url": "http://localhost:8000/v1"}
+    ]
+}
+```
+
+Si editas `"endpoints"` a mano y una entrada no sirve (le falta algo, el id no es válido o se repite…), Moss la ignora con un aviso al arrancar y usa las demás; al guardar desde F2 se quita. Si `"provider"` nombra un endpoint que no existe, o un proveedor que no está en la tabla, Moss abre F2 con el error para que elijas otro.
+
+**URL base de un endpoint:** normalmente termina en `/v1` (`https://mi-servidor/v1`, no `https://mi-servidor`). Moss no sigue redirecciones: si el servidor responde con una (301, 302…), el error dice a dónde redirige y, si puede, qué URL base usar.
+
+**Dónde se guarda la key:** en `~/.config/moss/credentials.json` (o `$XDG_CONFIG_HOME/moss/credentials.json`; en Windows, `%APPDATA%\moss\credentials.json`; en [modo portable](#modo-portable), `datos/credentials.json` junto al ejecutable), una por proveedor (la de un endpoint, como `custom:<id>`). El archivo se escribe con permisos 0600 y su carpeta con 0700. Si alguien le abre los permisos (grupo u otros), Moss no lo lee y te pide correr `chmod 600` sobre él (en Windows no: ahí lo protege la carpeta de tu perfil). Al guardar, una key que empieza con `$`, trae espacios o saltos de línea, o mide menos de 20 caracteres no se guarda: suele ser el nombre de una variable (`$NIMKEY`) o una key cortada al copiarla. La key nunca va en `config.json`, en los volcados de depuración ni en las conversaciones guardadas. No copies `credentials.json` al repositorio (está en `.gitignore`).
+
+**Servidor local (Ollama, llama.cpp…):** elige `Ollama (local)` o agrega un endpoint con una URL como `http://localhost:8080/v1`. Solo se acepta `http://` para `localhost`, `127.0.0.1` o `[::1]` (cualquier puerto), y ahí la key es opcional; cualquier otro servidor necesita `https://`, para que la key y la conversación no viajen sin cifrar.
 
 **Variables de entorno:** también puedes configurar todo sin la pantalla:
 
@@ -340,6 +368,7 @@ Escribe `/` al principio de la caja y arriba de ella aparece el menú de comando
 | `/copiar [número de bloque]` | Copia un bloque de código; sin número, el último |
 | `/guardar [número de bloque [nombre]]` | Guarda un bloque de código en un archivo |
 | `/exportar` | Exporta la conversación a Markdown |
+| `/model [proveedor] [modelo]` | Cambia de modelo o de proveedor (ver [Cambiar de modelo con /model](#cambiar-de-modelo-con-model)) |
 
 - ↑/↓ mueven el cursor del menú (dan la vuelta en los extremos). Tab completa el comando: `/buscar ` con un espacio para que escribas la consulta, o `/exportar` solo. Enter hace lo mismo con `/buscar` (no se envía sin consulta) y con los demás los completa y los ejecuta de una vez: `/ex` + Enter exporta.
 - Esc cierra el menú sin borrar lo que escribiste; no se vuelve a abrir hasta que cambies el texto. Con una respuesta en curso, el primer Esc cierra el menú y el segundo la cancela.
@@ -347,6 +376,22 @@ Escribe `/` al principio de la caja y arriba de ella aparece el menú de comando
 - Un comando que ahora no sirve se ve atenuado con el motivo (`falta la key de búsqueda (F2)`, `no hay bloques de código`, `la conversación está vacía`, `espera a que termine la respuesta`), pero se puede elegir igual: al enviarlo aparece el aviso de siempre.
 - Si nada coincide, el menú dice `Sin comandos que coincidan · se enviará como mensaje`: un texto como `/hola` va al modelo como cualquier mensaje.
 - En una terminal angosta la descripción se recorta con `…` y, si no cabe, se oculta antes que el nombre. Con la barra de conversaciones o la configuración con el foco no hay menú.
+
+#### Cambiar de modelo con /model
+
+`/model` cambia de modelo o de proveedor sin abrir F2 y sin cerrar la conversación; el cambio se guarda en `config.json` igual que en F2 y en el historial queda `Ahora se usa <modelo> de <proveedor>.`. No pide ni guarda keys: solo deja elegir proveedores con key guardada (o locales, como Ollama).
+
+| Escribes | Hace |
+|---|---|
+| `/model` | Abre el selector en la lista de proveedores |
+| `/model <proveedor>` | Abre el selector en la lista de modelos de ese proveedor |
+| `/model <modelo>` | Cambia el modelo en el proveedor actual |
+| `/model <proveedor> <modelo>` | Cambia de proveedor y de modelo |
+
+- `<proveedor>` es el id de la tabla de [Configurar](#configurar) (`nvidia`, `openai`, `gemini`, …, `ollama`) o el de uno de tus [endpoints](#endpoints-personalizados), solo o con `custom:` (`/model omniroute qwen3` y `/model custom:omniroute qwen3` hacen lo mismo), sin distinguir mayúsculas. Una sola palabra que no es un id se toma como modelo (`/model z-ai/glm5`).
+- El selector aparece donde el menú de comandos y se maneja igual (lo que escribes filtra, ↑/↓, Enter, Esc, ratón). Los endpoints van después de la tabla, con su id y su nombre. Cada proveedor dice `key guardada`, `local` o, atenuado y sin poderse elegir, `sin key`. Para agregar un endpoint, usa F2. En la lista de modelos, si el filtro no deja nada o el proveedor no da la lista, la última fila es `Usar «<texto>»` para escribir el id a mano. Esc regresa a los proveedores y, ahí, cierra.
+- El modelo no se valida contra la lista: si no existe, el siguiente mensaje da el error de modelo no encontrado.
+- No funciona con una respuesta en curso ni con `CHAT_MODEL` definida; con `CHAT_BASE_URL` solo cambia el modelo.
 
 ### Markdown en las respuestas
 

@@ -6,6 +6,7 @@
 
 #include "command_parser.h"
 #include "downloads.h"
+#include "chatbot/providers.h"
 #include "search_settings.h"
 
 #include "blocking_transport.hpp"
@@ -31,6 +32,7 @@
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <string>
@@ -699,4 +701,427 @@ TEST_CASE("Session se destruye en menos de 2 s con una petición bloqueada", "[s
     h.session.reset(); // Cancela y hace join.
     chatbot_test::report_latency("~Session", std::chrono::steady_clock::now() - begin);
     CHECK(h.finished.empty()); // Lo que quedó en la cola nunca se ejecuta.
+}
+
+namespace {
+
+/// Harness con key de NVIDIA guardada y config.json en nvidia/m1.
+void save_nvidia(Harness& h) {
+    chatbot::Credentials credentials;
+    credentials.keys["nvidia"] = "sk-clave-secreta-de-prueba-1234";
+    REQUIRE_FALSE(chatbot::save_credentials(h.credentials_path(), credentials).has_value());
+    REQUIRE_FALSE(chatbot::save_config_file(h.config_path(),
+                                            {"nvidia", "https://integrate.api.nvidia.com/v1", "m1"})
+                      .has_value());
+}
+
+std::string read_file(const std::string& path) {
+    std::ifstream in(path, std::ios::binary);
+    return {std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
+}
+
+} // namespace
+
+TEST_CASE("Session::switch_model cambia de modelo y de proveedor como F2", "[session][model]") {
+    using Status = chatbot::cli::ModelSwitch::Status;
+    Harness h;
+    save_nvidia(h);
+    const std::string credentials_before = read_file(h.credentials_path());
+
+    SECTION("otro modelo del mismo proveedor, sin perder la conversación") {
+        h.start(h.load());
+        REQUIRE(h.exchange("hola"));
+        const std::string id = h.session->conversation().id();
+        const std::size_t entries = h.session->conversation().entries().size();
+        const chatbot::cli::ModelSwitch got = h.session->switch_model(std::nullopt, "m2");
+        CHECK(got.status == Status::Switched);
+        CHECK(got.message == "Ahora se usa m2 de NVIDIA NIM.");
+        CHECK(h.last_entry().text == got.message);
+        CHECK(h.session->model() == "m2");
+        CHECK(h.session->conversation().id() == id);
+        CHECK(h.session->conversation().entries().size() == entries + 1);
+        CHECK(chatbot::load_config_file_values(h.config_path()).value().model == "m2");
+        CHECK(read_file(h.credentials_path()) == credentials_before);
+    }
+    SECTION("a un proveedor local sin key; config.json queda con los dos") {
+        h.start(h.load());
+        const chatbot::cli::ModelSwitch got = h.session->switch_model("OLLAMA", "qwen3:8b");
+        CHECK(got.status == Status::Switched);
+        CHECK(got.message == "Ahora se usa qwen3:8b de Ollama (local).");
+        const chatbot::ConfigFileValues saved =
+            chatbot::load_config_file_values(h.config_path()).value();
+        CHECK(saved.provider == "ollama");
+        CHECK(saved.base_url == "http://localhost:11434/v1");
+        CHECK(saved.model == "qwen3:8b");
+        CHECK(h.session->config().base_url == "http://localhost:11434/v1");
+        CHECK(read_file(h.credentials_path()) == credentials_before);
+        // Y de regreso: la key guardada de NVIDIA sigue sirviendo.
+        CHECK(h.session->switch_model("nvidia", "m1").status == Status::Switched);
+        CHECK(h.session->config().api_key == "sk-clave-secreta-de-prueba-1234");
+    }
+    SECTION("sin configurar, a un proveedor con key guardada") {
+        std::filesystem::remove(h.config_path()); // Sin config.json: NVIDIA, sin modelo.
+        h.start(h.load());
+        REQUIRE_FALSE(h.session->configured());
+        CHECK(h.session->switch_model("nvidia", "m3").status == Status::Switched);
+        CHECK(h.session->configured());
+        CHECK(h.session->model() == "m3");
+    }
+    SECTION("el mismo proveedor y modelo no escribe nada") {
+        h.start(h.load());
+        const std::string config_before = read_file(h.config_path());
+        const std::size_t entries = h.session->conversation().entries().size();
+        const chatbot::cli::ModelSwitch got = h.session->switch_model("nvidia", "m1");
+        CHECK(got.status == Status::Unchanged);
+        CHECK(got.message == "Ya estás usando m1.");
+        CHECK(h.clients == 1);
+        CHECK(read_file(h.config_path()) == config_before);
+        CHECK(h.session->conversation().entries().size() == entries);
+    }
+    SECTION("errores, sin cambiar nada") {
+        h.start(h.load());
+        const std::string config_before = read_file(h.config_path());
+        CHECK(h.session->switch_model("gemini", "g").message ==
+              "Falta la key de Google Gemini. Agrégala en F2 → Proveedor de IA.");
+        CHECK(h.session->switch_model("custom:", "x").message ==
+              "Proveedor desconocido: custom:. Escribe /model para ver la lista.");
+        const chatbot::cli::ModelSwitch unknown = h.session->switch_model("nope", "x");
+        CHECK(unknown.status == Status::Invalid);
+        CHECK(unknown.message == "Proveedor desconocido: nope. Escribe /model para ver la lista.");
+        CHECK(h.session->switch_model(std::nullopt, "").message ==
+              "Elige un modelo de la lista o escríbelo.");
+        CHECK(read_file(h.config_path()) == config_before);
+        CHECK(h.session->model() == "m1");
+    }
+    SECTION("con CHAT_MODEL, nada") {
+        h.env.values["CHAT_MODEL"] = "modelo-del-entorno";
+        h.start(h.load());
+        CHECK(h.session->model_locked());
+        const chatbot::cli::ModelSwitch got = h.session->switch_model(std::nullopt, "m2");
+        CHECK(got.status == Status::Invalid);
+        CHECK(got.message == "El modelo está fijado por CHAT_MODEL.");
+        CHECK(h.session->command_context().model_locked);
+        check_status(h.session->submit("/model"), "El modelo está fijado por CHAT_MODEL.");
+    }
+    SECTION("con CHAT_BASE_URL, el mismo proveedor sí; otro no") {
+        h.env.values["CHAT_BASE_URL"] = "https://integrate.api.nvidia.com/v1";
+        h.start(h.load());
+        const chatbot::cli::ModelSwitch other = h.session->switch_model("ollama", "q");
+        CHECK(other.status == Status::Invalid);
+        CHECK(other.message == "El proveedor está fijado por CHAT_BASE_URL.");
+        CHECK(h.session->switch_model("nvidia", "m2").status == Status::Switched);
+        CHECK(h.session->model() == "m2");
+    }
+    SECTION("con una respuesta en curso, kWaitOrCancel") {
+        BlockingTransport* blocking = nullptr;
+        h.chat_transport = [&blocking] {
+            auto transport = std::make_unique<BlockingTransport>(BlockingTransport::Mode::Block);
+            blocking = transport.get();
+            return transport;
+        };
+        h.start(h.load());
+        REQUIRE(h.session->submit("hola").type == Type::Started);
+        REQUIRE(blocking->started.wait_for(kThreadTimeout));
+        const chatbot::cli::ModelSwitch got = h.session->switch_model(std::nullopt, "m2");
+        CHECK(got.status == Status::Busy);
+        CHECK(got.message == chatbot::cli::kWaitOrCancel);
+        check_status(h.session->submit("/model m2"), std::string{chatbot::cli::kWaitOrCancel});
+        CHECK(h.session->model() == "m1");
+        h.session->cancel();
+        REQUIRE(h.finish());
+    }
+}
+
+TEST_CASE("Session::provider_choices dice qué proveedores se pueden elegir", "[session][model]") {
+    Harness h;
+    save_nvidia(h);
+    h.start(h.load());
+    const auto choices = h.session->provider_choices();
+    REQUIRE(choices.is_ok());
+    REQUIRE(choices.value().size() == chatbot::providers().size());
+    const auto find = [&](std::string_view id) {
+        for (const chatbot::cli::ProviderChoice& choice : choices.value()) {
+            if (choice.id == id) {
+                return choice;
+            }
+        }
+        FAIL("sin " << id);
+        return chatbot::cli::ProviderChoice{};
+    };
+    const auto nvidia = find("nvidia");
+    CHECK(nvidia.current);
+    CHECK(nvidia.key_saved);
+    CHECK(nvidia.selectable);
+    CHECK(nvidia.note.empty());
+    const auto ollama = find("ollama");
+    CHECK_FALSE(ollama.current);
+    CHECK_FALSE(ollama.key_saved);
+    CHECK(ollama.local);
+    CHECK(ollama.selectable);
+    const auto openrouter = find("openrouter");
+    CHECK_FALSE(openrouter.selectable);
+    CHECK(openrouter.note == chatbot::cli::kNoKeyNote);
+    CHECK(h.session->provider_problem("ollama") == std::nullopt);
+    CHECK(h.session->provider_problem("openrouter") ==
+          "Falta la key de OpenRouter. Agrégala en F2 → Proveedor de IA.");
+
+    // models_config: la key guardada de ese proveedor, nunca la de otro.
+    const chatbot::Result<chatbot::Config> nim = h.session->models_config("nvidia");
+    REQUIRE(nim.is_ok());
+    CHECK(nim.value().api_key == "sk-clave-secreta-de-prueba-1234");
+    const chatbot::Result<chatbot::Config> local = h.session->models_config("ollama");
+    REQUIRE(local.is_ok());
+    CHECK(local.value().base_url == "http://localhost:11434/v1");
+    CHECK(local.value().api_key.empty());
+    CHECK(h.session->models_config("openrouter").is_error());
+
+    SECTION("con CHAT_API_KEY todos tienen key, aunque no esté guardada") {
+        h.session.reset();
+        h.env.values["CHAT_API_KEY"] = "sk-clave-del-entorno-de-prueba-99";
+        h.start(h.load());
+        const auto with_env = h.session->provider_choices();
+        REQUIRE(with_env.is_ok());
+        for (const chatbot::cli::ProviderChoice& choice : with_env.value()) {
+            INFO(choice.id);
+            CHECK(choice.selectable);
+        }
+        CHECK(h.session->switch_model("gemini", "g").status ==
+              chatbot::cli::ModelSwitch::Status::Switched);
+    }
+}
+
+TEST_CASE("Session::submit con /model", "[session][model]") {
+    Harness h;
+    save_nvidia(h);
+    h.start(h.load());
+    SECTION("sin argumentos abre el selector en el paso de proveedor") {
+        const SubmitOutcome got = h.session->submit("/model");
+        CHECK(got.type == Type::OpenModelPicker);
+        CHECK_FALSE(got.picker_provider.has_value());
+        CHECK(got.clear);
+        CHECK(got.command == chatbot::cli::ParsedCommand::Type::Model);
+    }
+    SECTION("con un proveedor elegible, en el paso de modelo") {
+        const SubmitOutcome got = h.session->submit("/model Ollama");
+        CHECK(got.type == Type::OpenModelPicker);
+        CHECK(got.picker_provider == "ollama");
+    }
+    SECTION("con un proveedor sin key, el error") {
+        check_status(h.session->submit("/model gemini"),
+                     "Falta la key de Google Gemini. Agrégala en F2 → Proveedor de IA.");
+    }
+    SECTION("con un modelo, cambia y vacía la caja") {
+        const SubmitOutcome got = h.session->submit("/model ollama qwen3:8b");
+        CHECK(got.type == Type::Done);
+        CHECK(got.clear);
+        CHECK(got.action.message == "Ahora se usa qwen3:8b de Ollama (local).");
+        CHECK_FALSE(got.action.error);
+        CHECK(h.session->model() == "qwen3:8b");
+    }
+    SECTION("errores de uso y el mismo modelo, a la línea de estado") {
+        check_status(h.session->submit("/model a b c"), std::string{chatbot::cli::kModelUsage});
+        check_status(h.session->submit("/model x m"),
+                     "Proveedor desconocido: x. Escribe /model para ver la lista.");
+        check_status(h.session->submit("/model m1"), "Ya estás usando m1.");
+    }
+}
+
+namespace {
+
+/// config.json con NVIDIA en uso y dos endpoints: "a" (con key) y "b" (local, sin key).
+void save_endpoints(Harness& h, const std::string& provider = "nvidia") {
+    chatbot::Credentials credentials;
+    credentials.keys["nvidia"] = "sk-clave-secreta-de-prueba-1234";
+    credentials.keys["custom:a"] = "sk-clave-del-endpoint-a-5678";
+    REQUIRE_FALSE(chatbot::save_credentials(h.credentials_path(), credentials).has_value());
+    chatbot::ConfigFileValues values;
+    values.provider = provider;
+    values.base_url = "https://integrate.api.nvidia.com/v1";
+    values.model = "m1";
+    values.endpoints = {{"a", "Falso A", "https://a.example/v1"},
+                        {"b", "Falso B", "http://localhost:8001/v1"}};
+    REQUIRE_FALSE(chatbot::save_config_file(h.config_path(), values).has_value());
+}
+
+} // namespace
+
+TEST_CASE("Session: endpoints en provider_choices y switch_model", "[session][model][endpoints]") {
+    using Status = chatbot::cli::ModelSwitch::Status;
+    Harness h;
+    save_endpoints(h);
+    h.start(h.load());
+
+    const auto choices = h.session->provider_choices();
+    REQUIRE(choices.is_ok());
+    const std::size_t table = chatbot::providers().size();
+    REQUIRE(choices.value().size() == table + 2); // Sin la fila de agregar.
+    const chatbot::cli::ProviderChoice& a = choices.value()[table];
+    CHECK(a.id == "custom:a");
+    CHECK(a.name == "Falso A");
+    CHECK(a.endpoint);
+    CHECK(a.base_url == "https://a.example/v1");
+    CHECK(a.key_saved);
+    CHECK(a.selectable);
+    const chatbot::cli::ProviderChoice& b = choices.value()[table + 1];
+    CHECK(b.local);
+    CHECK_FALSE(b.key_saved);
+    CHECK(b.selectable);
+    CHECK_FALSE(b.needs_key);
+
+    // Entre endpoints y la tabla, con y sin "custom:".
+    chatbot::cli::ModelSwitch got = h.session->switch_model("a", "m-a");
+    CHECK(got.status == Status::Switched);
+    CHECK(got.message == "Ahora se usa m-a de Falso A.");
+    CHECK(h.last_entry().text == got.message);
+    CHECK(h.session->config().provider == "custom:a");
+    CHECK(h.session->config().base_url == "https://a.example/v1");
+    CHECK(h.session->config().api_key == "sk-clave-del-endpoint-a-5678");
+    got = h.session->switch_model("ollama", "q");
+    CHECK(got.status == Status::Switched);
+    got = h.session->switch_model("custom:b", "m-b");
+    CHECK(got.message == "Ahora se usa m-b de Falso B.");
+    CHECK(h.session->config().base_url == "http://localhost:8001/v1");
+    CHECK(h.session->config().api_key.empty());
+    got = h.session->switch_model("CUSTOM:A", "m-a");
+    CHECK(got.status == Status::Switched);
+    CHECK(h.session->config().provider == "custom:a");
+    const chatbot::ConfigFileValues saved = chatbot::load_config_file_values(h.config_path()).value();
+    CHECK(saved.provider == "custom:a");
+    CHECK(saved.endpoints.size() == 2); // Nunca se pierden.
+    CHECK(read_file(h.config_path()).find("integrate.api.nvidia.com") == std::string::npos);
+
+    CHECK(h.session->switch_model("custom:zzz", "m").message ==
+          "Proveedor desconocido: custom:zzz. Escribe /model para ver la lista.");
+    CHECK(h.session->switch_model("zzz", "m").message ==
+          "Proveedor desconocido: zzz. Escribe /model para ver la lista.");
+
+    // /model con el id solo o con "custom:" hace lo mismo.
+    SubmitOutcome bare = h.session->submit("/model b m-b");
+    CHECK(bare.type == Type::Done);
+    CHECK(h.session->config().provider == "custom:b");
+    SubmitOutcome prefixed = h.session->submit("/model custom:a m-a");
+    CHECK(prefixed.type == Type::Done);
+    CHECK(h.session->config().provider == "custom:a");
+    const SubmitOutcome picker = h.session->submit("/model B");
+    CHECK(picker.type == Type::OpenModelPicker);
+    CHECK(picker.picker_provider == "custom:b");
+}
+
+TEST_CASE("Session: guardar y borrar endpoints", "[session][endpoints]") {
+    using Status = chatbot::cli::EndpointDeletion::Status;
+    Harness h;
+    save_endpoints(h);
+    h.start(h.load());
+
+    SECTION("crear uno nuevo con su key") {
+        auto form = h.session->provider_form().value();
+        form.select_provider(*form.find_provider("custom:"));
+        form.set_name("Mi Gateway");
+        form.set_base_url("https://gw.example/v1");
+        form.set_key("sk-clave-del-gateway-0000");
+        form.set_model("qwen3");
+        REQUIRE(h.session->save_provider(form) == std::nullopt);
+        CHECK(h.last_entry().text == "Ahora se usa qwen3 de Mi Gateway.");
+        CHECK(h.session->config().provider == "custom:mi-gateway");
+        CHECK(h.session->config().api_key == "sk-clave-del-gateway-0000");
+        const auto credentials = chatbot::load_credentials(h.credentials_path()).value();
+        CHECK(credentials.keys.at("custom:mi-gateway") == "sk-clave-del-gateway-0000");
+        CHECK(chatbot::load_config_file_values(h.config_path()).value().endpoints.size() == 3);
+    }
+    SECTION("editar nombre y URL no pierde la key") {
+        auto form = h.session->provider_form().value();
+        form.select_provider(*form.find_provider("a"));
+        form.set_name("Falso A nuevo");
+        form.set_base_url("https://a2.example/v1");
+        form.set_model("m-a");
+        REQUIRE(h.session->save_provider(form) == std::nullopt);
+        CHECK(h.session->config().base_url == "https://a2.example/v1");
+        CHECK(h.session->config().api_key == "sk-clave-del-endpoint-a-5678");
+        const auto values = chatbot::load_config_file_values(h.config_path()).value();
+        CHECK(values.endpoints[0].id == "a");
+        CHECK(values.endpoints[0].name == "Falso A nuevo");
+    }
+    SECTION("borrar uno que no está en uso: también su key") {
+        const chatbot::cli::EndpointDeletion done = h.session->delete_endpoint("custom:a");
+        CHECK(done.status == Status::Deleted);
+        CHECK(done.message == "Se borró el endpoint Falso A.");
+        const auto values = chatbot::load_config_file_values(h.config_path()).value();
+        REQUIRE(values.endpoints.size() == 1);
+        CHECK(values.endpoints[0].id == "b");
+        CHECK(values.provider == "nvidia");
+        CHECK(values.base_url == "https://integrate.api.nvidia.com/v1");
+        const auto credentials = chatbot::load_credentials(h.credentials_path()).value();
+        CHECK_FALSE(credentials.keys.contains("custom:a"));
+        CHECK(credentials.keys.contains("nvidia"));
+        CHECK(h.session->delete_endpoint("custom:a").message == "Ese endpoint ya no existe.");
+        // El id solo también sirve; sin key no toca credentials.json.
+        CHECK(h.session->delete_endpoint("b").status == Status::Deleted);
+        CHECK(h.session->provider_choices().value().size() == chatbot::providers().size());
+    }
+    SECTION("no se borra el que está en uso, ni uno que no existe") {
+        REQUIRE(h.session->switch_model("a", "m-a").status ==
+                chatbot::cli::ModelSwitch::Status::Switched);
+        const std::string config_before = read_file(h.config_path());
+        const chatbot::cli::EndpointDeletion in_use = h.session->delete_endpoint("custom:a");
+        CHECK(in_use.status == Status::Invalid);
+        CHECK(in_use.message == "Cambia de proveedor antes de borrar este endpoint.");
+        CHECK(h.session->delete_endpoint("custom:").message == "Ese endpoint ya no existe.");
+        CHECK(h.session->delete_endpoint("nvidia").message == "Ese endpoint ya no existe.");
+        CHECK(read_file(h.config_path()) == config_before);
+        CHECK(chatbot::load_credentials(h.credentials_path()).value().keys.contains("custom:a"));
+    }
+}
+
+TEST_CASE("Session: borrar el último endpoint deja credentials.json sin keys y se vuelve a cargar",
+          "[session][endpoints]") {
+    Harness h;
+    chatbot::Credentials credentials;
+    credentials.keys["custom:solo"] = "sk-clave-del-unico-endpoint-1234";
+    REQUIRE_FALSE(chatbot::save_credentials(h.credentials_path(), credentials).has_value());
+    chatbot::ConfigFileValues values;
+    values.provider = "ollama";
+    values.base_url = "http://localhost:11434/v1";
+    values.model = "qwen3:8b";
+    values.endpoints = {{"solo", "Solo", "https://solo.example/v1"}};
+    REQUIRE_FALSE(chatbot::save_config_file(h.config_path(), values).has_value());
+    h.start(h.load());
+
+    REQUIRE(h.session->delete_endpoint("solo").status ==
+            chatbot::cli::EndpointDeletion::Status::Deleted);
+    const nlohmann::json written = nlohmann::json::parse(read_file(h.credentials_path()));
+    CHECK(written.at("version") == 1);
+    CHECK(written.at("keys") == nlohmann::json::object());
+    CHECK(read_file(h.config_path()).find("endpoints") == std::string::npos);
+    // Se vuelve a cargar sin error, como al arrancar.
+    const chatbot::Result<chatbot::Credentials> reloaded =
+        chatbot::load_credentials(h.credentials_path());
+    REQUIRE(reloaded.is_ok());
+    CHECK(reloaded.value().keys.empty());
+    const chatbot::Config config = h.load();
+    CHECK(config.provider == "ollama");
+    CHECK(config.warnings.empty());
+    CHECK(h.session->provider_form().is_ok());
+}
+
+TEST_CASE("Session: un proveedor que no existe deja la app sin configurar", "[session][endpoints]") {
+    Harness h;
+    save_endpoints(h, "custom:borrado");
+    h.start(h.load());
+    CHECK_FALSE(h.session->configured());
+    CHECK(h.session->setup_problem() == "El endpoint borrado no existe. Elige un proveedor en F2.");
+    check_status(h.session->submit("hola"), h.session->setup_problem());
+    // Al elegir uno que sí existe, queda configurada.
+    CHECK(h.session->switch_model("a", "m-a").status == chatbot::cli::ModelSwitch::Status::Switched);
+    CHECK(h.session->configured());
+    CHECK(h.session->setup_problem() == chatbot::cli::kSetupNotice);
+}
+
+TEST_CASE("Session: los endpoints ignorados son avisos de arranque", "[session][endpoints]") {
+    Harness h;
+    std::ofstream{h.config_path()}
+        << R"({"provider":"nvidia","model":"m1","endpoints":[{"id":"Mal","name":"x","base_url":"https://x/v1"}]})";
+    h.start(h.load());
+    REQUIRE(h.session->startup_warnings().size() == 1);
+    CHECK(h.session->startup_warnings()[0] ==
+          "Se ignoró un endpoint de config.json: el id no es válido.");
 }

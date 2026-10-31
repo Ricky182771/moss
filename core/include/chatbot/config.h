@@ -2,6 +2,7 @@
 #define CHATBOT_CONFIG_H
 
 #include "chatbot/platform.h"
+#include "chatbot/providers.h"
 #include "chatbot/result.h"
 
 #include <chrono>
@@ -10,6 +11,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace chatbot {
 
@@ -22,8 +24,16 @@ struct Config {
     /// archivo de configuración). Nunca de config.json. Puede quedar vacía
     /// para un servidor local (localhost, 127.0.0.1 o [::1]).
     std::string api_key;
-    std::string base_url; ///< Por defecto: https://integrate.api.nvidia.com/v1
-    std::string provider; ///< "provider" de config.json (id de la tabla de cli/), o vacío.
+    /// Por defecto: https://integrate.api.nvidia.com/v1. Con un endpoint, la
+    /// suya de "endpoints" (la "base_url" de primer nivel no se lee).
+    std::string base_url;
+    std::string provider; ///< "provider" de config.json (de providers() o "custom:<id>"), o vacío.
+    /// Por qué el proveedor de config.json no se puede usar (no está en
+    /// providers() ni es un endpoint guardado), o vacío. La app queda sin
+    /// configurar: validate_config lo devuelve como error Config.
+    std::string provider_error;
+    /// Avisos de arranque al leer config.json (endpoints que se ignoraron).
+    std::vector<std::string> warnings;
     std::string model;    ///< Sin valor por defecto a propósito (sección 7).
     std::chrono::seconds timeout_seconds{120};
     /// Límite del historial que se envía, en bytes UTF-8 de los content
@@ -105,6 +115,10 @@ inline constexpr std::string_view kPortableMarker = "moss.portable";
 /// Carga la configuración con precedencia entorno > archivo > defectos.
 /// - La key: CHAT_API_KEY; si no, la de credentials.json para el "provider"
 ///   de config.json (credentials_key); si no, ninguna. Nunca de config.json.
+/// - "endpoints": las entradas inválidas se ignoran con un aviso en
+///   warnings. Con "provider": "custom:<id>", la URL base es la del
+///   endpoint (CHAT_BASE_URL sigue ganando); si no existe, o el proveedor no
+///   está en providers(), provider_error.
 /// - Que el archivo no exista no es un error.
 /// - Falta de key o de modelo produce un error Config (sección 7).
 /// Las excepciones internas nunca cruzan esta función (sección 6).
@@ -143,19 +157,24 @@ inline constexpr std::string_view kSearchCredentialsKey = "search:tavily";
 /// Valores que la pantalla de configuración guarda en config.json.
 struct ConfigFileValues {
     std::string provider;
-    std::string base_url; ///< Siempre se guarda, también para proveedores conocidos.
+    /// La URL del proveedor: con un endpoint, la suya; si no, "base_url"
+    /// (siempre se guarda para los de la tabla).
+    std::string base_url;
     std::string model;
+    std::vector<Endpoint> endpoints{}; ///< "endpoints", sin las entradas inválidas.
 };
 
-/// Lee provider, base_url y model tal como están en config.json, sin el
-/// entorno ni valores por defecto (vacíos si faltan). Que el archivo no
-/// exista no es un error; si no es un objeto JSON válido, error Config.
+/// Lee provider, base_url, model y endpoints de config.json, sin el entorno
+/// ni valores por defecto (vacíos si faltan). Que el archivo no exista no es
+/// un error; si no es un objeto JSON válido, error Config.
 [[nodiscard]] Result<ConfigFileValues> load_config_file_values(const std::string& path);
 
-/// Escribe provider, base_url y model en config.json de forma atómica,
-/// conservando todas las demás llaves que ya tuviera el archivo (y su
-/// orden). Nunca escribe una key. Si el archivo existe pero no es un objeto
-/// JSON válido, no lo toca y devuelve el error Config.
+/// Escribe provider, base_url, model y endpoints en config.json de forma
+/// atómica, conservando todas las demás llaves que ya tuviera el archivo (y
+/// su orden). Con un endpoint ("custom:<id>") quita la "base_url" de primer
+/// nivel; sin endpoints quita "endpoints". Nunca escribe una key. Si el
+/// archivo existe pero no es un objeto JSON válido, no lo toca y devuelve el
+/// error Config.
 [[nodiscard]] std::optional<ChatError> save_config_file(const std::string& path,
                                                         const ConfigFileValues& values);
 

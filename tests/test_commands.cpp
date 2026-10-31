@@ -28,7 +28,7 @@ CommandAvailability availability_of(std::string_view name, const CommandContext&
 }
 
 /// Todo disponible.
-CommandContext ready() { return CommandContext{true, true, true, true, false}; }
+CommandContext ready() { return CommandContext{true, true, true, true, false, false}; }
 
 } // namespace
 
@@ -49,7 +49,8 @@ TEST_CASE("Cada comando del registro lo reconoce parse_command", "[commands]") {
 TEST_CASE("Ningún tipo de ParsedCommand queda sin entrada en el registro", "[commands]") {
     using Type = ParsedCommand::Type;
     for (const Type type : {Type::Search, Type::SearchEmpty, Type::Copy, Type::CopyUsage,
-                            Type::Save, Type::SaveUsage, Type::Export, Type::ExportUsage}) {
+                            Type::Save, Type::SaveUsage, Type::Export, Type::ExportUsage,
+                            Type::Model, Type::ModelUsage}) {
         INFO(static_cast<int>(type));
         CHECK(chatbot::cli::find_command(chatbot::cli::command_name(type)) != nullptr);
     }
@@ -65,6 +66,7 @@ TEST_CASE("Los argumentos del registro coinciden con los avisos de uso", "[comma
     CHECK(usage("/buscar") == chatbot::cli::kSearchUsage);
     CHECK(usage("/copiar") == chatbot::cli::kCopyUsage);
     CHECK(usage("/guardar") == chatbot::cli::kSaveUsage);
+    CHECK(usage("/model") == chatbot::cli::kModelUsage);
     const CommandInfo* exportar = chatbot::cli::find_command("/exportar");
     REQUIRE(exportar != nullptr);
     CHECK(exportar->arguments.empty());
@@ -89,6 +91,7 @@ TEST_CASE("Registro: nombres en minúsculas, sin repetir y descripciones cortas"
     CHECK_FALSE(chatbot::cli::find_command("/copiar")->needs_argument);
     CHECK_FALSE(chatbot::cli::find_command("/guardar")->needs_argument);
     CHECK_FALSE(chatbot::cli::find_command("/exportar")->needs_argument);
+    CHECK_FALSE(chatbot::cli::find_command("/model")->needs_argument);
     CHECK(chatbot::cli::find_command("/BUSCAR") == nullptr);
     CHECK(chatbot::cli::find_command("/bus") == nullptr);
 }
@@ -117,6 +120,20 @@ TEST_CASE("Disponibilidad de los comandos", "[commands]") {
         CHECK(availability_of("/copiar", context).note == "no hay bloques de código");
         CHECK(availability_of("/guardar", context).note == "no hay bloques de código");
         CHECK(availability_of("/exportar", context).available);
+    }
+    SECTION("/model: sin configurar sí; con CHAT_MODEL o en curso, no") {
+        CommandContext context = ready();
+        context.configured = false;
+        context.has_search_key = false;
+        context.has_code_blocks = false;
+        context.has_turns = false;
+        CHECK(availability_of("/model", context).available);
+        context.busy = true;
+        CHECK(availability_of("/model", context).note == "espera a que termine la respuesta");
+        context.model_locked = true;
+        CHECK(availability_of("/model", context).note == "fijado por CHAT_MODEL");
+        context.busy = false;
+        CHECK_FALSE(availability_of("/model", context).available);
     }
     SECTION("/exportar con la conversación vacía") {
         CommandContext context = ready();

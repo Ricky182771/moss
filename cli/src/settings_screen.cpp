@@ -99,9 +99,6 @@ SettingsScreen::SettingsScreen(ModelsLoader& loader, const Palette& palette, OnS
     }
     background_names_ = {"Del tema", "Transparente"};
     symbol_names_ = {"Automático", "Unicode", "Sencillos"};
-    for (const ProviderInfo& provider : providers()) {
-        provider_names_.emplace_back(provider.name);
-    }
 
     // Categorías: el cursor y la elegida se mueven juntos (Menu).
     ftxui::MenuOption categories = ftxui::MenuOption::Vertical();
@@ -134,7 +131,8 @@ SettingsScreen::SettingsScreen(ModelsLoader& loader, const Palette& palette, OnS
     symbol_list_ = ftxui::Radiobox(symbol_list);
 
     ftxui::DropdownOption dropdown;
-    dropdown.open = &dropdown_open_;
+    // FTXUI 7.0.3 toma el estado de checkbox.checked, no de open.
+    dropdown.checkbox.checked = &dropdown_open_;
     dropdown.radiobox.entries = &provider_names_;
     dropdown.radiobox.selected = &provider_selected_;
     dropdown.radiobox.on_change = [this] {
@@ -145,8 +143,22 @@ SettingsScreen::SettingsScreen(ModelsLoader& loader, const Palette& palette, OnS
         settings_->select_provider(static_cast<std::size_t>(provider_selected_));
         sync_fields();
         status_.clear();
+        if (settings_->is_new_endpoint()) {
+            dropdown_open_ = false;
+            name_input_->TakeFocus(); // "Agregar endpoint…": se empieza por el nombre.
+        }
     };
-    dropdown.radiobox.transform = row_transform(palette_, true);
+    // Los endpoints, con su id atenuado.
+    dropdown.radiobox.transform = [this](const ftxui::EntryState& state) {
+        ftxui::Element row =
+            ftxui::hbox({chosen_mark(state.state, palette_), ftxui::text(clean(state.label))});
+        const auto index = static_cast<std::size_t>(state.index);
+        if (state.index >= 0 && index < provider_ids_.size() && !provider_ids_[index].empty()) {
+            row = ftxui::hbox({std::move(row),
+                               ftxui::text("  " + provider_ids_[index]) | palette_.ink(&Theme::notice)});
+        }
+        return state.focused ? row | palette_.selection() : row;
+    };
     dropdown.checkbox.transform = [this](const ftxui::EntryState& state) {
         const std::string arrow{
             palette_.glyph(state.state ? Glyph::DropdownOpen : Glyph::DropdownClosed)};
@@ -164,6 +176,18 @@ SettingsScreen::SettingsScreen(ModelsLoader& loader, const Palette& palette, OnS
     };
     dropdown_ = ftxui::Dropdown(dropdown);
 
+    name_input_ = ftxui::Input(&name_text_, "nombre del endpoint", field_option(palette_, [this] {
+                                   if (settings_) {
+                                       (void)settings_->set_name(name_text_);
+                                   }
+                               }));
+    ftxui::ButtonOption delete_option;
+    // En el endpoint en uso, atenuado: al activarlo dice por qué no se borra.
+    delete_option.transform = [this](const ftxui::EntryState& state) {
+        ftxui::Element label = button_label(state.label, state.focused, palette_);
+        return endpoint_in_use() ? label | palette_.ink(&Theme::notice) : label;
+    };
+    delete_button_ = ftxui::Button("Borrar endpoint", [this] { request_delete(); }, delete_option);
     url_input_ = ftxui::Input(&url_text_, "https://mi-servidor/v1",
                               field_option(
                                   palette_,
@@ -232,8 +256,14 @@ SettingsScreen::SettingsScreen(ModelsLoader& loader, const Palette& palette, OnS
 
     const ftxui::Component provider_form = ftxui::Container::Vertical({
         dropdown_,
+        ftxui::Maybe(name_input_, [this] { return settings_ && settings_->is_endpoint(); }),
         ftxui::Maybe(url_input_, [this] { return settings_ && settings_->base_url_editable(); }),
         ftxui::Maybe(key_input_, [this] { return settings_ && !settings_->key_locked(); }),
+        ftxui::Maybe(delete_button_,
+                     [this] {
+                         return settings_ && settings_->is_endpoint() &&
+                                !settings_->is_new_endpoint();
+                     }),
         ftxui::Container::Horizontal({filter_input_, refresh_button_}),
         ftxui::Maybe(model_input_, [this] { return settings_ && !settings_->model_locked(); }),
     });
@@ -293,9 +323,10 @@ void SettingsScreen::open(ProviderSettings settings, Config base, Appearance app
     search_ = std::move(search);
     search_key_text_.clear();
     addons_.open(base_.model);
-    provider_selected_ = static_cast<int>(settings_->provider());
     dropdown_open_ = false;
     confirm_discard_ = false;
+    confirm_delete_ = false;
+    sync_providers();
     sync_fields();
     status_ = std::move(notice);
     focus();
@@ -307,7 +338,7 @@ void SettingsScreen::open(ProviderSettings settings, Config base, Appearance app
 void SettingsScreen::focus() { categories_->TakeFocus(); }
 
 PasteTarget SettingsScreen::paste_target() const {
-    if (!settings_ || confirm_discard_ || dropdown_open_ || addons_.question()) {
+    if (!settings_ || confirm_discard_ || confirm_delete_ || dropdown_open_ || addons_.question()) {
         return PasteTarget::None;
     }
     if (addons_.text_field_focused()) {
@@ -317,7 +348,7 @@ PasteTarget SettingsScreen::paste_target() const {
         return PasteTarget::MultiLine;
     }
     for (const ftxui::Component& field :
-         {url_input_, key_input_, filter_input_, model_input_, search_key_input_}) {
+         {name_input_, url_input_, key_input_, filter_input_, model_input_, search_key_input_}) {
         if (field->Focused()) {
             return PasteTarget::SingleLine;
         }
@@ -327,6 +358,7 @@ PasteTarget SettingsScreen::paste_target() const {
 
 std::vector<std::pair<std::string_view, bool>> SettingsScreen::debug_focus() const {
     return {{"root", root_->Focused()},
+            {"name", name_input_->Focused()},
             {"url", url_input_->Focused()},
             {"key", key_input_->Focused()},
             {"filter", filter_input_->Focused()},
@@ -380,13 +412,55 @@ void SettingsScreen::close() {
     search_ = SearchSettings{};
     search_key_text_.clear();
     confirm_discard_ = false;
+    confirm_delete_ = false;
     dropdown_open_ = false;
     status_.clear();
     addons_.close();
     on_close_();
 }
 
+void SettingsScreen::sync_providers() {
+    provider_names_.clear();
+    provider_ids_.clear();
+    for (const ProviderEntry& entry : settings_->provider_list()) {
+        provider_names_.push_back(entry.name);
+        provider_ids_.push_back(entry.endpoint ? std::string{*endpoint_id(entry.id)} : std::string{});
+    }
+    provider_selected_ = static_cast<int>(settings_->provider());
+}
+
+bool SettingsScreen::endpoint_in_use() const {
+    return settings_ && settings_->is_endpoint() && !settings_->is_new_endpoint() &&
+           settings_->provider() == settings_->saved_provider();
+}
+
+void SettingsScreen::request_delete() {
+    if (!settings_ || !settings_->is_endpoint() || settings_->is_new_endpoint() ||
+        !on_delete_endpoint_) {
+        return;
+    }
+    if (endpoint_in_use()) {
+        delete_endpoint(); // Session no lo borra y dice por qué.
+        return;
+    }
+    confirm_delete_ = true;
+}
+
+void SettingsScreen::delete_endpoint() {
+    confirm_delete_ = false;
+    EndpointDeleted result = on_delete_endpoint_(settings_->provider_id());
+    status_ = std::move(result.message);
+    if (result.form.has_value()) {
+        loader_.cancel(); // La lista era del endpoint borrado.
+        settings_ = std::move(result.form);
+        sync_providers();
+        sync_fields();
+        dropdown_->TakeFocus();
+    }
+}
+
 void SettingsScreen::sync_fields() {
+    name_text_ = settings_->name();
     url_text_ = settings_->base_url();
     key_text_ = settings_->key();
     filter_text_ = settings_->filter();
@@ -458,6 +532,7 @@ void SettingsScreen::save() {
             return;
         }
         settings_->mark_saved();
+        sync_providers(); // Un endpoint nuevo ya está en la lista.
     }
     if (appearance_changed) {
         const Appearance chosen = chosen_appearance();
@@ -519,11 +594,17 @@ void SettingsScreen::move_focus(int step) {
         }
     } else {
         order.push_back(dropdown_);
+        if (settings_->is_endpoint()) {
+            order.push_back(name_input_);
+        }
         if (settings_->base_url_editable()) {
             order.push_back(url_input_);
         }
         if (!settings_->key_locked()) {
             order.push_back(key_input_);
+        }
+        if (settings_->is_endpoint() && !settings_->is_new_endpoint()) {
+            order.push_back(delete_button_);
         }
         order.push_back(filter_input_);
         order.push_back(refresh_button_);
@@ -563,6 +644,15 @@ bool SettingsScreen::handle_event(const ftxui::Event& event) {
                 addons_.cancel_question();
             } else {
                 addons_.answer(reply == YesNo::Yes);
+            }
+        } else if (confirm_delete_) {
+            if (reply == YesNo::Yes) {
+                delete_endpoint();
+            } else {
+                confirm_delete_ = false;
+                if (reply == YesNo::Cancel) {
+                    status_ = "Cancelado: no se borró el endpoint.";
+                }
             }
         } else if (reply == YesNo::Yes) {
             close();
@@ -691,11 +781,11 @@ ftxui::Element SettingsScreen::render_provider() const {
         });
     }
 
-    // Aviso de URL sin ruta: en "custom" sus kHintRows filas están siempre,
+    // Aviso de URL sin ruta: en un endpoint sus kHintRows filas están siempre,
     // vacías si no hay aviso, para que escribir la URL no mueva los campos de
     // abajo. En pantallas angostas lo que no cabe se recorta.
     ftxui::Element url_hint = ftxui::emptyElement();
-    if (s.provider_info().id == kCustomProvider) {
+    if (s.is_endpoint()) {
         const std::optional<std::string> hint = s.base_url_hint();
         url_hint = ftxui::hbox({
                        ftxui::text("") | ftxui::size(ftxui::WIDTH, ftxui::EQUAL, kLabelWidth),
@@ -728,10 +818,16 @@ ftxui::Element SettingsScreen::render_provider() const {
         ftxui::text(""),
         ftxui::hbox({label("Proveedor", dropdown_->Focused(), palette_),
                      dropdown_->Render() | ftxui::flex}),
+        s.is_endpoint() ? ftxui::hbox({label("Nombre", name_input_->Focused(), palette_),
+                                       name_input_->Render() | ftxui::flex})
+                        : ftxui::emptyElement(),
         ftxui::hbox({label("URL base", url_input_->Focused(), palette_), std::move(url)}),
         std::move(url_hint),
         ftxui::hbox({label("API key", key_input_->Focused(), palette_), std::move(key)}),
-        ftxui::text(""),
+        // En un endpoint guardado, el botón va en la fila vacía: la página no crece.
+        s.is_endpoint() && !s.is_new_endpoint()
+            ? ftxui::hbox({label("", false, palette_), delete_button_->Render()})
+            : ftxui::text(""),
         ftxui::hbox({label("Modelos", false, palette_),
                      field_label("Filtrar:", filter_input_->Focused(), palette_),
                      ftxui::text(" "), filter_input_->Render() | ftxui::flex, ftxui::text(" "),
@@ -874,6 +970,10 @@ ftxui::Element SettingsScreen::render() const {
         status = ftxui::paragraph(addons_.question()->text) | ftxui::bold;
     } else if (confirm_discard_) {
         status = ftxui::text("¿Descartar los cambios? (s/n)") | ftxui::bold;
+    } else if (confirm_delete_) {
+        const std::string name = settings_->provider_list()[settings_->provider()].name;
+        status = ftxui::paragraph("¿Borrar el endpoint " + clean(name) + "? (s/n)") |
+                 ftxui::bold;
     } else if (!status_.empty()) {
         status = ftxui::paragraph(clean(status_)) | ftxui::bold;
     } else if (category_ == kAppearance) {

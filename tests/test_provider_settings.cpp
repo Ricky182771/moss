@@ -1,9 +1,9 @@
 // Lógica de la sección "Proveedor de IA" (sin FTXUI): tabla, cambio de
-// proveedor, URL editable solo en "custom", enmascarado, campos bloqueados
+// proveedor, nombre y URL editables solo en un endpoint, enmascarado, campos bloqueados
 // por CHAT_*, filtro de modelos y cambios sin guardar.
 
 #include "provider_settings.h"
-#include "providers.h"
+#include "chatbot/providers.h"
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
@@ -18,13 +18,25 @@ using chatbot::ConfigFileValues;
 using chatbot::Credentials;
 using chatbot::cli::ModelsState;
 using chatbot::cli::ProviderSettings;
-using chatbot::cli::provider_index;
 using chatbot::cli::SettingsEnv;
+
+std::size_t provider_index(std::string_view id) { return *chatbot::provider_index(id); }
 
 constexpr const char* kSecret = "sk-clave-secreta-de-prueba-1234";
 
 ConfigFileValues saved(std::string provider, std::string base_url, std::string model) {
-    return ConfigFileValues{std::move(provider), std::move(base_url), std::move(model)};
+    ConfigFileValues values;
+    values.provider = std::move(provider);
+    values.base_url = std::move(base_url);
+    values.model = std::move(model);
+    return values;
+}
+
+/// config.json con el endpoint "lab" (nombre "Lab") en uso, con esa URL.
+ConfigFileValues lab(std::string url, std::string model = "m") {
+    ConfigFileValues values = saved("custom:lab", url, std::move(model));
+    values.endpoints = {{"lab", "Lab", std::move(url)}};
+    return values;
 }
 
 Credentials credentials_with(std::string id, std::string key) {
@@ -35,35 +47,77 @@ Credentials credentials_with(std::string id, std::string key) {
 
 } // namespace
 
-TEST_CASE("proveedores: tabla con custom al final y ids únicos", "[proveedor][ajustes]") {
-    const auto table = chatbot::cli::providers();
-    REQUIRE(table.size() == 13);
-    CHECK(table.back().id == chatbot::cli::kCustomProvider);
-    CHECK(table.back().base_url.empty());
+TEST_CASE("proveedores: tabla con ids únicos y URL válidas", "[proveedor][ajustes]") {
+    const auto table = chatbot::providers();
+    REQUIRE(table.size() == 12);
     for (std::size_t i = 0; i < table.size(); ++i) {
         CAPTURE(table[i].id);
         CHECK(provider_index(table[i].id) == i);
-        if (i + 1 < table.size()) {
-            // Toda URL de la tabla es válida (http solo en Ollama, local).
-            CHECK_FALSE(chatbot::validate_base_url(table[i].base_url).has_value());
-            CHECK(table[i].needs_key == (table[i].id != "ollama"));
-        }
+        // Toda URL de la tabla es válida (http solo en Ollama, local).
+        CHECK_FALSE(chatbot::validate_base_url(table[i].base_url).has_value());
+        CHECK(table[i].needs_key == (table[i].id != "ollama"));
     }
-    CHECK(provider_index("no-existe") == table.size() - 1);
+    CHECK_FALSE(chatbot::provider_index("no-existe").has_value());
+    CHECK_FALSE(chatbot::provider_index("custom").has_value());
     CHECK(table[provider_index("gemini")].base_url ==
           "https://generativelanguage.googleapis.com/v1beta/openai");
 }
 
 TEST_CASE("ajustes: el proveedor inicial sale de config.json", "[proveedor][ajustes]") {
-    CHECK(ProviderSettings(saved("", "", ""), {}, {}).provider_info().id == "nvidia");
-    CHECK(ProviderSettings(saved("", "https://api.openai.com/v1", ""), {}, {})
-              .provider_info()
-              .id == "openai");
-    const ProviderSettings custom(saved("", "http://localhost:8080/v1", "m"), {}, {});
-    CHECK(custom.provider_info().id == "custom");
-    CHECK(custom.base_url() == "http://localhost:8080/v1");
-    CHECK(custom.model() == "m");
-    CHECK_FALSE(custom.dirty());
+    CHECK(ProviderSettings(saved("", "", ""), {}, {}).provider_id() == "nvidia");
+    CHECK(ProviderSettings(saved("", "https://api.openai.com/v1", ""), {}, {}).provider_id() ==
+          "openai");
+    const ProviderSettings endpoint(lab("http://localhost:8080/v1"), {}, {});
+    CHECK(endpoint.provider_id() == "custom:lab");
+    CHECK(endpoint.is_endpoint());
+    CHECK_FALSE(endpoint.is_new_endpoint());
+    CHECK(endpoint.name() == "Lab");
+    CHECK(endpoint.base_url() == "http://localhost:8080/v1");
+    CHECK(endpoint.model() == "m");
+    CHECK(endpoint.saved_provider() == endpoint.provider());
+    CHECK_FALSE(endpoint.dirty());
+
+    // Un proveedor que no existe (también el "custom" de antes): F2 empieza
+    // en NVIDIA, sin nada elegido como guardado ni su modelo.
+    for (const char* provider : {"custom", "lab", "custom:otro", "custom:", "no-existe"}) {
+        CAPTURE(provider);
+        ConfigFileValues values = lab("https://lab/v1", "qwen3");
+        values.provider = provider;
+        const ProviderSettings unknown(values, {}, {});
+        CHECK(unknown.provider_id() == "nvidia");
+        CHECK(unknown.saved_provider() == ProviderSettings::kNoProvider);
+        CHECK(unknown.model().empty());
+        CHECK_FALSE(unknown.dirty());
+    }
+}
+
+TEST_CASE("ajustes: la lista de proveedores es la tabla, los endpoints y agregar",
+          "[proveedor][ajustes][endpoints]") {
+    ConfigFileValues values = saved("nvidia", "", "m");
+    values.endpoints = {{"omniroute", "OmniRoute", "https://gw.example/v1"},
+                        {"lab", "Servidor del lab", "http://localhost:8000/v1"}};
+    const ProviderSettings settings(values, {}, {});
+    const std::vector<chatbot::cli::ProviderEntry> list = settings.provider_list();
+    const std::size_t table = chatbot::providers().size();
+    REQUIRE(list.size() == table + 3);
+    CHECK(list[0].id == "nvidia");
+    CHECK_FALSE(list[0].endpoint);
+    CHECK(list[table].id == "custom:omniroute");
+    CHECK(list[table].name == "OmniRoute");
+    CHECK(list[table].endpoint);
+    CHECK(list[table].needs_key);
+    CHECK(list[table + 1].id == "custom:lab");
+    CHECK_FALSE(list[table + 1].needs_key); // Local.
+    CHECK(list.back().add);
+    CHECK(list.back().name == chatbot::cli::kAddEndpoint);
+
+    CHECK(settings.find_provider("custom:lab") == table + 1);
+    CHECK(settings.find_provider("lab") == table + 1); // El id solo.
+    CHECK(settings.find_provider("custom:") == table + 2);
+    CHECK(settings.find_provider("gemini") == provider_index("gemini"));
+    CHECK_FALSE(settings.find_provider("custom").has_value());
+    CHECK_FALSE(settings.find_provider("custom:otro").has_value());
+    CHECK_FALSE(settings.find_provider("").has_value());
 }
 
 TEST_CASE("ajustes: cambiar de proveedor rellena la URL y la key guardada",
@@ -88,25 +142,116 @@ TEST_CASE("ajustes: cambiar de proveedor rellena la URL y la key guardada",
     CHECK(settings.can_request_models());
 }
 
-TEST_CASE("ajustes: la URL solo se edita en Personalizado", "[proveedor][ajustes]") {
-    ProviderSettings settings(saved("openai", "https://api.openai.com/v1", ""), {}, {});
+TEST_CASE("ajustes: nombre y URL solo se editan en un endpoint", "[proveedor][ajustes][endpoints]") {
+    ConfigFileValues values = saved("openai", "https://api.openai.com/v1", "");
+    values.endpoints = {{"lab", "Lab", "https://lab.example/v1"}};
+    ProviderSettings settings(values, credentials_with("custom:lab", kSecret), {});
     CHECK_FALSE(settings.base_url_editable());
     CHECK_FALSE(settings.set_base_url("https://otra/v1"));
+    CHECK_FALSE(settings.set_name("Otro"));
     CHECK(settings.base_url() == "https://api.openai.com/v1");
 
-    settings.select_provider(provider_index("custom"));
+    settings.select_provider(*settings.find_provider("custom:lab"));
     CHECK(settings.base_url_editable());
-    CHECK(settings.base_url().empty());
-    CHECK(settings.set_base_url("https://mi-servidor/v1"));
-    settings.set_key(kSecret);
-    // La key del endpoint propio va por su URL.
+    CHECK(settings.name() == "Lab");
+    CHECK(settings.base_url() == "https://lab.example/v1");
+    CHECK(settings.provider_label() == "Lab");
+    CHECK(settings.key_status() == "guardada: …1234");
+    // Cambiar el nombre y la URL no pierde la key: va por el id.
+    CHECK(settings.set_name("Laboratorio"));
+    CHECK(settings.set_base_url("https://nueva.example/v1"));
+    CHECK(settings.dirty());
+    CHECK(settings.effective_key() == kSecret);
+    CHECK(settings.provider_id() == "custom:lab");
+    settings.set_model("m");
+    CHECK_FALSE(settings.validate().has_value());
+    const ConfigFileValues file = settings.file_values();
+    CHECK(file.provider == "custom:lab");
+    REQUIRE(file.endpoints.size() == 1);
+    CHECK(file.endpoints[0].id == "lab");
+    CHECK(file.endpoints[0].name == "Laboratorio");
+    CHECK(file.endpoints[0].base_url == "https://nueva.example/v1");
+    settings.set_key("sk-escrita-nueva-0000000");
     REQUIRE(settings.credential_update().has_value());
-    CHECK(settings.credential_update()->first == "custom:https://mi-servidor/v1");
-    // Al regresar a "custom" se recupera la última URL escrita.
+    CHECK(settings.credential_update()->first == "custom:lab");
+    // Al cambiar de proveedor y regresar, vuelve lo guardado.
     settings.select_provider(provider_index("openai"));
-    settings.select_provider(provider_index("custom"));
-    CHECK(settings.base_url() == "https://mi-servidor/v1");
-    CHECK(settings.provider_label() == "https://mi-servidor/v1");
+    settings.select_provider(*settings.find_provider("lab"));
+    CHECK(settings.name() == "Lab");
+    CHECK(settings.base_url() == "https://lab.example/v1");
+}
+
+TEST_CASE("ajustes: agregar un endpoint", "[proveedor][ajustes][endpoints]") {
+    ConfigFileValues values = saved("nvidia", "https://integrate.api.nvidia.com/v1", "m");
+    values.endpoints = {{"lab", "Lab", "https://lab.example/v1"}};
+    ProviderSettings settings(values, credentials_with("nvidia", kSecret), {});
+    settings.select_provider(*settings.find_provider("custom:"));
+    CHECK(settings.is_new_endpoint());
+    CHECK(settings.name().empty());
+    CHECK(settings.base_url().empty());
+    CHECK(settings.key_status().empty());
+    CHECK(settings.validate() == "Escribe un nombre para el endpoint.");
+    settings.set_name("LAB");
+    CHECK(settings.validate() == "Ya hay un endpoint con ese nombre.");
+    settings.set_name("Servidor Ñandú");
+    CHECK(settings.validate() == "Escribe la URL base del servidor.");
+    settings.set_base_url("http://192.168.1.10/v1");
+    REQUIRE(settings.validate().has_value());
+    CHECK_THAT(*settings.validate(), Catch::Matchers::ContainsSubstring("https://"));
+    settings.set_base_url("https://nandu.example/v1");
+    CHECK(settings.validate() == "Falta la API key de Servidor Ñandú.");
+    settings.set_key("sk-del-servidor-nandu-1234");
+    settings.set_model("qwen3");
+    CHECK_FALSE(settings.validate().has_value());
+    CHECK(settings.provider_id() == "custom:servidor-nandu");
+    CHECK(settings.credential_update()->first == "custom:servidor-nandu");
+    const ConfigFileValues file = settings.file_values();
+    CHECK(file.provider == "custom:servidor-nandu");
+    REQUIRE(file.endpoints.size() == 2);
+    CHECK(file.endpoints[1].id == "servidor-nandu");
+    CHECK(file.endpoints[1].name == "Servidor Ñandú");
+
+    // Tras guardar queda en la lista, elegido, y ya no es nuevo.
+    const std::size_t index = settings.provider();
+    settings.mark_saved();
+    CHECK_FALSE(settings.is_new_endpoint());
+    CHECK(settings.provider() == index);
+    CHECK(settings.saved_provider() == index);
+    CHECK(settings.provider_list()[index].id == "custom:servidor-nandu");
+    CHECK(settings.provider_list().back().add);
+    CHECK(settings.key_status() == "guardada: …1234");
+    CHECK_FALSE(settings.dirty());
+
+    // Con CHAT_BASE_URL la URL no se edita: no se agrega uno sin la suya.
+    SettingsEnv env;
+    env.base_url = "https://desde-entorno/v1";
+    ProviderSettings locked(values, credentials_with("nvidia", kSecret), env);
+    locked.select_provider(*locked.find_provider("custom:"));
+    locked.set_name("Nuevo");
+    CHECK_FALSE(locked.set_base_url("https://nuevo/v1"));
+    locked.set_model("m");
+    CHECK(locked.validate() == "Con CHAT_BASE_URL definida no se puede agregar un endpoint.");
+    // Uno guardado sí se edita: conserva su URL.
+    locked.select_provider(*locked.find_provider("lab"));
+    locked.set_model("m");
+    locked.set_key("sk-del-servidor-lab-00000");
+    CHECK_FALSE(locked.validate().has_value());
+    CHECK(locked.file_values().endpoints[0].base_url == "https://lab.example/v1");
+
+    // Tope: con 20 no se agrega otro.
+    ConfigFileValues full = saved("nvidia", "", "m");
+    for (int i = 0; i < 20; ++i) {
+        full.endpoints.push_back({"e" + std::to_string(i), "E" + std::to_string(i), "https://x/v1"});
+    }
+    ProviderSettings capped(full, {}, {});
+    capped.select_provider(*capped.find_provider("custom:"));
+    capped.set_name("Otro");
+    CHECK(capped.validate() == "Ya tienes 20 endpoints; borra uno antes de agregar otro.");
+    // Editar uno de los 20 sí se puede.
+    capped.select_provider(*capped.find_provider("e3"));
+    capped.set_model("m");
+    capped.set_key("sk-del-servidor-e3-000000");
+    CHECK_FALSE(capped.validate().has_value());
 }
 
 TEST_CASE("ajustes: el enmascarado nunca expone más de 4 caracteres", "[proveedor][ajustes]") {
@@ -136,8 +281,8 @@ TEST_CASE("ajustes: CHAT_* bloquean sus campos", "[proveedor][ajustes]") {
     env.base_url = "https://desde-entorno/v1";
     env.model = "modelo-entorno";
     env.api_key = "clave-del-entorno-9999";
-    ProviderSettings settings(saved("custom", "https://guardada/v1", "guardado"),
-                              credentials_with("custom:https://desde-entorno/v1", kSecret), env);
+    ConfigFileValues values = lab("https://guardada/v1", "guardado");
+    ProviderSettings settings(values, credentials_with("custom:lab", kSecret), env);
     CHECK(settings.base_url_locked());
     CHECK_FALSE(settings.base_url_editable());
     CHECK_FALSE(settings.set_base_url("https://otra/v1"));
@@ -229,11 +374,6 @@ TEST_CASE("ajustes: cambios sin guardar y validación", "[proveedor][ajustes]") 
     CHECK(settings.key().empty());
     CHECK(settings.key_status() == "guardada: …0000");
 
-    // URL inválida en Personalizado.
-    settings.select_provider(provider_index("custom"));
-    settings.set_base_url("http://192.168.1.10/v1");
-    REQUIRE(settings.validate().has_value());
-    CHECK_THAT(*settings.validate(), Catch::Matchers::ContainsSubstring("https://"));
 }
 
 TEST_CASE("ajustes: una key que parece variable o incompleta no se guarda",
@@ -284,7 +424,7 @@ TEST_CASE("ajustes: una key que parece variable o incompleta no se guarda",
 TEST_CASE("ajustes: key vacía válida en Ollama y en un host local", "[proveedor][ajustes]") {
     for (const ConfigFileValues& values : {
              saved("ollama", "http://localhost:11434/v1", "m"),
-             saved("custom", "http://localhost:8080/v1", "m")}) {
+             lab("http://localhost:8080/v1")}) {
         ProviderSettings settings(values, {}, {});
         CHECK_FALSE(settings.validate().has_value());
         CHECK_FALSE(settings.credential_update().has_value());
@@ -294,9 +434,7 @@ TEST_CASE("ajustes: key vacía válida en Ollama y en un host local", "[proveedo
 TEST_CASE("ajustes: aviso de URL base sin ruta, sin bloquear", "[proveedor][ajustes]") {
     for (const char* url : {"https://h", "https://h/", "https://h:8443", "http://localhost:8080"}) {
         INFO(url);
-        ProviderSettings settings(saved("custom", url, "m"),
-                                  credentials_with(chatbot::credentials_key("custom", url), kSecret),
-                                  {});
+        ProviderSettings settings(lab(url), credentials_with("custom:lab", kSecret), {});
         const std::optional<std::string> hint = settings.base_url_hint();
         REQUIRE(hint.has_value());
         CHECK_THAT(*hint, Catch::Matchers::ContainsSubstring("/v1"));
@@ -307,34 +445,32 @@ TEST_CASE("ajustes: aviso de URL base sin ruta, sin bloquear", "[proveedor][ajus
     for (const char* url :
          {"https://h/v1", "https://h:8443/openai/v1", "http://h", "no es url", ""}) {
         INFO(url);
-        ProviderSettings settings(saved("custom", url, "m"), {}, {});
+        ProviderSettings settings(lab("https://h/v1"), {}, {});
+        (void)settings.set_base_url(url); // Las inválidas no se cargan de config.json.
         CHECK_FALSE(settings.base_url_hint().has_value());
     }
 
     // Se actualiza al escribir.
-    ProviderSettings typing(saved("custom", "https://h/v1", "m"), {}, {});
+    ProviderSettings typing(lab("https://h/v1"), {}, {});
     CHECK_FALSE(typing.base_url_hint().has_value());
     REQUIRE(typing.set_base_url("https://h"));
     CHECK(typing.base_url_hint().has_value());
 
     // Un proveedor conocido nunca, aunque CHAT_BASE_URL no tenga ruta.
-    for (std::size_t i = 0; i < chatbot::cli::providers().size(); ++i) {
-        if (chatbot::cli::providers()[i].id == chatbot::cli::kCustomProvider) {
-            continue;
-        }
-        ProviderSettings settings(saved("custom", "https://h", "m"), {}, {});
+    for (std::size_t i = 0; i < chatbot::providers().size(); ++i) {
+        ProviderSettings settings(lab("https://h"), {}, {});
         settings.select_provider(i);
         CHECK_FALSE(settings.base_url_hint().has_value());
         SettingsEnv env;
         env.base_url = "https://h";
-        ProviderSettings locked(saved(std::string{chatbot::cli::providers()[i].id}, "", "m"), {},
+        ProviderSettings locked(saved(std::string{chatbot::providers()[i].id}, "", "m"), {},
                                 env);
         CHECK_FALSE(locked.base_url_hint().has_value());
     }
 
-    // En "custom" cuenta la URL efectiva: CHAT_BASE_URL.
+    // En un endpoint cuenta la URL efectiva: CHAT_BASE_URL.
     SettingsEnv env;
     env.base_url = "https://h";
-    ProviderSettings locked(saved("custom", "https://h/v1", "m"), {}, env);
+    ProviderSettings locked(lab("https://h/v1"), {}, env);
     CHECK(locked.base_url_hint().has_value());
 }

@@ -21,24 +21,8 @@ std::string lowercase(std::string_view text) {
     return out;
 }
 
-/// Proveedor de lo guardado: el de "provider"; si no hay, el de la tabla con
-/// esa URL base (sin URL: NVIDIA, el valor por defecto del núcleo); si no,
-/// "custom".
-std::size_t initial_provider(const ConfigFileValues& saved) {
-    if (!saved.provider.empty()) {
-        return provider_index(saved.provider);
-    }
-    if (saved.base_url.empty()) {
-        return 0;
-    }
-    const auto table = providers();
-    for (std::size_t i = 0; i < table.size(); ++i) {
-        if (!table[i].base_url.empty() && table[i].base_url == saved.base_url) {
-            return i;
-        }
-    }
-    return provider_index(kCustomProvider);
-}
+/// Filas de la tabla en provider_list(): los endpoints van después.
+std::size_t table_size() { return providers().size(); }
 
 } // namespace
 
@@ -67,29 +51,78 @@ std::string mask_key(std::string_view key) {
 ProviderSettings::ProviderSettings(ConfigFileValues saved, Credentials credentials,
                                    SettingsEnv env)
     : saved_(std::move(saved)), credentials_(std::move(credentials)), env_(std::move(env)) {
-    saved_provider_ = initial_provider(saved_);
-    provider_ = saved_provider_;
-    if (provider_info().id == kCustomProvider) {
-        custom_url_ = saved_.base_url;
-        base_url_ = custom_url_;
+    // Sin "provider": el de la tabla con esa URL base (sin URL o con otra,
+    // NVIDIA, el valor por defecto del núcleo). Uno que no existe no queda
+    // elegido como guardado: F2 empieza en NVIDIA.
+    if (saved_.provider.empty()) {
+        const auto table = providers();
+        const auto same = std::find_if(table.begin(), table.end(), [this](const ProviderInfo& info) {
+            return info.base_url == saved_.base_url;
+        });
+        saved_provider_ = same != table.end() ? static_cast<std::size_t>(same - table.begin()) : 0;
     } else {
-        base_url_ = std::string{provider_info().base_url};
+        // En config.json solo valen un id de la tabla o "custom:<id>" de un
+        // endpoint guardado (ni el id solo ni "custom:").
+        const std::optional<std::size_t> index = find_provider(saved_.provider);
+        const bool known =
+            index.has_value() &&
+            (*index < table_size() || (endpoint_id(saved_.provider).has_value() &&
+                                       *index < table_size() + saved_.endpoints.size()));
+        saved_provider_ = known ? *index : kNoProvider;
     }
-    model_ = saved_.model;
+    provider_ = saved_provider_ == kNoProvider ? 0 : saved_provider_;
+    select_provider(provider_, true); // El modelo guardado, solo si se conoce el proveedor.
     initial_provider_ = provider_;
+    initial_name_ = name_;
     initial_url_ = base_url_;
     initial_model_ = model_;
 }
 
-const ProviderInfo& ProviderSettings::provider_info() const { return providers()[provider_]; }
+std::vector<ProviderEntry> ProviderSettings::provider_list() const {
+    std::vector<ProviderEntry> list;
+    for (const ProviderInfo& info : providers()) {
+        list.push_back({std::string{info.id}, std::string{info.name}, std::string{info.base_url},
+                        info.needs_key, false, false});
+    }
+    for (const Endpoint& endpoint : saved_.endpoints) {
+        list.push_back({endpoint_provider(endpoint.id), endpoint.name, endpoint.base_url,
+                        !is_local_base_url(endpoint.base_url), true, false});
+    }
+    list.push_back({{}, std::string{kAddEndpoint}, {}, true, false, true});
+    return list;
+}
 
-void ProviderSettings::select_provider(std::size_t index) {
-    if (index >= providers().size() || index == provider_) {
+std::optional<std::size_t> ProviderSettings::find_provider(std::string_view id) const {
+    if (const std::optional<std::size_t> index = provider_index(id)) {
+        return index;
+    }
+    const std::string_view bare = endpoint_id(id).value_or(id);
+    if (id == kEndpointPrefix) {
+        return table_size() + saved_.endpoints.size();
+    }
+    for (std::size_t i = 0; i < saved_.endpoints.size(); ++i) {
+        if (saved_.endpoints[i].id == bare) {
+            return table_size() + i;
+        }
+    }
+    return std::nullopt;
+}
+
+void ProviderSettings::select_provider(std::size_t index) { select_provider(index, false); }
+
+void ProviderSettings::select_provider(std::size_t index, bool force) {
+    if (index > table_size() + saved_.endpoints.size() || (index == provider_ && !force)) {
         return;
     }
     provider_ = index;
-    base_url_ = provider_info().id == kCustomProvider ? custom_url_
-                                                       : std::string{provider_info().base_url};
+    const Endpoint* chosen = endpoint();
+    if (index < table_size()) {
+        name_.clear();
+        base_url_ = std::string{providers()[index].base_url};
+    } else {
+        name_ = chosen != nullptr ? chosen->name : std::string{};
+        base_url_ = chosen != nullptr ? chosen->base_url : std::string{};
+    }
     key_.clear();
     filter_.clear();
     models_.clear();
@@ -99,25 +132,49 @@ void ProviderSettings::select_provider(std::size_t index) {
     model_ = index == saved_provider_ ? saved_.model : std::string{};
 }
 
-std::string ProviderSettings::provider_label() const {
-    if (provider_info().id == kCustomProvider) {
-        return effective_base_url();
+const Endpoint* ProviderSettings::endpoint() const {
+    if (provider_ < table_size() || provider_ - table_size() >= saved_.endpoints.size()) {
+        return nullptr;
     }
-    return std::string{provider_info().name};
+    return &saved_.endpoints[provider_ - table_size()];
+}
+
+bool ProviderSettings::is_endpoint() const { return provider_ >= table_size(); }
+
+bool ProviderSettings::is_new_endpoint() const { return is_endpoint() && endpoint() == nullptr; }
+
+std::string ProviderSettings::provider_id() const {
+    if (!is_endpoint()) {
+        return std::string{providers()[provider_].id};
+    }
+    if (const Endpoint* chosen = endpoint()) {
+        return endpoint_provider(chosen->id);
+    }
+    return endpoint_provider(make_endpoint_id(name_, saved_.endpoints));
+}
+
+std::string ProviderSettings::provider_label() const {
+    return is_endpoint() ? name_ : std::string{providers()[provider_].name};
+}
+
+bool ProviderSettings::set_name(std::string name) {
+    if (!is_endpoint()) {
+        return false;
+    }
+    name_ = std::move(name);
+    return true;
 }
 
 const std::string& ProviderSettings::effective_base_url() const {
     return env_.base_url.has_value() ? *env_.base_url : base_url_;
 }
 
-bool ProviderSettings::base_url_editable() const {
-    return provider_info().id == kCustomProvider && !base_url_locked();
-}
+bool ProviderSettings::base_url_editable() const { return is_endpoint() && !base_url_locked(); }
 
 std::optional<std::string> ProviderSettings::base_url_hint() const {
     const std::string& url = effective_base_url();
     // Hay servidores que sirven en la raíz: es solo un aviso.
-    if (provider_info().id != kCustomProvider || validate_base_url(url).has_value() ||
+    if (!is_endpoint() || validate_base_url(url).has_value() ||
         base_url_has_path(url)) {
         return std::nullopt;
     }
@@ -136,7 +193,6 @@ bool ProviderSettings::set_base_url(std::string url) {
         highlighted_ = 0;
     }
     base_url_ = std::move(url);
-    custom_url_ = base_url_;
     return true;
 }
 
@@ -149,8 +205,10 @@ bool ProviderSettings::set_key(std::string key) {
 }
 
 std::string ProviderSettings::saved_key() const {
-    const auto it = credentials_.keys.find(
-        credentials_key(provider_info().id, effective_base_url()));
+    if (is_new_endpoint()) {
+        return {};
+    }
+    const auto it = credentials_.keys.find(credentials_key(provider_id()));
     return it != credentials_.keys.end() ? it->second : std::string{};
 }
 
@@ -257,7 +315,7 @@ bool ProviderSettings::can_request_models() const {
 }
 
 Config ProviderSettings::request_config(Config base) const {
-    base.provider = std::string{provider_info().id};
+    base.provider = provider_id();
     base.base_url = effective_base_url();
     base.api_key = effective_key();
     base.model = effective_model();
@@ -265,6 +323,25 @@ Config ProviderSettings::request_config(Config base) const {
 }
 
 std::optional<std::string> ProviderSettings::validate() const {
+    if (is_new_endpoint() && saved_.endpoints.size() >= kMaxEndpoints) {
+        return "Ya tienes " + std::to_string(kMaxEndpoints) +
+               " endpoints; borra uno antes de agregar otro.";
+    }
+    if (is_endpoint()) {
+        if (std::optional<std::string> problem = endpoint_name_problem(name_)) {
+            return problem;
+        }
+        const Endpoint* self = endpoint();
+        for (const Endpoint& other : saved_.endpoints) {
+            if (&other != self && same_endpoint_name(other.name, name_)) {
+                return "Ya hay un endpoint con ese nombre.";
+            }
+        }
+        // Con CHAT_BASE_URL la URL no se edita: uno nuevo quedaría sin la suya.
+        if (is_new_endpoint() && base_url_locked()) {
+            return "Con CHAT_BASE_URL definida no se puede agregar un endpoint.";
+        }
+    }
     const std::string& url = effective_base_url();
     if (url.empty()) {
         return "Escribe la URL base del servidor.";
@@ -287,9 +364,21 @@ std::optional<std::string> ProviderSettings::validate() const {
 
 ConfigFileValues ProviderSettings::file_values() const {
     ConfigFileValues values;
-    values.provider = std::string{provider_info().id};
+    values.provider = provider_id();
     values.base_url = base_url_;
     values.model = model_locked() ? saved_.model : model_;
+    values.endpoints = saved_.endpoints;
+    if (is_endpoint()) {
+        const std::string id{*endpoint_id(values.provider)};
+        const auto it = std::find_if(values.endpoints.begin(), values.endpoints.end(),
+                                     [&id](const Endpoint& other) { return other.id == id; });
+        if (it == values.endpoints.end()) {
+            values.endpoints.push_back({id, name_, base_url_});
+        } else {
+            it->name = name_;
+            it->base_url = base_url_;
+        }
+    }
     return values;
 }
 
@@ -297,22 +386,23 @@ std::optional<std::pair<std::string, std::string>> ProviderSettings::credential_
     if (key_locked() || !plausible_key(key_)) {
         return std::nullopt;
     }
-    return std::pair{credentials_key(provider_info().id, effective_base_url()), key_};
+    return std::pair{credentials_key(provider_id()), key_};
 }
 
 bool ProviderSettings::dirty() const {
-    return provider_ != initial_provider_ || base_url_ != initial_url_ ||
-           model_ != initial_model_ || !key_.empty();
+    return provider_ != initial_provider_ || name_ != initial_name_ ||
+           base_url_ != initial_url_ || model_ != initial_model_ || !key_.empty();
 }
 
 void ProviderSettings::mark_saved() {
     if (const auto update = credential_update()) {
         credentials_.keys[update->first] = update->second;
     }
-    saved_ = file_values();
+    saved_ = file_values(); // Un endpoint nuevo queda en provider_, al final de los guardados.
     saved_provider_ = provider_;
     key_.clear();
     initial_provider_ = provider_;
+    initial_name_ = name_;
     initial_url_ = base_url_;
     initial_model_ = model_;
 }

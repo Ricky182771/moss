@@ -13,6 +13,8 @@
 #include "clipboard.h"
 #include "command_menu.h"
 #include "command_menu_view.h"
+#include "model_picker.h"
+#include "model_picker_view.h"
 #include "commands.h"
 #include "conversation.h"
 #include "conversation_list.h"
@@ -367,6 +369,14 @@ int main(int argc, char** argv) {
         });
     chatbot::cli::ModelsLoader models_loader(
         [] { return std::make_unique<chatbot::CurlTransport>(); }, post);
+    // Selector de /model, con su propio ModelsLoader: no cancela la lista de
+    // F2. Se destruye antes que session (cancela y une su hilo).
+    chatbot::cli::ModelPicker model_picker(
+        [&session](std::string_view provider) { return session.models_config(provider); },
+        [] { return std::make_unique<chatbot::CurlTransport>(); }, post);
+    ftxui::Box model_picker_box;
+    std::vector<ftxui::Box> model_picker_rows;
+    std::size_t model_picker_first = 0; ///< first() del cuadro de model_picker_rows.
 
     // Avisos de arranque: tema, instrucciones del sistema y búsqueda.
     std::string startup_warning = appearance_warning;
@@ -385,7 +395,7 @@ int main(int argc, char** argv) {
          .placeholder = [&session](int columns) {
              return session.configured()
                         ? std::string{chatbot::cli::input_placeholder(columns)}
-                        : std::string{chatbot::cli::kSetupNotice} + " (F2)";
+                        : session.setup_problem() + " (F2)";
          }});
     const ftxui::Component input = input_area;
 
@@ -411,6 +421,19 @@ int main(int argc, char** argv) {
         if (outcome.type == Type::Status) {
             flash = outcome.status; // El texto se queda en la caja.
             return;
+        }
+        if (outcome.type == Type::OpenModelPicker) {
+            const auto choices = session.provider_choices();
+            if (choices.is_error()) {
+                flash = choices.error().message;
+                return;
+            }
+            const chatbot::cli::ModelPickerAction opened =
+                model_picker.open(choices.value(), outcome.picker_provider, session.model());
+            if (opened.type == chatbot::cli::ModelPickerAction::Type::Status) {
+                flash = opened.text;
+                return;
+            }
         }
         if (outcome.type == Type::Copy) {
             session.report(chatbot::cli::copy_block(outcome.block, chatbot::cli::real_clipboard()));
@@ -444,6 +467,35 @@ int main(int argc, char** argv) {
             input_area->set_text(action.text); // El cursor al final.
             if (action.type == Type::Submit) {
                 send();
+            }
+            return true;
+        }
+        return false;
+    };
+
+    // Aplica lo que pidió el selector de /model. true si el selector usó el evento.
+    const auto apply_model_picker = [&](const chatbot::cli::ModelPickerAction& action) {
+        using Type = chatbot::cli::ModelPickerAction::Type;
+        switch (action.type) {
+        case Type::Pass:
+            return false;
+        case Type::Handled:
+        case Type::Closed: // El filtro se queda en la caja, como con el menú de "/".
+            return true;
+        case Type::ClearInput:
+            input_area->set_text("");
+            return true;
+        case Type::Status:
+            flash = action.text;
+            return true;
+        case Type::Switch:
+            if (const std::optional<std::string> notice =
+                    model_picker.finish(session.switch_model(action.provider, action.text))) {
+                flash = *notice;
+            }
+            if (!model_picker.is_open()) {
+                input_area->set_text("");
+                scroll.to_bottom();
             }
             return true;
         }
@@ -504,6 +556,20 @@ int main(int argc, char** argv) {
         });
 
     settings.set_portable_dir(chatbot::process_portable_data_dir());
+    settings.set_on_delete_endpoint([&](const std::string& id) {
+        chatbot::cli::SettingsScreen::EndpointDeleted result;
+        const chatbot::cli::EndpointDeletion deletion = session.delete_endpoint(id);
+        result.message = deletion.message;
+        if (deletion.status == chatbot::cli::EndpointDeletion::Status::Deleted) {
+            chatbot::Result<chatbot::cli::ProviderSettings> form = session.provider_form();
+            if (form.is_ok()) {
+                result.form = std::move(form).value();
+            } else {
+                result.message = form.error().message;
+            }
+        }
+        return result;
+    });
     settings.set_addons_environment(
         chatbot::cli::addons_environment(post, chatbot::executable_path().value_or("")));
 
@@ -669,8 +735,26 @@ int main(int argc, char** argv) {
 
         // Menú de comandos: entre la línea de estado y la caja; empuja el
         // historial hacia arriba.
-        command_menu.update(input_area->text(), input->Focused());
+        // El selector de /model va en el mismo lugar; mientras está abierto
+        // lo escrito es su filtro y el menú de "/" no se abre.
+        if (settings.is_open()) {
+            model_picker.close();
+        }
+        model_picker.update(input_area->text());
+        if (model_picker.is_open() && !model_picker.models_error().empty()) {
+            status.push_back({chatbot::md::sanitize(model_picker.models_error()), notice});
+        }
+        command_menu.update(input_area->text(), input->Focused() && !model_picker.is_open());
         ftxui::Element menu = ftxui::emptyElement();
+        if (model_picker.is_open()) {
+            model_picker_first = model_picker.first();
+            menu = chatbot::cli::render_model_picker(model_picker, width, palette,
+                                                     &model_picker_rows) |
+                   ftxui::reflect(model_picker_box);
+        } else {
+            model_picker_rows.clear();
+            model_picker_box = ftxui::Box{};
+        }
         if (command_menu.is_open()) {
             menu = chatbot::cli::render_command_menu(
                        command_menu, chatbot::cli::command_availability(session.command_context()),
@@ -680,7 +764,8 @@ int main(int argc, char** argv) {
             command_menu_rows.clear();
             command_menu_box = ftxui::Box{};
         }
-        const bool hide_status = command_menu.is_open() && status.empty();
+        const bool hide_status =
+            (command_menu.is_open() || model_picker.is_open()) && status.empty();
         input_area->set_max_rows(chatbot::cli::input_max_rows(ftxui::Terminal::Size().dimy));
         const std::string title =
             "Moss — " +
@@ -838,6 +923,28 @@ int main(int argc, char** argv) {
         }
         const bool click =
             mouse.button == ftxui::Mouse::Left && mouse.motion == ftxui::Mouse::Pressed;
+        // Selector de /model: hover mueve el cursor, clic elige (como Enter)
+        // y la rueda mueve el cursor. Nada llega al historial.
+        if (model_picker.is_open() && model_picker_box.Contain(mouse.x, mouse.y)) {
+            if (mouse.button == ftxui::Mouse::WheelUp || mouse.button == ftxui::Mouse::WheelDown) {
+                model_picker.scroll(mouse.button == ftxui::Mouse::WheelUp ? -1 : 1);
+                return true;
+            }
+            // Las cajas son del cuadro anterior: su first, no el de ahora.
+            const std::size_t first = model_picker_first;
+            for (std::size_t row = 0; row < model_picker_rows.size(); ++row) {
+                if (!model_picker_rows[row].Contain(mouse.x, mouse.y)) {
+                    continue;
+                }
+                if (mouse.motion == ftxui::Mouse::Moved) {
+                    model_picker.select(first + row);
+                } else if (click) {
+                    (void)apply_model_picker(model_picker.choose(first + row));
+                }
+                break;
+            }
+            return true;
+        }
         // Menú de comandos: hover mueve el cursor y clic completa (como Tab).
         // Nada del ratón sobre el menú llega al historial (tampoco la rueda).
         if (command_menu.is_open() && command_menu_box.Contain(mouse.x, mouse.y)) {
@@ -1096,9 +1203,21 @@ int main(int argc, char** argv) {
             (void)settings.component()->OnEvent(event);
             return true;
         }
+        // Selector de /model abierto: ↑/↓, Tab, Enter y Esc son suyos (Enter
+        // nunca envía la caja mientras está abierto).
+        model_picker.update(input_area->text());
+        if (model_picker.is_open() && input->Focused()) {
+            using chatbot::cli::ListKey;
+            const ListKey key = list_key(event);
+            if ((key == ListKey::Up || key == ListKey::Down || key == ListKey::Tab ||
+                 key == ListKey::Enter || key == ListKey::Escape) &&
+                apply_model_picker(model_picker.handle(key))) {
+                return true;
+            }
+        }
         // Menú de comandos abierto: ↑/↓, Tab, Enter y Esc son primero suyos
         // (el primer Esc lo cierra; el segundo ya cancela la respuesta).
-        command_menu.update(input_area->text(), input->Focused());
+        command_menu.update(input_area->text(), input->Focused() && !model_picker.is_open());
         if (command_menu.is_open()) {
             using chatbot::cli::ListKey;
             const ListKey key = list_key(event);
@@ -1152,12 +1271,12 @@ int main(int argc, char** argv) {
     });
 
     if (incomplete.has_value()) {
-        // Falta la key o el modelo. Los avisos del tema y de las
-        // instrucciones, si hay, van también.
+        // Falta la key o el modelo (o el proveedor no existe). Los avisos
+        // del tema, de las instrucciones y de los endpoints, si hay, van
+        // también.
         const std::string notice = startup_warning.empty()
-                                       ? std::string{chatbot::cli::kSetupNotice}
-                                       : std::string{chatbot::cli::kSetupNotice} + " " +
-                                             startup_warning;
+                                       ? session.setup_problem()
+                                       : session.setup_problem() + " " + startup_warning;
         open_settings(notice);
         flash = notice; // Si no se pudo abrir, al menos el aviso.
     } else {
