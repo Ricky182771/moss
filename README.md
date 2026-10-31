@@ -139,6 +139,8 @@ Hay una capa común de los bots (`addons/common/`: acceso solo para usuarios aut
 
 La forma más fácil es la pantalla de configuración: ábrela con **F2** o con la fila `⚙ Configuración` de la barra. Si al arrancar falta la key o el modelo, Moss la abre solo con el aviso `Configura un proveedor para empezar.` (mientras tanto, la caja de entrada no envía nada). Ahí eliges el proveedor, escribes la API key (se ve como `•••`) y eliges el modelo de la lista que devuelve el servidor (`GET {URL base}/models`). Con el filtro, ↑/↓ mueven el resaltado y Enter elige; si la lista falla (por ejemplo, Anthropic no documenta ese endpoint), el error aparece en la lista y puedes escribir el modelo a mano. Tab y Shift+Tab cambian de campo; Guardar aplica los cambios sin reiniciar y Esc o Cancelar cierran sin guardar (si hay cambios, pregunta `¿Descartar los cambios? (s/n)`: solo **s** o **n** la contestan y **Esc** la cancela). No se abre mientras hay una respuesta en curso.
 
+El modelo y el proveedor también se pueden cambiar desde la caja con `/model` (ver [Cambiar de modelo con /model](#cambiar-de-modelo-con-model)), entre los proveedores que ya tienen key guardada.
+
 | Proveedor | URL base | Lista de modelos |
 |---|---|---|
 | NVIDIA NIM | `https://integrate.api.nvidia.com/v1` | sí |
@@ -340,6 +342,7 @@ Escribe `/` al principio de la caja y arriba de ella aparece el menú de comando
 | `/copiar [número de bloque]` | Copia un bloque de código; sin número, el último |
 | `/guardar [número de bloque [nombre]]` | Guarda un bloque de código en un archivo |
 | `/exportar` | Exporta la conversación a Markdown |
+| `/model [proveedor] [modelo]` | Cambia de modelo o de proveedor (ver [Cambiar de modelo con /model](#cambiar-de-modelo-con-model)) |
 
 - ↑/↓ mueven el cursor del menú (dan la vuelta en los extremos). Tab completa el comando: `/buscar ` con un espacio para que escribas la consulta, o `/exportar` solo. Enter hace lo mismo con `/buscar` (no se envía sin consulta) y con los demás los completa y los ejecuta de una vez: `/ex` + Enter exporta.
 - Esc cierra el menú sin borrar lo que escribiste; no se vuelve a abrir hasta que cambies el texto. Con una respuesta en curso, el primer Esc cierra el menú y el segundo la cancela.
@@ -347,6 +350,22 @@ Escribe `/` al principio de la caja y arriba de ella aparece el menú de comando
 - Un comando que ahora no sirve se ve atenuado con el motivo (`falta la key de búsqueda (F2)`, `no hay bloques de código`, `la conversación está vacía`, `espera a que termine la respuesta`), pero se puede elegir igual: al enviarlo aparece el aviso de siempre.
 - Si nada coincide, el menú dice `Sin comandos que coincidan · se enviará como mensaje`: un texto como `/hola` va al modelo como cualquier mensaje.
 - En una terminal angosta la descripción se recorta con `…` y, si no cabe, se oculta antes que el nombre. Con la barra de conversaciones o la configuración con el foco no hay menú.
+
+#### Cambiar de modelo con /model
+
+`/model` cambia de modelo o de proveedor sin abrir F2 y sin cerrar la conversación; el cambio se guarda en `config.json` igual que en F2 y en el historial queda `Ahora se usa <modelo> de <proveedor>.`. No pide ni guarda keys: solo deja elegir proveedores con key guardada (o locales, como Ollama).
+
+| Escribes | Hace |
+|---|---|
+| `/model` | Abre el selector en la lista de proveedores |
+| `/model <proveedor>` | Abre el selector en la lista de modelos de ese proveedor |
+| `/model <modelo>` | Cambia el modelo en el proveedor actual |
+| `/model <proveedor> <modelo>` | Cambia de proveedor y de modelo |
+
+- `<proveedor>` es el id de la tabla de [Configurar](#configurar) (`nvidia`, `openai`, `gemini`, …, `ollama`, `custom`), sin distinguir mayúsculas. Una sola palabra que no es un id se toma como modelo (`/model z-ai/glm5`).
+- El selector aparece donde el menú de comandos y se maneja igual (lo que escribes filtra, ↑/↓, Enter, Esc, ratón). Cada proveedor dice `key guardada`, `local` o, atenuado y sin poderse elegir, `sin key` (o `falta la URL` en el personalizado). En la lista de modelos, si el filtro no deja nada o el proveedor no da la lista, la última fila es `Usar «<texto>»` para escribir el id a mano. Esc regresa a los proveedores y, ahí, cierra.
+- El modelo no se valida contra la lista: si no existe, el siguiente mensaje da el error de modelo no encontrado.
+- No funciona con una respuesta en curso ni con `CHAT_MODEL` definida; con `CHAT_BASE_URL` solo cambia el modelo.
 
 ### Markdown en las respuestas
 
