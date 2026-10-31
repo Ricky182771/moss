@@ -28,7 +28,8 @@ std::string at_cursor(const CommandMenu& menu) {
     return std::string{kCommands[menu.matches()[menu.cursor()]].name};
 }
 
-const std::vector<std::string> kAll = {"/buscar", "/copiar", "/guardar", "/exportar"};
+const std::vector<std::string> kAll = {"/buscar", "/copiar", "/guardar", "/exportar",
+                                       "/model"};
 
 } // namespace
 
@@ -107,7 +108,7 @@ TEST_CASE("El cursor del menú da la vuelta en los extremos", "[command_menu]") 
     menu.update("/", true);
     CHECK(at_cursor(menu) == "/buscar");
     CHECK(menu.handle(ListKey::Up).type == CommandMenuAction::Type::Handled);
-    CHECK(at_cursor(menu) == "/exportar");
+    CHECK(at_cursor(menu) == "/model");
     CHECK(menu.handle(ListKey::Down).type == CommandMenuAction::Type::Handled);
     CHECK(at_cursor(menu) == "/buscar");
     (void)menu.handle(ListKey::Down);
@@ -115,11 +116,11 @@ TEST_CASE("El cursor del menú da la vuelta en los extremos", "[command_menu]") 
 
     SECTION("Home, End, PgUp y PgDn van a los extremos") {
         CHECK(menu.handle(ListKey::End).type == CommandMenuAction::Type::Handled);
-        CHECK(at_cursor(menu) == "/exportar");
+        CHECK(at_cursor(menu) == "/model");
         (void)menu.handle(ListKey::Home);
         CHECK(at_cursor(menu) == "/buscar");
         (void)menu.handle(ListKey::PageDown);
-        CHECK(at_cursor(menu) == "/exportar");
+        CHECK(at_cursor(menu) == "/model");
         (void)menu.handle(ListKey::PageUp);
         CHECK(at_cursor(menu) == "/buscar");
     }
@@ -140,7 +141,7 @@ TEST_CASE("El cursor del menú da la vuelta en los extremos", "[command_menu]") 
 TEST_CASE("El cursor queda en rango cuando cambia el filtro", "[command_menu]") {
     CommandMenu menu;
     menu.update("/", true);
-    (void)menu.handle(ListKey::End); // /exportar, la cuarta fila.
+    (void)menu.handle(ListKey::End); // /model, la quinta fila.
     menu.update("/g", true);         // Una sola fila.
     CHECK(menu.cursor() == 0);
     CHECK(at_cursor(menu) == "/guardar");

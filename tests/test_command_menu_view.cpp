@@ -22,7 +22,7 @@ using chatbot::cli::CommandMenu;
 
 /// Todo disponible.
 std::vector<CommandAvailability> all_available() {
-    return chatbot::cli::command_availability(CommandContext{true, true, true, true, false});
+    return chatbot::cli::command_availability(CommandContext{true, true, true, true, false, false});
 }
 
 ftxui::Screen draw(const CommandMenu& menu, const std::vector<CommandAvailability>& availability,
@@ -72,7 +72,7 @@ TEST_CASE("Menú de comandos: columnas alineadas", "[command_menu_view]") {
     menu.update("/", true);
     const ftxui::Screen screen = draw(menu, all_available(), 100, chatbot::cli::terminal_palette());
     const std::vector<std::string> rows = rows_of(screen);
-    REQUIRE(rows.size() == 5);
+    REQUIRE(rows.size() == 6);
     // Arriba, la línea que lo separa del historial.
     CHECK(rows[0].find("────") == 0);
     CHECK(rows[1].find("  /buscar <consulta>") == 0);
@@ -172,7 +172,7 @@ TEST_CASE("Menú de comandos: una caja por fila para el ratón", "[command_menu_
     menu.update("/", true);
     std::vector<ftxui::Box> boxes;
     (void)draw(menu, all_available(), 80, chatbot::cli::terminal_palette(), &boxes);
-    REQUIRE(boxes.size() == 4);
+    REQUIRE(boxes.size() == 5);
     for (std::size_t i = 0; i < boxes.size(); ++i) {
         CHECK(boxes[i].y_min == static_cast<int>(i) + 1);
         CHECK(boxes[i].y_max == static_cast<int>(i) + 1);

@@ -14,6 +14,7 @@ inline constexpr std::string_view kSearchCommand = "/buscar";
 inline constexpr std::string_view kCopyCommand = "/copiar";
 inline constexpr std::string_view kSaveCommand = "/guardar";
 inline constexpr std::string_view kExportCommand = "/exportar";
+inline constexpr std::string_view kModelCommand = "/model";
 
 /// Un comando de la caja, como lo muestra el menú de comandos.
 struct CommandInfo {
@@ -25,14 +26,15 @@ struct CommandInfo {
 
 /// Registro de los comandos, en el orden en que los muestra el menú. Es la
 /// única lista: los argumentos coinciden con los avisos de uso
-/// (kSearchUsage, kCopyUsage, kSaveUsage), y las pruebas lo revisan.
-inline constexpr std::array<CommandInfo, 4> kCommands = {{
+/// (kSearchUsage, kCopyUsage, kSaveUsage, kModelUsage), y las pruebas lo revisan.
+inline constexpr std::array<CommandInfo, 5> kCommands = {{
     {kSearchCommand, "<consulta>", "Busca en la web y responde con fuentes citadas", true},
     {kCopyCommand, "[número de bloque]", "Copia un bloque de código; sin número, el último",
      false},
     {kSaveCommand, "[número de bloque [nombre]]", "Guarda un bloque de código en un archivo",
      false},
     {kExportCommand, "", "Exporta la conversación a Markdown", false},
+    {kModelCommand, "[proveedor] [modelo]", "Cambia de modelo o de proveedor", false},
 }};
 
 /// El comando del registro con ese nombre exacto, o nullptr.
@@ -49,6 +51,7 @@ struct CommandContext {
     bool has_code_blocks = false; ///< La conversación tiene bloques de código.
     bool has_turns = false;       ///< Hay al menos un par pregunta/respuesta.
     bool busy = false;            ///< Hay una respuesta en curso.
+    bool model_locked = false;    ///< CHAT_MODEL está definida (/model no sirve).
 };
 
 /// Si un comando se puede usar ahora y, si no, una nota corta del porqué.

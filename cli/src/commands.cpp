@@ -9,6 +9,7 @@ constexpr std::string_view kNoSearchKey = "falta la key de búsqueda (F2)";
 constexpr std::string_view kNoCodeBlocks = "no hay bloques de código";
 constexpr std::string_view kEmptyConversation = "la conversación está vacía";
 constexpr std::string_view kBusy = "espera a que termine la respuesta";
+constexpr std::string_view kModelLocked = "fijado por CHAT_MODEL";
 
 /// Primero lo que no se arregla esperando; la respuesta en curso, al final.
 CommandAvailability availability_of(std::string_view name, const CommandContext& context) {
@@ -26,6 +27,11 @@ CommandAvailability availability_of(std::string_view name, const CommandContext&
         note = !context.has_turns ? kEmptyConversation
                : context.busy     ? kBusy
                                   : std::string_view{};
+    } else if (name == kModelCommand) {
+        // Sin configurar sí sirve: es para elegir un proveedor con key.
+        note = context.model_locked ? kModelLocked
+               : context.busy       ? kBusy
+                                    : std::string_view{};
     }
     return CommandAvailability{note.empty(), note};
 }
@@ -58,6 +64,9 @@ std::string_view command_name(ParsedCommand::Type type) {
     case Type::Export:
     case Type::ExportUsage:
         return kExportCommand;
+    case Type::Model:
+    case Type::ModelUsage:
+        return kModelCommand;
     }
     return {};
 }

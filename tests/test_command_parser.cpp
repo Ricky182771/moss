@@ -207,3 +207,55 @@ TEST_CASE("parse_command acepta saltos de línea entre argumentos", "[command_pa
         REQUIRE(result.text == "hola\n\nmundo");
     }
 }
+
+TEST_CASE("parse_command reconoce /model en todas sus formas", "[command_parser]") {
+    using Type = ParsedCommand::Type;
+    SECTION("Sin argumentos abre el selector") {
+        const auto result = parse_command("/model");
+        REQUIRE(result.type == Type::Model);
+        CHECK_FALSE(result.provider.has_value());
+        CHECK_FALSE(result.model.has_value());
+    }
+    SECTION("Una palabra que es un proveedor, sin distinguir mayúsculas") {
+        const auto result = parse_command("/model  OLLama ");
+        REQUIRE(result.type == Type::Model);
+        CHECK(result.provider == "ollama");
+        CHECK_FALSE(result.model.has_value());
+    }
+    SECTION("Una palabra que no es un proveedor es el modelo, con / y :") {
+        auto result = parse_command("/model z-ai/glm5");
+        REQUIRE(result.type == Type::Model);
+        CHECK_FALSE(result.provider.has_value());
+        CHECK(result.model == "z-ai/glm5");
+        result = parse_command("/model deepseek/deepseek-v4:free");
+        CHECK(result.model == "deepseek/deepseek-v4:free");
+        // El modelo se queda como se escribió.
+        CHECK(parse_command("/model Qwen3:8B").model == "Qwen3:8B");
+    }
+    SECTION("Proveedor y modelo") {
+        const auto result = parse_command("/model Gemini gemini-2.5-flash");
+        REQUIRE(result.type == Type::Model);
+        CHECK(result.provider == "gemini");
+        CHECK(result.model == "gemini-2.5-flash");
+    }
+    SECTION("Saltos de línea como separadores") {
+        const auto result = parse_command("/model\nollama\n qwen3:8b\n");
+        REQUIRE(result.type == Type::Model);
+        CHECK(result.provider == "ollama");
+        CHECK(result.model == "qwen3:8b");
+    }
+    SECTION("Dos palabras con un proveedor desconocido") {
+        const auto result = parse_command("/model nvidiaa z-ai/glm5");
+        REQUIRE(result.type == Type::ModelUsage);
+        CHECK(result.text == "Proveedor desconocido: nvidiaa. Escribe /model para ver la lista.");
+    }
+    SECTION("Tres palabras o más") {
+        const auto result = parse_command("/model ollama qwen3 extra");
+        REQUIRE(result.type == Type::ModelUsage);
+        CHECK(result.text == kModelUsage);
+    }
+    SECTION("/modelx no es el comando") {
+        CHECK(parse_command("/modelx a").type == Type::Normal);
+        CHECK(parse_command("/models").type == Type::Normal);
+    }
+}
