@@ -27,10 +27,13 @@ using chatbot::cli::ProviderChoice;
 
 std::vector<ProviderChoice> choices() {
     return {
-        {"nvidia", "NVIDIA NIM", true, true, false, true, ""},
-        {"openrouter", "OpenRouter", false, false, false, false, "sin key"},
-        {"ollama", "Ollama (local)", false, false, true, true, ""},
-        {"custom", "Personalizado…", false, false, false, false, "falta la URL"},
+        {.id = "nvidia", .name = "NVIDIA NIM", .current = true, .key_saved = true,
+         .selectable = true},
+        {.id = "openrouter", .name = "OpenRouter", .note = "sin key"},
+        {.id = "ollama", .name = "Ollama (local)", .needs_key = false, .local = true,
+         .selectable = true},
+        {.id = "custom:lab", .name = "Servidor del lab", .base_url = "https://lab.example/v1",
+         .endpoint = true, .note = "sin key"},
     };
 }
 
@@ -99,7 +102,7 @@ TEST_CASE("Selector de /model: proveedores con marca y estado", "[model_picker_v
     CHECK(rows[3].find("    openrouter") == 0);
     CHECK(contains(rows[3], "sin key"));
     CHECK(contains(rows[4], "local"));
-    CHECK(contains(rows[5], "falta la URL"));
+    CHECK(contains(rows[5], "sin key"));
     // El cursor en el actual; los que no se eligen, atenuados.
     CHECK(screen.CellAt(2, 2).background_color ==
           chatbot::cli::to_ftxui(palette.theme().selection_bg));

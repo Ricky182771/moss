@@ -8,6 +8,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
 #include <cctype>
 #include <cerrno>
 #include <chrono>
@@ -26,6 +27,7 @@
 #include <string_view>
 #include <system_error>
 #include <utility>
+#include <vector>
 
 namespace chatbot {
 namespace {
@@ -86,6 +88,73 @@ std::optional<long long> parse_nonnegative_integer(std::string_view text) {
     return value;
 }
 
+/// "endpoints" de document sin las entradas inválidas (le falta un campo o
+/// no es cadena, id inválido o repetido, nombre inválido o repetido, URL
+/// inválida, más de kMaxEndpoints); cada una deja su aviso en warnings.
+std::vector<Endpoint> parse_endpoints(const json& document, std::vector<std::string>& warnings) {
+    std::vector<Endpoint> endpoints;
+    const auto list = document.find("endpoints");
+    if (list == document.end()) {
+        return endpoints;
+    }
+    if (!list->is_array()) {
+        warnings.emplace_back("Se ignoró \"endpoints\" de config.json: no es un arreglo.");
+        return endpoints;
+    }
+    const auto ignore = [&warnings](const std::string& reason) {
+        warnings.push_back("Se ignoró un endpoint de config.json: " + reason + ".");
+    };
+    for (const json& entry : *list) {
+        if (endpoints.size() == kMaxEndpoints) {
+            ignore("ya hay " + std::to_string(kMaxEndpoints) + " (el máximo)");
+            break;
+        }
+        if (!entry.is_object()) {
+            ignore("no es un objeto");
+            continue;
+        }
+        const auto field = [&entry](const char* name) -> std::optional<std::string> {
+            const auto it = entry.find(name);
+            return it != entry.end() && it->is_string() ? std::optional{it->get<std::string>()}
+                                                        : std::nullopt;
+        };
+        const std::optional<std::string> id = field("id");
+        const std::optional<std::string> name = field("name");
+        const std::optional<std::string> url = field("base_url");
+        if (!id.has_value() || !name.has_value() || !url.has_value()) {
+            ignore("le falta \"id\", \"name\" o \"base_url\", o no es una cadena");
+            continue;
+        }
+        // El id solo se muestra si es válido: así no trae controles.
+        if (!valid_endpoint_id(*id)) {
+            ignore("el id no es válido");
+            continue;
+        }
+        const auto same = [&](const auto& match) {
+            return std::any_of(endpoints.begin(), endpoints.end(), match);
+        };
+        if (same([&](const Endpoint& other) { return other.id == *id; })) {
+            ignore("el id " + *id + " está repetido");
+        } else if (endpoint_name_problem(*name).has_value()) {
+            ignore("el nombre de " + *id + " no es válido");
+        } else if (same([&](const Endpoint& other) { return same_endpoint_name(other.name, *name); })) {
+            ignore("el nombre de " + *id + " está repetido");
+        } else if (validate_base_url(*url).has_value()) {
+            ignore("la URL base de " + *id + " no es válida");
+        } else {
+            endpoints.push_back({*id, *name, *url});
+        }
+    }
+    return endpoints;
+}
+
+/// El endpoint con ese id, o nullptr.
+const Endpoint* find_endpoint(const std::vector<Endpoint>& endpoints, std::string_view id) {
+    const auto it = std::find_if(endpoints.begin(), endpoints.end(),
+                                 [id](const Endpoint& endpoint) { return endpoint.id == id; });
+    return it != endpoints.end() ? &*it : nullptr;
+}
+
 /// Aplica al config los valores presentes en el archivo JSON.
 /// Lanza std::runtime_error ante JSON malformado o campos de tipo incorrecto
 /// (las excepciones se capturan en load_config y no cruzan la API pública).
@@ -108,7 +177,19 @@ void apply_config_file(const std::string& path, Config& config) {
         }
         config.provider = value.get<std::string>();
     }
-    if (document.contains("base_url")) {
+    const std::vector<Endpoint> endpoints = parse_endpoints(document, config.warnings);
+    if (const std::optional<std::string_view> id = endpoint_id(config.provider)) {
+        // Con un endpoint, la "base_url" de primer nivel ni se lee.
+        if (const Endpoint* endpoint = find_endpoint(endpoints, *id)) {
+            config.base_url = endpoint->base_url;
+        } else {
+            config.provider_error =
+                "El endpoint " + std::string{*id} + " no existe. Elige un proveedor en F2.";
+        }
+    } else if (!config.provider.empty() && !provider_index(config.provider).has_value()) {
+        config.provider_error =
+            "Proveedor desconocido en config.json: " + config.provider + ". Elige uno en F2.";
+    } else if (document.contains("base_url")) {
         const json& value = document.at("base_url");
         if (!value.is_string()) {
             throw std::runtime_error("\"base_url\" debe ser una cadena");
@@ -372,6 +453,9 @@ std::optional<ChatError> validate_url_and_timeout(const Config& config) {
 } // namespace
 
 std::optional<ChatError> validate_connection(const Config& config) {
+    if (!config.provider_error.empty()) {
+        return ChatError{ErrorKind::Config, 0, config.provider_error, std::nullopt};
+    }
     if (std::optional<ChatError> error = validate_url_and_timeout(config)) {
         return error;
     }
@@ -455,7 +539,7 @@ Result<Config> load_config(const ConfigOptions& options) {
     }
 
     // 3) Sin CHAT_API_KEY: la key guardada para el proveedor de config.json.
-    if (config.api_key.empty() && !config.provider.empty()) {
+    if (config.api_key.empty() && !config.provider.empty() && config.provider_error.empty()) {
         std::optional<std::string> credentials_path;
         if (options.credentials_path) {
             credentials_path = options.credentials_path();
@@ -469,7 +553,7 @@ Result<Config> load_config(const ConfigOptions& options) {
                 return credentials.error();
             }
             const auto key = credentials.value().keys.find(
-                credentials_key(config.provider, config.base_url));
+                credentials_key(config.provider));
             if (key != credentials.value().keys.end()) {
                 config.api_key = key->second;
             }
@@ -511,6 +595,12 @@ Result<ConfigFileValues> load_config_file_values(const std::string& path) {
         values.provider = field("provider");
         values.base_url = field("base_url");
         values.model = field("model");
+        std::vector<std::string> ignored; // Los avisos ya salen al arrancar (load_config).
+        values.endpoints = parse_endpoints(document, ignored);
+        if (const std::optional<std::string_view> id = endpoint_id(values.provider)) {
+            const Endpoint* endpoint = find_endpoint(values.endpoints, *id);
+            values.base_url = endpoint != nullptr ? endpoint->base_url : std::string{};
+        }
     } catch (const std::exception&) {
         return ChatError{ErrorKind::Config, 0,
                          "Archivo de configuración inválido (" + path + "): no es un objeto "
@@ -565,8 +655,22 @@ std::optional<ChatError> save_config_file(const std::string& path,
                                           const ConfigFileValues& values) {
     return update_config_file(path, [&values](ordered& document) {
         document["provider"] = values.provider;
-        document["base_url"] = values.base_url;
+        if (endpoint_id(values.provider).has_value()) {
+            document.erase("base_url"); // La URL es la del endpoint.
+        } else {
+            document["base_url"] = values.base_url;
+        }
         document["model"] = values.model;
+        if (values.endpoints.empty()) {
+            document.erase("endpoints");
+            return;
+        }
+        ordered list = ordered::array();
+        for (const Endpoint& endpoint : values.endpoints) {
+            list.push_back(
+                {{"id", endpoint.id}, {"name", endpoint.name}, {"base_url", endpoint.base_url}});
+        }
+        document["endpoints"] = std::move(list);
     });
 }
 

@@ -47,22 +47,24 @@ std::optional<int> block_number(std::string_view word) {
     return value;
 }
 
-/// Id de la tabla de proveedores que coincide con word sin distinguir
-/// mayúsculas, o nullopt.
-std::optional<std::string> provider_id(std::string_view word) {
+/// El proveedor de word sin distinguir mayúsculas (ver parse_command), o
+/// nullopt.
+std::optional<std::string> provider_id(std::string_view word, const EndpointLookup& is_endpoint) {
     std::string lower{word};
     std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) {
         return static_cast<char>(std::tolower(c));
     });
-    for (const ProviderInfo& provider : providers()) {
-        if (provider.id == lower) {
-            return lower;
-        }
+    if (provider_index(lower).has_value() || endpoint_id(lower).has_value()) {
+        return lower;
+    }
+    if (is_endpoint && is_endpoint(lower)) {
+        return endpoint_provider(lower);
     }
     return std::nullopt;
 }
 
-ParsedCommand parse_model_command(const std::vector<std::string_view>& args) {
+ParsedCommand parse_model_command(const std::vector<std::string_view>& args,
+                                  const EndpointLookup& is_endpoint) {
     ParsedCommand command;
     command.type = ParsedCommand::Type::Model;
     if (args.size() > 2) {
@@ -71,7 +73,7 @@ ParsedCommand parse_model_command(const std::vector<std::string_view>& args) {
         return command;
     }
     if (!args.empty()) {
-        command.provider = provider_id(args[0]);
+        command.provider = provider_id(args[0], is_endpoint);
     }
     if (args.size() == 2 && !command.provider.has_value()) {
         command.type = ParsedCommand::Type::ModelUsage;
@@ -88,7 +90,8 @@ ParsedCommand parse_model_command(const std::vector<std::string_view>& args) {
 
 /// /copiar, /guardar, /exportar y /model. input ya viene recortado. nullopt
 /// si no es ninguno de ellos (por ejemplo "/copiarx").
-std::optional<ParsedCommand> parse_block_command(std::string_view input) {
+std::optional<ParsedCommand> parse_block_command(std::string_view input,
+                                                const EndpointLookup& is_endpoint) {
     const std::size_t end = static_cast<std::size_t>(
         std::find_if(input.begin(), input.end(), is_space) - input.begin());
     const std::string_view name = input.substr(0, end);
@@ -118,7 +121,7 @@ std::optional<ParsedCommand> parse_block_command(std::string_view input) {
         return command;
     }
     if (name == kModelCommand) {
-        return parse_model_command(args);
+        return parse_model_command(args, is_endpoint);
     }
     if (name == kExportCommand) {
         command.type = args.empty() ? ParsedCommand::Type::Export
@@ -134,7 +137,7 @@ std::string unknown_provider_message(std::string_view word) {
     return "Proveedor desconocido: " + std::string{word} + ". Escribe /model para ver la lista.";
 }
 
-ParsedCommand parse_command(std::string_view input) {
+ParsedCommand parse_command(std::string_view input, const EndpointLookup& is_endpoint) {
     // Recortar espacios al inicio y al final.
     while (!input.empty() && std::isspace(static_cast<unsigned char>(input.front()))) {
         input.remove_prefix(1);
@@ -143,7 +146,7 @@ ParsedCommand parse_command(std::string_view input) {
         input.remove_suffix(1);
     }
 
-    if (std::optional<ParsedCommand> command = parse_block_command(input)) {
+    if (std::optional<ParsedCommand> command = parse_block_command(input, is_endpoint)) {
         return *std::move(command);
     }
 

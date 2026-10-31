@@ -110,7 +110,7 @@ struct Harness {
     }
 
     void write_config(const nlohmann::json& telegram) const {
-        const nlohmann::json app{{"provider", "custom"},
+        const nlohmann::json app{{"provider", "ollama"},
                                  {"base_url", "http://localhost:8080/v1"},
                                  {"model", "modelo-de-la-app"},
                                  {"addons", {{"telegram", telegram}}}};
@@ -181,7 +181,11 @@ struct Harness {
         chatbot::Config config;
         config.base_url = "http://localhost:8080/v1";
         config.model = "modelo-de-la-app";
-        chatbot::cli::ProviderSettings provider({"custom", config.base_url, config.model}, {}, {});
+        chatbot::ConfigFileValues values;
+        values.provider = "ollama";
+        values.base_url = config.base_url;
+        values.model = config.model;
+        chatbot::cli::ProviderSettings provider(values, {}, {});
         settings.open(std::move(provider), config, chatbot::cli::resolve_appearance("", ""),
                       "", chatbot::cli::SearchSettings{});
         REQUIRE(queue.run_until([this] { return !loader.busy(); }));

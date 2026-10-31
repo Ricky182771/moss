@@ -1,6 +1,7 @@
 #ifndef CHATBOT_CLI_COMMAND_PARSER_H
 #define CHATBOT_CLI_COMMAND_PARSER_H
 
+#include <functional>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -57,11 +58,16 @@ inline constexpr std::string_view kModelUsage = "Uso: /model [proveedor] [modelo
 ///   solo dígitos (a lo más 9); los argumentos se separan con espacios o
 ///   saltos de línea.
 /// - `/model [proveedor] [modelo]`: Model. Una sola palabra es el proveedor
-///   si coincide con un id de providers() (sin distinguir mayúsculas); si
-///   no, el modelo. Con dos, la primera tiene que ser un proveedor; si no, o
+///   si coincide con un id de providers(), empieza con "custom:" o es el id
+///   de un endpoint (is_endpoint), sin distinguir mayúsculas; si no, el
+///   modelo. provider queda en minúsculas, y el id de un endpoint solo, como
+///   "custom:<id>". Con dos, la primera tiene que ser un proveedor; si no, o
 ///   con tres o más, ModelUsage con el aviso en text.
 /// - Cualquier otro texto (incluido `/buscarx`, `/copiarx` u otros comandos): devuelve Normal.
-ParsedCommand parse_command(std::string_view input);
+/// is_endpoint: si hay un endpoint guardado con ese id (en minúsculas); se
+/// llama solo con /model. Vacío: ninguno.
+using EndpointLookup = std::function<bool(std::string_view id)>;
+ParsedCommand parse_command(std::string_view input, const EndpointLookup& is_endpoint = {});
 
 }  // namespace chatbot::cli
 

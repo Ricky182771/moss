@@ -29,10 +29,13 @@ using Kind = ModelPickerRow::Kind;
 
 std::vector<ProviderChoice> choices() {
     return {
-        {"nvidia", "NVIDIA NIM", true, true, false, true, ""},
-        {"openrouter", "OpenRouter", false, false, false, false, "sin key"},
-        {"ollama", "Ollama (local)", false, false, true, true, ""},
-        {"custom", "Personalizado…", false, false, false, false, "falta la URL"},
+        {.id = "nvidia", .name = "NVIDIA NIM", .current = true, .key_saved = true,
+         .selectable = true},
+        {.id = "openrouter", .name = "OpenRouter", .note = "sin key"},
+        {.id = "ollama", .name = "Ollama (local)", .needs_key = false, .local = true,
+         .selectable = true},
+        {.id = "custom:lab", .name = "Servidor del lab", .base_url = "https://lab.example/v1",
+         .endpoint = true, .note = "sin key"},
     };
 }
 
@@ -110,7 +113,7 @@ TEST_CASE("ModelPicker: paso de proveedor, filtro y filas que no se eligen", "[m
     CHECK(h.picker->open(choices(), std::nullopt, "m1").type == Action::Handled);
     REQUIRE(h.picker->is_open());
     CHECK_FALSE(h.picker->model_step());
-    CHECK(h.texts() == std::vector<std::string>{"nvidia", "openrouter", "ollama", "custom"});
+    CHECK(h.texts() == std::vector<std::string>{"nvidia", "openrouter", "ollama", "custom:lab"});
     // El cursor empieza en el actual, que va marcado.
     CHECK(h.at_cursor().text == "nvidia");
     CHECK(h.at_cursor().current);
@@ -126,7 +129,7 @@ TEST_CASE("ModelPicker: paso de proveedor, filtro y filas que no se eligen", "[m
     }
     SECTION("↑/↓ dan la vuelta; Tab no hace nada; lo demás pasa") {
         CHECK(h.picker->handle(ListKey::Up).type == Action::Handled);
-        CHECK(h.at_cursor().text == "custom");
+        CHECK(h.at_cursor().text == "custom:lab");
         (void)h.picker->handle(ListKey::Down);
         CHECK(h.at_cursor().text == "nvidia");
         CHECK(h.picker->handle(ListKey::Tab).type == Action::Handled);
@@ -246,7 +249,7 @@ TEST_CASE("ModelPicker: regresar o cerrar cancela la lista en curso", "[model_pi
         fake->responses = {models(R"({"data":[{"id":"llama3"}]})")};
         return fake;
     };
-    (void)h.picker->handle(ListKey::End); // custom
+    (void)h.picker->handle(ListKey::End); // El endpoint.
     (void)h.picker->handle(ListKey::Up);  // ollama
     CHECK(h.picker->handle(ListKey::Enter).type == Action::ClearInput);
     REQUIRE(h.loaded());

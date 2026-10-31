@@ -799,11 +799,12 @@ std::optional<cli::ProviderSettings> Dispatcher::provider_draft(const Json& para
                                                     {"api_key", Param::Type::String, false}});
     std::size_t index = 0;
     if (!bad.has_value()) {
-        const std::string provider = draft.at("provider").get<std::string>();
-        index = provider_index(provider);
-        if (providers()[index].id != provider) {
-            // Al leer config.json un id desconocido cae en custom; aquí es un error de la GUI.
+        const std::optional<std::size_t> found =
+            provider_index(draft.at("provider").get<std::string>());
+        if (!found.has_value()) {
             bad = Json{{"fields", Json::array({"provider"})}};
+        } else {
+            index = *found;
         }
     }
     if (bad.has_value()) {

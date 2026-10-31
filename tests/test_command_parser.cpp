@@ -259,3 +259,29 @@ TEST_CASE("parse_command reconoce /model en todas sus formas", "[command_parser]
         CHECK(parse_command("/models").type == Type::Normal);
     }
 }
+
+TEST_CASE("Parser: /model con el id de un endpoint, solo o con custom:", "[command_parser][model]") {
+    const chatbot::cli::EndpointLookup lookup = [](std::string_view id) {
+        return id == "omniroute";
+    };
+    auto parsed = parse_command("/model OmniRoute qwen3", lookup);
+    CHECK(parsed.type == ParsedCommand::Type::Model);
+    CHECK(parsed.provider == "custom:omniroute");
+    CHECK(parsed.model == "qwen3");
+    parsed = parse_command("/model custom:OmniRoute qwen3", lookup);
+    CHECK(parsed.provider == "custom:omniroute");
+    CHECK(parsed.model == "qwen3");
+    parsed = parse_command("/model omniroute", lookup);
+    CHECK(parsed.provider == "custom:omniroute");
+    CHECK_FALSE(parsed.model.has_value());
+    // "custom:" siempre es un proveedor (Session dice si existe).
+    parsed = parse_command("/model custom:otro");
+    CHECK(parsed.provider == "custom:otro");
+    // Sin endpoint con ese id, una palabra sola es el modelo; dos, un error de uso.
+    parsed = parse_command("/model omniroute");
+    CHECK_FALSE(parsed.provider.has_value());
+    CHECK(parsed.model == "omniroute");
+    parsed = parse_command("/model lab m", lookup);
+    CHECK(parsed.type == ParsedCommand::Type::ModelUsage);
+    CHECK(parsed.text == "Proveedor desconocido: lab. Escribe /model para ver la lista.");
+}

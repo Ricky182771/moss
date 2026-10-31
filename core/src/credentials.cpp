@@ -19,16 +19,7 @@ ChatError config_error(std::string message) {
 
 } // namespace
 
-std::string credentials_key(std::string_view provider, std::string_view base_url) {
-    if (provider != "custom") {
-        return std::string{provider};
-    }
-    std::string base{base_url};
-    while (!base.empty() && base.back() == '/') {
-        base.pop_back();
-    }
-    return "custom:" + base;
-}
+std::string credentials_key(std::string_view provider) { return std::string{provider}; }
 
 Result<Credentials> load_credentials(const std::string& path) {
     switch (check_secret_file(path)) {

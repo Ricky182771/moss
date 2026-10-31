@@ -24,6 +24,9 @@ Result<Config> resolve_bot_model(const std::string& config_path,
         return loaded.error();
     }
     Config config = loaded.value();
+    if (!config.provider_error.empty()) { // Proveedor desconocido o endpoint que no existe.
+        return ChatError{ErrorKind::Config, 0, config.provider_error, std::nullopt};
+    }
     if (!section_model.empty()) {
         config.model = std::string{section_model};
     }

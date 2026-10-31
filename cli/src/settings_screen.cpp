@@ -695,7 +695,7 @@ ftxui::Element SettingsScreen::render_provider() const {
     // vacías si no hay aviso, para que escribir la URL no mueva los campos de
     // abajo. En pantallas angostas lo que no cabe se recorta.
     ftxui::Element url_hint = ftxui::emptyElement();
-    if (s.provider_info().id == kCustomProvider) {
+    if (s.is_endpoint()) {
         const std::optional<std::string> hint = s.base_url_hint();
         url_hint = ftxui::hbox({
                        ftxui::text("") | ftxui::size(ftxui::WIDTH, ftxui::EQUAL, kLabelWidth),
