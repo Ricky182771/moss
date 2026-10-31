@@ -1,10 +1,11 @@
-#ifndef CHATBOT_CLI_PROVIDERS_H
-#define CHATBOT_CLI_PROVIDERS_H
+#ifndef CHATBOT_PROVIDERS_H
+#define CHATBOT_PROVIDERS_H
 
+#include <cstddef>
 #include <span>
 #include <string_view>
 
-namespace chatbot::cli {
+namespace chatbot {
 
 /// Un proveedor compatible con la API de OpenAI.
 struct ProviderInfo {
@@ -26,6 +27,6 @@ inline constexpr std::string_view kCustomProvider = "custom";
 /// existe (o está vacío).
 [[nodiscard]] std::size_t provider_index(std::string_view id);
 
-} // namespace chatbot::cli
+} // namespace chatbot
 
-#endif // CHATBOT_CLI_PROVIDERS_H
+#endif // CHATBOT_PROVIDERS_H

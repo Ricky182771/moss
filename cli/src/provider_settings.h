@@ -1,7 +1,7 @@
 #ifndef CHATBOT_CLI_PROVIDER_SETTINGS_H
 #define CHATBOT_CLI_PROVIDER_SETTINGS_H
 
-#include "providers.h"
+#include "chatbot/providers.h"
 
 #include "chatbot/config.h"
 #include "chatbot/credentials.h"

@@ -3,7 +3,7 @@
 // por CHAT_*, filtro de modelos y cambios sin guardar.
 
 #include "provider_settings.h"
-#include "providers.h"
+#include "chatbot/providers.h"
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
@@ -18,7 +18,7 @@ using chatbot::ConfigFileValues;
 using chatbot::Credentials;
 using chatbot::cli::ModelsState;
 using chatbot::cli::ProviderSettings;
-using chatbot::cli::provider_index;
+using chatbot::provider_index;
 using chatbot::cli::SettingsEnv;
 
 constexpr const char* kSecret = "sk-clave-secreta-de-prueba-1234";
@@ -36,9 +36,9 @@ Credentials credentials_with(std::string id, std::string key) {
 } // namespace
 
 TEST_CASE("proveedores: tabla con custom al final y ids únicos", "[proveedor][ajustes]") {
-    const auto table = chatbot::cli::providers();
+    const auto table = chatbot::providers();
     REQUIRE(table.size() == 13);
-    CHECK(table.back().id == chatbot::cli::kCustomProvider);
+    CHECK(table.back().id == chatbot::kCustomProvider);
     CHECK(table.back().base_url.empty());
     for (std::size_t i = 0; i < table.size(); ++i) {
         CAPTURE(table[i].id);
@@ -318,8 +318,8 @@ TEST_CASE("ajustes: aviso de URL base sin ruta, sin bloquear", "[proveedor][ajus
     CHECK(typing.base_url_hint().has_value());
 
     // Un proveedor conocido nunca, aunque CHAT_BASE_URL no tenga ruta.
-    for (std::size_t i = 0; i < chatbot::cli::providers().size(); ++i) {
-        if (chatbot::cli::providers()[i].id == chatbot::cli::kCustomProvider) {
+    for (std::size_t i = 0; i < chatbot::providers().size(); ++i) {
+        if (chatbot::providers()[i].id == chatbot::kCustomProvider) {
             continue;
         }
         ProviderSettings settings(saved("custom", "https://h", "m"), {}, {});
@@ -327,7 +327,7 @@ TEST_CASE("ajustes: aviso de URL base sin ruta, sin bloquear", "[proveedor][ajus
         CHECK_FALSE(settings.base_url_hint().has_value());
         SettingsEnv env;
         env.base_url = "https://h";
-        ProviderSettings locked(saved(std::string{chatbot::cli::providers()[i].id}, "", "m"), {},
+        ProviderSettings locked(saved(std::string{chatbot::providers()[i].id}, "", "m"), {},
                                 env);
         CHECK_FALSE(locked.base_url_hint().has_value());
     }

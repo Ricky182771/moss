@@ -1,7 +1,7 @@
 #include "command_parser.h"
 
 #include "commands.h"
-#include "providers.h"
+#include "chatbot/providers.h"
 
 #include <algorithm>
 #include <cctype>

@@ -3,7 +3,7 @@
 #include "block_actions.h"
 #include "code_blocks.h"
 #include "commands.h"
-#include "providers.h"
+#include "chatbot/providers.h"
 #include "search_settings.h"
 #include "sidebar.h"
 
@@ -590,7 +590,7 @@ void Dispatcher::settings(const std::string& method, const Json* params, const J
         }
         const cli::ProviderSettings& f = form.value();
         Json providers = Json::array();
-        const auto table = cli::providers();
+        const auto table = chatbot::providers();
         for (std::size_t i = 0; i < table.size(); ++i) {
             const cli::ProviderChoice& choice = choices.value()[i];
             providers.push_back({{"id", std::string{table[i].id}},
@@ -800,8 +800,8 @@ std::optional<cli::ProviderSettings> Dispatcher::provider_draft(const Json& para
     std::size_t index = 0;
     if (!bad.has_value()) {
         const std::string provider = draft.at("provider").get<std::string>();
-        index = cli::provider_index(provider);
-        if (cli::providers()[index].id != provider) {
+        index = provider_index(provider);
+        if (providers()[index].id != provider) {
             // Al leer config.json un id desconocido cae en custom; aquí es un error de la GUI.
             bad = Json{{"fields", Json::array({"provider"})}};
         }

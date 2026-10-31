@@ -13,7 +13,7 @@
 #include "debug_log.h"
 #include "downloads.h"
 #include "models_loader.h"
-#include "providers.h"
+#include "chatbot/providers.h"
 #include "search_settings.h"
 #include "session.h"
 #include "sidebar.h"
@@ -1254,8 +1254,8 @@ TEST_CASE("RPC: settings.provider.get", "[rpc][settings]") {
         rpc.initialize();
         rpc.call(2, "settings.provider.get");
         const Json result = only(rpc)["result"];
-        REQUIRE(result["providers"].size() == chatbot::cli::providers().size());
-        CHECK(result["providers"][0]["id"] == std::string{chatbot::cli::providers()[0].id});
+        REQUIRE(result["providers"].size() == chatbot::providers().size());
+        CHECK(result["providers"][0]["id"] == std::string{chatbot::providers()[0].id});
         CHECK(result["providers"].back()["id"] == "custom");
         CHECK(result["locks"].dump() == R"({"base_url":false,"model":false,"api_key":false})");
         CHECK(result["saved"].contains("provider"));

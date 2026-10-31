@@ -6,7 +6,7 @@
 
 #include "command_parser.h"
 #include "downloads.h"
-#include "providers.h"
+#include "chatbot/providers.h"
 #include "search_settings.h"
 
 #include "blocking_transport.hpp"
@@ -838,7 +838,7 @@ TEST_CASE("Session::provider_choices dice qué proveedores se pueden elegir", "[
     h.start(h.load());
     const auto choices = h.session->provider_choices();
     REQUIRE(choices.is_ok());
-    REQUIRE(choices.value().size() == chatbot::cli::providers().size());
+    REQUIRE(choices.value().size() == chatbot::providers().size());
     const auto find = [&](std::string_view id) {
         for (const chatbot::cli::ProviderChoice& choice : choices.value()) {
             if (choice.id == id) {

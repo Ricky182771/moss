@@ -1,7 +1,7 @@
 #include "model_picker_view.h"
 
 #include "command_menu_view.h"
-#include "providers.h"
+#include "chatbot/providers.h"
 #include "sidebar_view.h"
 
 #include "chatbot/markdown/markdown.h"

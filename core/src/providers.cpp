@@ -1,8 +1,8 @@
-#include "providers.h"
+#include "chatbot/providers.h"
 
 #include <array>
 
-namespace chatbot::cli {
+namespace chatbot {
 
 namespace {
 
@@ -40,4 +40,4 @@ std::size_t provider_index(std::string_view id) {
     return kProviders.size() - 1; // "custom".
 }
 
-} // namespace chatbot::cli
+} // namespace chatbot
