@@ -1,4 +1,4 @@
-// main.cpp — interfaz de terminal del chatbot.
+// main.cpp — interfaz de terminal de Moss.
 //
 // Pantalla completa con FTXUI: historial arriba, caja de entrada abajo. La
 // lógica sin FTXUI está en Session (session.h) y la petición corre en el

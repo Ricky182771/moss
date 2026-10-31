@@ -414,7 +414,7 @@ Los bloques de código de las respuestas se numeran desde 1 en toda la conversac
 
 OSC 52 solo manda bloques de hasta 100 000 bytes; para uno más grande, usa `/guardar`.
 
-**Dónde se guarda:** en la carpeta `chatbot/` (se crea con permisos 0755, o menos según tu `umask`) dentro de la primera de estas que aplique:
+**Dónde se guarda:** en la carpeta `moss/` (se crea con permisos 0755, o menos según tu `umask`) dentro de la primera de estas que aplique:
 
 1. `CHAT_DOWNLOAD_DIR`, si la defines;
 2. tu carpeta de descargas de `~/.config/user-dirs.dirs` (`XDG_DOWNLOAD_DIR`, la que configura tu escritorio), si existe;

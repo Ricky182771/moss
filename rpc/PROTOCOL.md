@@ -123,7 +123,7 @@ cliente                                  servidor
 - `ready: false` es el equivalente de la TUI abriendo F2 con `Configura un proveedor para empezar.`. La carga usa `allow_missing_key_and_model = true`, como la TUI.
 - `warnings` son los avisos de arranque que la TUI manda a la línea de estado, por ejemplo un system prompt que no es cadena. Los avisos de tema y símbolos son solo de la TUI y no aparecen aquí.
 - `capabilities` dice qué soporta este servidor y no cambia durante la sesión. `search: true`: `chat.send` acepta `search` (que haya key o no lo dice `app.status.has_search_key`). En Linux, `addons` trae los de `known_addons` (`["telegram"]`) y `service` es `"systemd"` (sección 6.8), aunque el addon no esté instalado; en Windows quedan en `[]` y `null`.
-- `paths.downloads` es la carpeta de `/guardar` y `/exportar`, con su `chatbot/` (no se crea al arrancar).
+- `paths.downloads` es la carpeta de `/guardar` y `/exportar`, con su `moss/` (no se crea al arrancar).
 
 ---
 
