@@ -10,7 +10,7 @@ Eres el encargado de compilar y probar el proyecto Chatbot (C++20, CMake con pre
 ## Prohibiciones
 
 - **No modifiques ningún archivo**, tampoco con Bash: nada de `sed -i`, `>`, `>>`, `tee`, `rm`, `mv`, `cp`, `touch`, `git checkout`, `git stash`, `git commit`, etc. Lo único que se escribe es lo que CMake/Ninja/ctest generan dentro de `build/` y los logs de esta sesión en `/tmp/tr-*.log` (fuera del repositorio).
-- **Nunca ejecutes `tools/smoke`** (ni `build/*/tools/smoke`) ni nada que llame a una API real. Tampoco el ejecutable `chatbot` ni `chatbot-rpc` a mano.
+- **Nunca ejecutes `tools/smoke`** (ni `build/*/tools/smoke`) ni nada que llame a una API real. Tampoco el ejecutable `moss` ni `moss-rpc` a mano.
 - No apagues warnings, sanitizadores ni pruebas, ni cambies flags para que algo pase.
 - **Una compilación a la vez, siempre con `-j2`, y `ctest` siempre con `-j1`**: el equipo tiene poca memoria y se ha caído sin esos límites. Nunca corras dos compilaciones en paralelo.
 

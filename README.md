@@ -1,8 +1,8 @@
-# Chatbot de CECYTE
+# Moss
 
-[![CI](https://github.com/Ricky182771/CB-CECYTE/actions/workflows/ci.yml/badge.svg)](https://github.com/Ricky182771/CB-CECYTE/actions/workflows/ci.yml)
+[![CI](https://github.com/Ricky182771/moss/actions/workflows/ci.yml/badge.svg)](https://github.com/Ricky182771/moss/actions/workflows/ci.yml)
 
-Repositorio para almacenar el código del chatbot hecho por estudiantes de CECyTE como sevicio social.
+Repositorio para almacenar el código de Moss hecho por estudiantes de CECyTE como servicio social.
 
 ## Compilar y ejecutar
 
@@ -27,13 +27,13 @@ Las pruebas necesitan Catch2 v3:
 - Ubuntu 24.04 (trae la 3.4.0) y Debian 13 "trixie" (trae la 3.7.1): el paquete `catch2` de `apt` basta.
 - Debian 12 "bookworm": su paquete `catch2` es la v2 (2.13.10), así que CMake descarga la v3 por FetchContent al configurar. Otra opción es instalar la 3.7.1 desde `bookworm-backports`.
 
-### Compilar para usar el chatbot
+### Compilar para usar Moss
 
 ```bash
 cmake --preset release && cmake --build --preset release
 ```
 
-El programa queda en `./build/release/cli/chatbot`. Es la build optimizada: con conversaciones largas o al cambiar el tamaño de la terminal responde varias veces más rápido que la de desarrollo.
+El programa queda en `./build/release/cli/moss`. Es la build optimizada: con conversaciones largas o al cambiar el tamaño de la terminal responde varias veces más rápido que la de desarrollo.
 
 ### Compilar para desarrollar
 
@@ -66,8 +66,8 @@ Funciona en Windows 10 (versión 1903 o posterior; se prueba en Windows 10 IoT L
 3. En esa misma terminal, clona el repositorio y compila con los mismos presets que en Linux (`asan` y `tsan` son solo de Linux):
 
    ```bash
-   git clone https://github.com/Ricky182771/CB-CECYTE.git
-   cd CB-CECYTE
+   git clone https://github.com/Ricky182771/moss.git
+   cd moss
    cmake --preset release && cmake --build --preset release
    ctest --preset release --output-on-failure   # opcional: las pruebas
    ```
@@ -79,65 +79,65 @@ Funciona en Windows 10 (versión 1903 o posterior; se prueba en Windows 10 IoT L
 ```bat
 :: CMD
 set PATH=C:\msys64\ucrt64\bin;%PATH%
-build\release\cli\chatbot.exe
+build\release\cli\moss.exe
 ```
 
 ```powershell
 # PowerShell
 $env:PATH = "C:\msys64\ucrt64\bin;" + $env:PATH
-.\build\release\cli\chatbot.exe
+.\build\release\cli\moss.exe
 ```
 
 Para usarlo en una PC sin MSYS2, usa el ZIP (ver [Descargar para Windows](#descargar-para-windows)).
 
 **Qué cambia en Windows:**
 
-- La configuración y la key van en `%APPDATA%\chatbot\` (`config.json` y `credentials.json`), las conversaciones en `%LOCALAPPDATA%\chatbot\conversations` y `/guardar` y `/exportar` en tu carpeta Descargas, dentro de `chatbot\`. Las variables `CHAT_*` siguen teniendo prioridad; `HOME` y `XDG_*` no se usan (MSYS2 define `HOME`). Con el [modo portable](#modo-portable), todo menos las descargas va a `datos\`, junto a `chatbot.exe`.
-- Con doble clic en `chatbot.exe` se abre en conhost, y esa ventana se cierra en cuanto el programa termina. Por eso, si el chatbot no puede arrancar (por ejemplo, en modo portable con `datos\` sin permiso de escritura), muestra el error y `Presiona Enter para cerrar esta ventana.`. Desde CMD, PowerShell o Windows Terminal (con una shell abierta) no espera nada.
+- La configuración y la key van en `%APPDATA%\moss\` (`config.json` y `credentials.json`), las conversaciones en `%LOCALAPPDATA%\moss\conversations` y `/guardar` y `/exportar` en tu carpeta Descargas, dentro de `moss\`. Las variables `CHAT_*` siguen teniendo prioridad; `HOME` y `XDG_*` no se usan (MSYS2 define `HOME`). Con el [modo portable](#modo-portable), todo menos las descargas va a `datos\`, junto a `moss.exe`.
+- Con doble clic en `moss.exe` se abre en conhost, y esa ventana se cierra en cuanto el programa termina. Por eso, si Moss no puede arrancar (por ejemplo, en modo portable con `datos\` sin permiso de escritura), muestra el error y `Presiona Enter para cerrar esta ventana.`. Desde CMD, PowerShell o Windows Terminal (con una shell abierta) no espera nada.
 - `credentials.json` no necesita `chmod`: lo protege la carpeta de tu perfil de Windows, que solo tu usuario puede leer. Todavía no va cifrado.
 - `/copiar` y `[Copiar]` usan el portapapeles de Windows (con acentos y saltos de línea que el Bloc de notas respeta); por SSH, OSC 52 primero.
-- Para pegar, usa Ctrl+V, Ctrl+Shift+V o Shift+Insert: el chatbot lee el portapapeles de Windows y pega en la caja o en el campo de la configuración que tenga el foco (con el foco en la barra de conversaciones no pega nada; en una lista o un botón avisa `Aquí no se puede pegar.`, y si el portapapeles no tiene texto, `El portapapeles no tiene texto.`). En Windows Terminal esos atajos los atiende la propia terminal, con el mismo resultado. En conhost (CMD o PowerShell sin Windows Terminal) está comprobado con `CHAT_DEBUG_KEYS`: Ctrl+V y Ctrl+Shift+V llegan como el byte `16` y Shift+Insert como `1b 5b 32 3b 32 7e` (`ESC [ 2 ; 2 ~`), y los tres pegan. Shift + clic derecho es el pegado propio de conhost: no pasa por el portapapeles del chatbot. Si los atajos no hacen nada, revisa que el `chatbot.exe` que abres sea del preset que acabas de compilar (`build\release` no se actualiza al compilar `dev`).
+- Para pegar, usa Ctrl+V, Ctrl+Shift+V o Shift+Insert: Moss lee el portapapeles de Windows y pega en la caja o en el campo de la configuración que tenga el foco (con el foco en la barra de conversaciones no pega nada; en una lista o un botón avisa `Aquí no se puede pegar.`, y si el portapapeles no tiene texto, `El portapapeles no tiene texto.`). En Windows Terminal esos atajos los atiende la propia terminal, con el mismo resultado. En conhost (CMD o PowerShell sin Windows Terminal) está comprobado con `CHAT_DEBUG_KEYS`: Ctrl+V y Ctrl+Shift+V llegan como el byte `16` y Shift+Insert como `1b 5b 32 3b 32 7e` (`ESC [ 2 ; 2 ~`), y los tres pegan. Shift + clic derecho es el pegado propio de conhost: no pasa por el portapapeles de Moss. Si los atajos no hacen nada, revisa que el `moss.exe` que abres sea del preset que acabas de compilar (`build\release` no se actualiza al compilar `dev`).
 - Los certificados HTTPS salen del almacén de Windows: no hace falta instalar nada más.
 - Al arrancar, la consola se pone en UTF-8 para que los acentos se vean bien, y al salir vuelve a la página de códigos que tenía (`chcp` muestra lo mismo que antes).
 - Ctrl+C sale limpio, también a mitad de una respuesta. Ctrl+Break y cerrar la ventana terminan el programa de golpe: lo que ya estaba guardado sigue ahí, pero la respuesta en curso se pierde y, con Ctrl+Break, `chcp` puede quedar en 65001.
 - En CMD y PowerShell sin Windows Terminal (conhost) de Windows 10, la fuente de la consola no tiene algunos símbolos: por eso **Símbolos** en `Automático` usa `Sencillos` ahí (ver [Colores y accesibilidad](#colores-y-accesibilidad)). En Windows 11 conhost busca el símbolo en otra fuente y se usa `Unicode`; en Windows Terminal, siempre `Unicode`.
-- El ratón en conhost funciona como en las demás terminales: clics, rueda, arrastrar el borde de la barra y pasar el puntero sobre el menú y los botones. Conhost se queda con Shift + clic para su propia selección (*QuickEdit*): **Shift + arrastrar** selecciona texto de la pantalla y **Enter** lo copia (Esc cancela); Shift + clic derecho pega. La selección toma líneas completas de la pantalla, así que con la barra lateral abierta también copia su borde y sus filas: ciérrala con Ctrl+B antes de seleccionar, o usa `[Copiar]` en los bloques de código. Mientras hay una selección, conhost detiene la salida del chatbot (la respuesta deja de avanzar en pantalla) hasta que copias o cancelas; después aparece de golpe lo que llegó mientras tanto. Es así en todas las apps de consola, no es una falla del chatbot.
+- El ratón en conhost funciona como en las demás terminales: clics, rueda, arrastrar el borde de la barra y pasar el puntero sobre el menú y los botones. Conhost se queda con Shift + clic para su propia selección (*QuickEdit*): **Shift + arrastrar** selecciona texto de la pantalla y **Enter** lo copia (Esc cancela); Shift + clic derecho pega. La selección toma líneas completas de la pantalla, así que con la barra lateral abierta también copia su borde y sus filas: ciérrala con Ctrl+B antes de seleccionar, o usa `[Copiar]` en los bloques de código. Mientras hay una selección, conhost detiene la salida de Moss (la respuesta deja de avanzar en pantalla) hasta que copias o cancelas; después aparece de golpe lo que llegó mientras tanto. Es así en todas las apps de consola, no es una falla de Moss.
 
 ### Descargar para Windows
 
-El ZIP `chatbot-windows-x64.zip` lo arma la CI en cada push y en cada pull request, en el trabajo `windows / release`: en GitHub, **Actions** → la ejecución → **Artifacts** → `chatbot-windows-x64`. GitHub lo entrega dentro de otro ZIP: descomprime ese y adentro está `chatbot-windows-x64.zip`. Por ahora no hay releases publicados.
+El ZIP `moss-windows-x64.zip` lo arma la CI en cada push y en cada pull request, en el trabajo `windows / release`: en GitHub, **Actions** → la ejecución → **Artifacts** → `moss-windows-x64`. GitHub lo entrega dentro de otro ZIP: descomprime ese y adentro está `moss-windows-x64.zip`. Por ahora no hay releases publicados.
 
 Trae, sin carpeta de por medio:
 
-- `chatbot.exe` y las DLL de MSYS2 que necesita (no hace falta instalar MSYS2);
-- `chatbot-rpc.exe`, para la interfaz gráfica que viene después ([`chatbot-rpc`](#otras-interfaces-chatbot-rpc)): no se abre a mano;
+- `moss.exe` y las DLL de MSYS2 que necesita (no hace falta instalar MSYS2);
+- `moss-rpc.exe`, para la interfaz gráfica que viene después ([`moss-rpc`](#otras-interfaces-moss-rpc)): no se abre a mano;
 - `LEEME.txt`: instrucciones en español para quien nunca usó una terminal (abrirlo, poner la key, pegar, comandos, seleccionar texto, modo portable, símbolos);
-- `chatbot.portable.ejemplo`: se renombra a `chatbot.portable` para activar el [modo portable](#modo-portable);
+- `moss.portable.ejemplo`: se renombra a `moss.portable` para activar el [modo portable](#modo-portable);
 - `LICENSE.txt` (la licencia del proyecto, GPL v3) y `AVISOS-TERCEROS.txt` (las licencias de FTXUI, md4c, nlohmann/json, el runtime de GCC y mingw-w64, y de cada DLL).
 
-Descomprímelo en una carpeta y abre `chatbot.exe` con doble clic o desde CMD. Windows SmartScreen puede avisar porque el programa no tiene firma digital ("Más información" → "Ejecutar de todas formas").
+Descomprímelo en una carpeta y abre `moss.exe` con doble clic o desde CMD. Windows SmartScreen puede avisar porque el programa no tiene firma digital ("Más información" → "Ejecutar de todas formas").
 
 Para armarlo tú, en la terminal **MSYS2 UCRT64**, después de compilar `release`:
 
 ```bash
-tools/package-windows.sh   # deja build/chatbot-windows-x64.zip
+tools/package-windows.sh   # deja build/moss-windows-x64.zip
 ```
 
 El script toma las DLL que reporta `ldd`, busca con `pacman -Qo` el paquete de cada una y copia su licencia de `/ucrt64/share/licenses/`. Algunos paquetes de MSYS2 no instalan su licencia (libidn2, que trae libcurl): para esos, los textos van en el repositorio, en `tools/windows-dist/licenses/<paquete>/`, copiados del tarball oficial, con un `README.md` que dice de qué versión son; si MSYS2 instala otra versión, el script avisa (sin fallar) para revisarlos. Si falta el texto de alguna licencia, lo dice y no arma el ZIP (`--allow-missing-licenses` lo arma igual y `AVISOS-TERCEROS.txt` dice cuál falta). Al final revisa que el ZIP traiga exactamente esos archivos.
 
 ### Integración continua
 
-En cada pull request y en cada push a `main`, GitHub Actions (`.github/workflows/ci.yml`) compila el proyecto en Ubuntu 24.04 y corre las pruebas. Usa GCC con los presets `dev`, `asan`, `tsan` y `release`, y Clang con `dev` y `release`; todos con el bot de Telegram, y revisan que `chatbot telegram` desactivado salga con 0 y sin token con 78; aparte, compila y prueba `dev` con GCC sin addons (`-DCHATBOT_BUILD_TELEGRAM=OFF`) y revisa que `chatbot telegram` salga con 69. En Windows (MSYS2 UCRT64 con GCC) compila y prueba `dev` y `release`, sin `CHATBOT_STRICT_PERF` (los tiempos de esas máquinas varían mucho), y en `release` arma el ZIP con `tools/package-windows.sh`, lo descomprime y arranca `chatbot.exe` desde ahí sin MSYS2 en el `PATH` (también con `chatbot.portable`), y lo sube como `chatbot-windows-x64`. En todos, los warnings cuentan como errores. Además, comprueba que el programa, sin `CHAT_API_KEY` y sin terminal, salga con código 1 y el mensaje de error de configuración. La CI nunca usa una API key ni se conecta a ninguna API real: las pruebas usan un transporte falso.
+En cada pull request y en cada push a `main`, GitHub Actions (`.github/workflows/ci.yml`) compila el proyecto en Ubuntu 24.04 y corre las pruebas. Usa GCC con los presets `dev`, `asan`, `tsan` y `release`, y Clang con `dev` y `release`; todos con el bot de Telegram, y revisan que `moss telegram` desactivado salga con 0 y sin token con 78; aparte, compila y prueba `dev` con GCC sin addons (`-DCHATBOT_BUILD_TELEGRAM=OFF`) y revisa que `moss telegram` salga con 69. En Windows (MSYS2 UCRT64 con GCC) compila y prueba `dev` y `release`, sin `CHATBOT_STRICT_PERF` (los tiempos de esas máquinas varían mucho), y en `release` arma el ZIP con `tools/package-windows.sh`, lo descomprime y arranca `moss.exe` desde ahí sin MSYS2 en el `PATH` (también con `moss.portable`), y lo sube como `moss-windows-x64`. En todos, los warnings cuentan como errores. Además, comprueba que el programa, sin `CHAT_API_KEY` y sin terminal, salga con código 1 y el mensaje de error de configuración. La CI nunca usa una API key ni se conecta a ninguna API real: las pruebas usan un transporte falso.
 
 ### Addons
 
-Los addons son programas aparte, como un bot de Telegram, que usan el mismo núcleo que el chatbot de la terminal: el alumno le escribe al bot y responde el modelo configurado. Viven en `addons/`. En Linux, cualquier preset compila el de Telegram (`chatbot-telegram`, junto a `chatbot` en `build/<preset>/cli/`); en Windows y en Termux va apagado (`CHATBOT_BUILD_TELEGRAM`).
+Los addons son programas aparte, como un bot de Telegram, que usan el mismo núcleo que Moss de la terminal: el alumno le escribe al bot y responde el modelo configurado. Viven en `addons/`. En Linux, cualquier preset compila el de Telegram (`moss-telegram`, junto a `moss` en `build/<preset>/cli/`); en Windows y en Termux va apagado (`CHATBOT_BUILD_TELEGRAM`).
 
 Hay una capa común de los bots (`addons/common/`: acceso solo para usuarios autorizados, conversaciones solo en memoria que se borran solas, límites por usuario, respuestas con vista previa mientras se generan y respuestas largas partidas) y el bot de Telegram (`addons/telegram/`, ver [Bot de Telegram](#bot-de-telegram)). Solo se prueban en Linux. No hay bot de WhatsApp: sus términos no permiten un asistente de IA de propósito general (los detalles están en `AGENTS.md`, sección 14).
 
 ### Configurar
 
-La forma más fácil es la pantalla de configuración: ábrela con **F2** o con la fila `⚙ Configuración` de la barra. Si al arrancar falta la key o el modelo, el chatbot la abre solo con el aviso `Configura un proveedor para empezar.` (mientras tanto, la caja de entrada no envía nada). Ahí eliges el proveedor, escribes la API key (se ve como `•••`) y eliges el modelo de la lista que devuelve el servidor (`GET {URL base}/models`). Con el filtro, ↑/↓ mueven el resaltado y Enter elige; si la lista falla (por ejemplo, Anthropic no documenta ese endpoint), el error aparece en la lista y puedes escribir el modelo a mano. Tab y Shift+Tab cambian de campo; Guardar aplica los cambios sin reiniciar y Esc o Cancelar cierran sin guardar (si hay cambios, pregunta `¿Descartar los cambios? (s/n)`: solo **s** o **n** la contestan y **Esc** la cancela). No se abre mientras hay una respuesta en curso.
+La forma más fácil es la pantalla de configuración: ábrela con **F2** o con la fila `⚙ Configuración` de la barra. Si al arrancar falta la key o el modelo, Moss la abre solo con el aviso `Configura un proveedor para empezar.` (mientras tanto, la caja de entrada no envía nada). Ahí eliges el proveedor, escribes la API key (se ve como `•••`) y eliges el modelo de la lista que devuelve el servidor (`GET {URL base}/models`). Con el filtro, ↑/↓ mueven el resaltado y Enter elige; si la lista falla (por ejemplo, Anthropic no documenta ese endpoint), el error aparece en la lista y puedes escribir el modelo a mano. Tab y Shift+Tab cambian de campo; Guardar aplica los cambios sin reiniciar y Esc o Cancelar cierran sin guardar (si hay cambios, pregunta `¿Descartar los cambios? (s/n)`: solo **s** o **n** la contestan y **Esc** la cancela). No se abre mientras hay una respuesta en curso.
 
 | Proveedor | URL base | Lista de modelos |
 |---|---|---|
@@ -155,11 +155,11 @@ La forma más fácil es la pantalla de configuración: ábrela con **F2** o con 
 | Ollama (local) | `http://localhost:11434/v1` | sí (sin key) |
 | Personalizado… | la que escribas | — |
 
-"No confirmada" no quiere decir que falle: el chatbot la pide igual y, si falla, te deja escribir el modelo.
+"No confirmada" no quiere decir que falle: Moss la pide igual y, si falla, te deja escribir el modelo.
 
-**URL base de un servidor personalizado:** normalmente termina en `/v1` (`https://mi-servidor/v1`, no `https://mi-servidor`). El chatbot no sigue redirecciones: si el servidor responde con una (301, 302…), el error dice a dónde redirige y, si puede, qué URL base usar.
+**URL base de un servidor personalizado:** normalmente termina en `/v1` (`https://mi-servidor/v1`, no `https://mi-servidor`). Moss no sigue redirecciones: si el servidor responde con una (301, 302…), el error dice a dónde redirige y, si puede, qué URL base usar.
 
-**Dónde se guarda la key:** en `~/.config/chatbot/credentials.json` (o `$XDG_CONFIG_HOME/chatbot/credentials.json`; en Windows, `%APPDATA%\chatbot\credentials.json`; en [modo portable](#modo-portable), `datos/credentials.json` junto al ejecutable), una por proveedor (y una por URL en los personalizados). El archivo se escribe con permisos 0600 y su carpeta con 0700. Si alguien le abre los permisos (grupo u otros), el chatbot no lo lee y te pide correr `chmod 600` sobre él (en Windows no: ahí lo protege la carpeta de tu perfil). Al guardar, una key que empieza con `$`, trae espacios o saltos de línea, o mide menos de 20 caracteres no se guarda: suele ser el nombre de una variable (`$NIMKEY`) o una key cortada al copiarla. La key nunca va en `config.json`, en los volcados de depuración ni en las conversaciones guardadas. No copies `credentials.json` al repositorio (está en `.gitignore`).
+**Dónde se guarda la key:** en `~/.config/moss/credentials.json` (o `$XDG_CONFIG_HOME/moss/credentials.json`; en Windows, `%APPDATA%\moss\credentials.json`; en [modo portable](#modo-portable), `datos/credentials.json` junto al ejecutable), una por proveedor (y una por URL en los personalizados). El archivo se escribe con permisos 0600 y su carpeta con 0700. Si alguien le abre los permisos (grupo u otros), Moss no lo lee y te pide correr `chmod 600` sobre él (en Windows no: ahí lo protege la carpeta de tu perfil). Al guardar, una key que empieza con `$`, trae espacios o saltos de línea, o mide menos de 20 caracteres no se guarda: suele ser el nombre de una variable (`$NIMKEY`) o una key cortada al copiarla. La key nunca va en `config.json`, en los volcados de depuración ni en las conversaciones guardadas. No copies `credentials.json` al repositorio (está en `.gitignore`).
 
 **Servidor local (Ollama, llama.cpp…):** elige `Ollama (local)` o `Personalizado…` con una URL como `http://localhost:8080/v1`. Solo se acepta `http://` para `localhost`, `127.0.0.1` o `[::1]` (cualquier puerto), y ahí la key es opcional; cualquier otro servidor necesita `https://`, para que la key y la conversación no viajen sin cifrar.
 
@@ -172,7 +172,7 @@ export CHAT_MODEL="nvidia/nemotron-3-super-120b-a12b"   # solo es un ejemplo
 
 No hay modelo por defecto: los modelos se retiran con el tiempo. El del ejemplo fue el más rápido y constante en las pruebas del equipo contra NIM, pero no es un valor por defecto.
 
-Lo que guarda la pantalla va a `~/.config/chatbot/config.json` (o `$XDG_CONFIG_HOME/chatbot/config.json`; en Windows, `%APPDATA%\chatbot\config.json`; en modo portable, `datos/config.json`), que también puedes editar a mano. Al guardar se conservan las demás llaves del archivo. Nunca lleva la key:
+Lo que guarda la pantalla va a `~/.config/moss/config.json` (o `$XDG_CONFIG_HOME/moss/config.json`; en Windows, `%APPDATA%\moss\config.json`; en modo portable, `datos/config.json`), que también puedes editar a mano. Al guardar se conservan las demás llaves del archivo. Nunca lleva la key:
 
 ```json
 {
@@ -188,7 +188,7 @@ Lo que guarda la pantalla va a `~/.config/chatbot/config.json` (o `$XDG_CONFIG_H
 
 Las variables de entorno (`CHAT_API_KEY`, `CHAT_BASE_URL`, `CHAT_MODEL`, `CHAT_TIMEOUT`, `CHAT_HISTORY_LIMIT`) tienen prioridad sobre lo guardado. En la pantalla, un campo definido por una de ellas muestra su valor con `(definido por CHAT_…)` y no se puede editar (la key, siempre enmascarada: solo sus últimos 4 caracteres).
 
-`CHAT_HISTORY_LIMIT` (o `history_limit` en el archivo) limita cuánto historial se envía en cada mensaje. Se mide en bytes del texto, más o menos un carácter por byte (los acentos y la ñ cuentan doble). El valor por defecto es 32000; `0` significa sin límite. Si la conversación pasa del límite, se omiten los mensajes más antiguos y la línea de estado lo avisa. Si el servidor rechaza la petición por demasiado larga, el chatbot recorta el historial a la mitad (del límite o del tamaño real, lo que sea menor) y reintenta una vez.
+`CHAT_HISTORY_LIMIT` (o `history_limit` en el archivo) limita cuánto historial se envía en cada mensaje. Se mide en bytes del texto, más o menos un carácter por byte (los acentos y la ñ cuentan doble). El valor por defecto es 32000; `0` significa sin límite. Si la conversación pasa del límite, se omiten los mensajes más antiguos y la línea de estado lo avisa. Si el servidor rechaza la petición por demasiado larga, Moss recorta el historial a la mitad (del límite o del tamaño real, lo que sea menor) y reintenta una vez.
 
 #### Colores y accesibilidad
 
@@ -227,7 +227,7 @@ Nuestro recorte cuenta bytes, no tokens, así que una petición todavía puede p
 
 #### Búsqueda web
 
-Escribe `/buscar` seguido de tu pregunta (por ejemplo, `/buscar quién ganó el último partido del América`). El chatbot consulta [Tavily](https://tavily.com), le pasa al modelo los resultados como datos y el modelo responde citando cada dato con `[n]`. Debajo de la respuesta aparece el bloque **Fuentes** con `[n] título (URL)`; ese bloque sale de la búsqueda, no del texto del modelo (que podría inventar direcciones), y Shift+clic sobre un enlace lo abre. Funciona con cualquier modelo.
+Escribe `/buscar` seguido de tu pregunta (por ejemplo, `/buscar quién ganó el último partido del América`). Moss consulta [Tavily](https://tavily.com), le pasa al modelo los resultados como datos y el modelo responde citando cada dato con `[n]`. Debajo de la respuesta aparece el bloque **Fuentes** con `[n] título (URL)`; ese bloque sale de la búsqueda, no del texto del modelo (que podría inventar direcciones), y Shift+clic sobre un enlace lo abre. Funciona con cualquier modelo.
 
 - Solo `/buscar` en minúsculas, seguido de un espacio y una consulta. `/buscar` solo muestra cómo se usa; cualquier otro texto que empiece con `/` se envía como un mensaje normal.
 - Mientras busca, la línea de estado dice `Buscando en la web…`. Esc cancela igual durante la búsqueda que durante la respuesta.
@@ -247,44 +247,44 @@ Cada conversación se guarda sola después de cada respuesta completa, en un arc
 
 - `CHAT_DATA_DIR`, si la defines;
 - si no, en [modo portable](#modo-portable), `datos/conversations` junto al ejecutable;
-- si no, `$XDG_DATA_HOME/chatbot/conversations` (solo si `XDG_DATA_HOME` es una ruta absoluta);
-- si no, `~/.local/share/chatbot/conversations`;
-- en Windows, si no defines `CHAT_DATA_DIR`, `%LOCALAPPDATA%\chatbot\conversations`.
+- si no, `$XDG_DATA_HOME/moss/conversations` (solo si `XDG_DATA_HOME` es una ruta absoluta);
+- si no, `~/.local/share/moss/conversations`;
+- en Windows, si no defines `CHAT_DATA_DIR`, `%LOCALAPPDATA%\moss\conversations`.
 
 Los archivos contienen **el texto completo de tus conversaciones**. Por eso la carpeta se crea con permisos 0700 y los archivos con 0600 (solo tu usuario puede leerlos). Para borrar una conversación, usa Supr en la barra de conversaciones (Ctrl+O); para borrarlas todas, borra la carpeta. Si un archivo está dañado o es de una versión más nueva del programa, aparece en la barra como ilegible y el programa nunca lo modifica.
 
 #### Modo portable
 
-Si junto al ejecutable hay un archivo llamado `chatbot.portable` (puede estar vacío; el ZIP de Windows trae `chatbot.portable.ejemplo` para renombrarlo), la configuración (`config.json`), la key (`credentials.json`) y las conversaciones (`conversations/`) van a la carpeta `datos/`, también junto al ejecutable, en lugar de la carpeta de tu usuario. Sirve para las PC que se restauran al reiniciar (Deep Freeze y similares), donde se perdería lo de `%APPDATA%`, y para llevar el chatbot en una memoria USB. Funciona en Windows y en Linux.
+Si junto al ejecutable hay un archivo llamado `moss.portable` (puede estar vacío; el ZIP de Windows trae `moss.portable.ejemplo` para renombrarlo), la configuración (`config.json`), la key (`credentials.json`) y las conversaciones (`conversations/`) van a la carpeta `datos/`, también junto al ejecutable, en lugar de la carpeta de tu usuario. Sirve para las PC que se restauran al reiniciar (Deep Freeze y similares), donde se perdería lo de `%APPDATA%`, y para llevar Moss en una memoria USB. Funciona en Windows y en Linux.
 
 - Las descargas de `/guardar` y `/exportar` no cambian: siguen en Descargas (o en `CHAT_DOWNLOAD_DIR`).
 - Las variables `CHAT_*` siguen ganando: `CHAT_API_KEY` sobre la key de `datos/credentials.json`, `CHAT_DATA_DIR` sobre `datos/conversations`, etc. `XDG_*`, `HOME`, `APPDATA` y `LOCALAPPDATA` ya no cuentan.
 - En la configuración (F2), al pie de **Proveedor de IA**, una línea atenuada dice `Modo portable: datos en <ruta>`. Sin modo portable no aparece.
-- Al arrancar, el chatbot crea `datos/` si falta y prueba que se pueda escribir ahí. Si no se puede (la carpeta del programa es de solo lectura, como `Archivos de programa`, o un disco protegido), sale con un error que dice la ruta y la causa, antes de abrir la pantalla; nunca usa en silencio la carpeta de tu usuario, que confundiría a quien cree estar en modo portable.
-- El archivo se revisa una vez, al arrancar: crearlo o borrarlo con el chatbot abierto no cambia nada hasta la siguiente vez.
+- Al arrancar, Moss crea `datos/` si falta y prueba que se pueda escribir ahí. Si no se puede (la carpeta del programa es de solo lectura, como `Archivos de programa`, o un disco protegido), sale con un error que dice la ruta y la causa, antes de abrir la pantalla; nunca usa en silencio la carpeta de tu usuario, que confundiría a quien cree estar en modo portable.
+- El archivo se revisa una vez, al arrancar: crearlo o borrarlo con Moss abierto no cambia nada hasta la siguiente vez.
 
-**La key queda en texto plano junto al ejecutable.** En modo portable, `datos/credentials.json` no está protegido por la carpeta de tu perfil: cualquiera que pueda abrir la carpeta del programa (otra cuenta de la PC, quien tome la memoria USB) puede leer la key y usarla. En Linux el archivo sigue en 0600 y `datos/` en 0700 (y la regla del `chmod 600` sigue valiendo); por eso en una memoria USB con FAT32 o exFAT, donde esos permisos no existen, en Linux el chatbot no lee `credentials.json`: ahí usa `CHAT_API_KEY` o una partición ext4. La defensa real no es esconder el archivo sino limitar el daño: **una key por PC con tope de gasto diario**. En OpenRouter, por ejemplo, cada key puede tener un límite de crédito (`limit`) que se reinicia cada día (`limit_reset: daily`); así una key copiada gasta, como mucho, el tope de un día y se revoca sin tocar las de las demás PC.
+**La key queda en texto plano junto al ejecutable.** En modo portable, `datos/credentials.json` no está protegido por la carpeta de tu perfil: cualquiera que pueda abrir la carpeta del programa (otra cuenta de la PC, quien tome la memoria USB) puede leer la key y usarla. En Linux el archivo sigue en 0600 y `datos/` en 0700 (y la regla del `chmod 600` sigue valiendo); por eso en una memoria USB con FAT32 o exFAT, donde esos permisos no existen, en Linux Moss no lee `credentials.json`: ahí usa `CHAT_API_KEY` o una partición ext4. La defensa real no es esconder el archivo sino limitar el daño: **una key por PC con tope de gasto diario**. En OpenRouter, por ejemplo, cada key puede tener un límite de crédito (`limit`) que se reinicia cada día (`limit_reset: daily`); así una key copiada gasta, como mucho, el tope de un día y se revoca sin tocar las de las demás PC.
 
 #### Depuración
 
-`CHAT_DEBUG_SSE=/ruta/archivo` (solo por variable de entorno) guarda en ese archivo, por cada intento de petición (tanto las respuestas por fragmentos, que usa la interfaz, como las completas, que usa `tools/smoke` sin `--stream`), la fecha, el modelo, el número de intento, el estado HTTP y el cuerpo crudo de la respuesta. Nunca guarda la key, las cabeceras ni lo que tú envías, pero **sí contiene las respuestas del modelo, es decir, la conversación**. Úsalo solo para diagnosticar un problema y borra el archivo después. Si no se puede escribir, el chatbot sigue funcionando sin avisar.
+`CHAT_DEBUG_SSE=/ruta/archivo` (solo por variable de entorno) guarda en ese archivo, por cada intento de petición (tanto las respuestas por fragmentos, que usa la interfaz, como las completas, que usa `tools/smoke` sin `--stream`), la fecha, el modelo, el número de intento, el estado HTTP y el cuerpo crudo de la respuesta. Nunca guarda la key, las cabeceras ni lo que tú envías, pero **sí contiene las respuestas del modelo, es decir, la conversación**. Úsalo solo para diagnosticar un problema y borra el archivo después. Si no se puede escribir, Moss sigue funcionando sin avisar.
 
 ```bash
-CHAT_DEBUG_SSE=/tmp/chat-debug.txt ./build/release/cli/chatbot
+CHAT_DEBUG_SSE=/tmp/chat-debug.txt ./build/release/cli/moss
 ```
 
-`CHAT_DEBUG_KEYS=/ruta/archivo` (solo por variable de entorno) agrega al archivo una línea por cada tecla, clic o evento que recibe la interfaz: la hora con milisegundos; el tipo (`special` con los bytes en hex, `character` con **solo la longitud en bytes**, `mouse` con botón, movimiento y posición, o `custom`); si la configuración está abierta, si la barra de conversaciones tiene el foco, a dónde iría un pegado (`target`) y si hay un pegado entre corchetes abierto. Con la configuración abierta, también qué campo tiene el foco. Tras Ctrl+V, Ctrl+Shift+V o Shift+Insert, una línea `paste-shortcut` con cuántos bytes tenía el portapapeles y si se pegó. Nunca escribe el texto que tecleas o pegas (por ahí pasa la API key). Sirve para ver qué secuencia manda tu terminal. Si no se puede escribir, el chatbot sigue sin avisar.
+`CHAT_DEBUG_KEYS=/ruta/archivo` (solo por variable de entorno) agrega al archivo una línea por cada tecla, clic o evento que recibe la interfaz: la hora con milisegundos; el tipo (`special` con los bytes en hex, `character` con **solo la longitud en bytes**, `mouse` con botón, movimiento y posición, o `custom`); si la configuración está abierta, si la barra de conversaciones tiene el foco, a dónde iría un pegado (`target`) y si hay un pegado entre corchetes abierto. Con la configuración abierta, también qué campo tiene el foco. Tras Ctrl+V, Ctrl+Shift+V o Shift+Insert, una línea `paste-shortcut` con cuántos bytes tenía el portapapeles y si se pegó. Nunca escribe el texto que tecleas o pegas (por ahí pasa la API key). Sirve para ver qué secuencia manda tu terminal. Si no se puede escribir, Moss sigue sin avisar.
 
 ```bat
 :: CMD
 set CHAT_DEBUG_KEYS=%TEMP%\chat-keys.txt
-build\release\cli\chatbot.exe
+build\release\cli\moss.exe
 ```
 
 ### Ejecutar
 
 ```bash
-./build/release/cli/chatbot
+./build/release/cli/moss
 ```
 
 Teclas:
@@ -324,11 +324,11 @@ A la izquierda está la lista de conversaciones guardadas, agrupadas por fecha: 
 
 La caja acepta varias líneas y ajusta el texto al ancho: una línea más larga que la caja se parte en varias filas por palabras (después de un espacio; una palabra más ancha que la caja se parte donde ya no cabe). Ninguna fila empieza con el espacio del corte: si la palabra llena justo la fila, ese espacio se queda al final de la fila, en la columna del cursor. El ajuste es solo de pantalla: lo que se envía es exactamente lo que escribiste, sin saltos ni espacios de más. La última columna queda libre para el cursor. La caja crece con sus filas en pantalla hasta 8 (o un tercio de la terminal, lo que sea menor); después aparece una barra a la derecha y se desplaza siguiendo al cursor (o con la rueda). Enter siempre envía; para un salto de línea usa `\` + Enter o Alt+Enter (Shift+Enter y Ctrl+Enter no se distinguen de Enter en la terminal).
 
-Pega con el atajo de tu terminal (en Linux casi siempre Ctrl+Shift+V). El chatbot activa el *pegado entre corchetes* (bracketed paste): un texto pegado con varias líneas queda completo en la caja, sin enviarse, y los tabuladores pasan a 4 espacios. Si tu terminal no lo soporta, cada salto de línea pegado llega como Enter y envía el mensaje a la mitad: pega una sola línea o usa otra terminal. En los campos de una línea de la configuración (URL, keys, filtro y modelo), los saltos de línea pegados se quitan. Un pegado de más de 256 KiB se recorta y avisa.
+Pega con el atajo de tu terminal (en Linux casi siempre Ctrl+Shift+V). Moss activa el *pegado entre corchetes* (bracketed paste): un texto pegado con varias líneas queda completo en la caja, sin enviarse, y los tabuladores pasan a 4 espacios. Si tu terminal no lo soporta, cada salto de línea pegado llega como Enter y envía el mensaje a la mitad: pega una sola línea o usa otra terminal. En los campos de una línea de la configuración (URL, keys, filtro y modelo), los saltos de línea pegados se quitan. Un pegado de más de 256 KiB se recorta y avisa.
 
 Si subes en el historial, la vista se queda donde está aunque llegue texto nuevo, y la línea de estado muestra `↓ Hay más abajo (End)`, o `(PgDn)` si hay texto en la caja (porque ahí End mueve el cursor). Al enviar un mensaje, la vista regresa abajo.
 
-El chatbot captura el ratón para la rueda. Para seleccionar texto con el ratón, mantén Shift mientras arrastras, como en la mayoría de terminales con apps que usan el ratón. Para abrir un enlace, Shift+clic sobre él (en Kitty también Ctrl+Shift+clic): un clic simple lo recibe el chatbot y no abre nada.
+Moss captura el ratón para la rueda. Para seleccionar texto con el ratón, mantén Shift mientras arrastras, como en la mayoría de terminales con apps que usan el ratón. Para abrir un enlace, Shift+clic sobre él (en Kitty también Ctrl+Shift+clic): un clic simple lo recibe Moss y no abre nada.
 
 #### Comandos
 
@@ -385,7 +385,7 @@ Los bloques de código de las respuestas se numeran desde 1 en toda la conversac
 - `[Copiar]` copia el bloque y cambia a `[✓ Copiado]` hasta que mueves el puntero fuera del botón o pasan 2 segundos.
 - `[Guardar]` lo guarda con el nombre por defecto (`bloque-3.cpp`). Para otro nombre, usa `/guardar 3 suma.cpp`.
 - `[Exportar]`, a la derecha de la barra de título, exporta la conversación. Sin respuestas que exportar se ve atenuado y no hace nada.
-- El resultado aparece en la línea de estado, corto y con lo importante primero: `#1 copiado con wl-copy`, `#1 copiado con OSC 52 · si no pega, usa [Guardar]`, `#1 guardado en ~/Descargas/chatbot/bloque-1.cpp` o `No se pudo copiar #1 · usa [Guardar]`. Si no cabe, termina en `…`; el indicador de la derecha (`Pensando…`) nunca se recorta. Los botones no agregan nada a la conversación ni mueven la vista: puedes copiar un bloque de la mitad de la conversación sin que salte al final.
+- El resultado aparece en la línea de estado, corto y con lo importante primero: `#1 copiado con wl-copy`, `#1 copiado con OSC 52 · si no pega, usa [Guardar]`, `#1 guardado en ~/Descargas/moss/bloque-1.cpp` o `No se pudo copiar #1 · usa [Guardar]`. Si no cabe, termina en `…`; el indicador de la derecha (`Pensando…`) nunca se recorta. Los botones no agregan nada a la conversación ni mueven la vista: puedes copiar un bloque de la mitad de la conversación sin que salte al final.
 - Funcionan también mientras llega una respuesta: un bloque que sigue llegando se copia como va, y el aviso empieza con `⚠ #1 incompleto (aún no termina)`. Lo mismo con un bloque de una respuesta cancelada (`se canceló`) o cortada por un error (`se cortó`).
 - En una terminal angosta los botones se acortan a `[C]` `[G]`; si tampoco caben, no se muestran (los comandos siguen funcionando). Con el puntero encima van en el color de selección del tema (invertidos con `NO_COLOR`).
 
@@ -424,15 +424,15 @@ OSC 52 solo manda bloques de hasta 100 000 bytes; para uno más grande, usa `/gu
 
 En Windows: `CHAT_DOWNLOAD_DIR`, si la defines; si no, tu carpeta Descargas; si Windows no la da, `%USERPROFILE%`.
 
-Para cambiarla, define la variable antes de abrir el chatbot:
+Para cambiarla, define la variable antes de abrir Moss:
 
 ```bash
-CHAT_DOWNLOAD_DIR=~/proyectos/escuela ./build/release/cli/chatbot
+CHAT_DOWNLOAD_DIR=~/proyectos/escuela ./build/release/cli/moss
 ```
 
-## Otras interfaces: `chatbot-rpc`
+## Otras interfaces: `moss-rpc`
 
-`chatbot-rpc` es el chatbot sin pantalla: habla [JSON-RPC 2.0](https://www.jsonrpc.org/specification) por stdin/stdout, un mensaje por línea, y hace lo mismo que la terminal porque usa su misma lógica (configuración, conversaciones guardadas, `/buscar`). Es la base de la interfaz gráfica y sirve para que cualquiera adapte otra interfaz sin reescribir nada: el protocolo completo, con lo que ya está implementado, está en [`rpc/PROTOCOL.md`](rpc/PROTOCOL.md). Se compila con todo lo demás (también en Windows) y sale en `build/<preset>/cli/chatbot-rpc` (junto a `chatbot`).
+`moss-rpc` es Moss sin pantalla: habla [JSON-RPC 2.0](https://www.jsonrpc.org/specification) por stdin/stdout, un mensaje por línea, y hace lo mismo que la terminal porque usa su misma lógica (configuración, conversaciones guardadas, `/buscar`). Es la base de la interfaz gráfica y sirve para que cualquiera adapte otra interfaz sin reescribir nada: el protocolo completo, con lo que ya está implementado, está en [`rpc/PROTOCOL.md`](rpc/PROTOCOL.md). Se compila con todo lo demás (también en Windows) y sale en `build/<preset>/cli/moss-rpc` (junto a `moss`).
 
 Para probarlo a mano, sin interfaz (con [`jq`](https://jqlang.org/) para leer la salida):
 
@@ -442,14 +442,14 @@ printf '%s\n' \
   '{"jsonrpc":"2.0","id":2,"method":"conversation.get","params":{"conversation":"c1"}}' \
   '{"jsonrpc":"2.0","id":3,"method":"shutdown","params":{}}' \
   '{"jsonrpc":"2.0","method":"exit"}' \
-| ./build/dev/cli/chatbot-rpc | jq -c .
+| ./build/dev/cli/moss-rpc | jq -c .
 ```
 
 Usa la misma configuración que la terminal (y el modo portable). stdout es solo del protocolo; los avisos van a stderr. `CHAT_DEBUG_RPC=/ruta/archivo` guarda cada línea que entra y sale con las keys tapadas, pero **contiene la conversación**: solo para diagnosticar.
 
 ## Bot de Telegram
 
-`chatbot-telegram` es un bot de Telegram que responde con el mismo modelo y las mismas instrucciones que el chatbot de la terminal. Usa *long polling* (solo hace peticiones HTTPS de salida, sin servidor público ni certificados), responde **solo en chats privados** (en grupos y canales no contesta) y las conversaciones viven **solo en memoria**: se borran tras un rato sin mensajes, con `/nuevo` o al reiniciar el bot. Solo Linux por ahora.
+`moss-telegram` es un bot de Telegram que responde con el mismo modelo y las mismas instrucciones que Moss de la terminal. Usa *long polling* (solo hace peticiones HTTPS de salida, sin servidor público ni certificados), responde **solo en chats privados** (en grupos y canales no contesta) y las conversaciones viven **solo en memoria**: se borran tras un rato sin mensajes, con `/nuevo` o al reiniciar el bot. Solo Linux por ahora.
 
 Mientras el modelo escribe, el alumno ve la respuesta crecer en una vista previa con un botón para **detenerla**; al terminar llega como un mensaje con formato (encabezados, listas, tablas, código, fórmulas). Si Telegram no acepta el formato, llega como texto plano. Las respuestas muy largas se parten en varios mensajes.
 
@@ -463,16 +463,16 @@ Mientras el modelo escribe, el alumno ve la respuesta crecer en una vista previa
 
 ### Instalar o quitar el addon
 
-En Linux, cualquier preset compila el bot junto con la app: `chatbot-telegram` queda junto a `chatbot`, en `build/<preset>/cli/`.
+En Linux, cualquier preset compila el bot junto con la app: `moss-telegram` queda junto a `moss`, en `build/<preset>/cli/`.
 
 ```bash
 cmake --preset release && cmake --build --preset release
-./build/release/cli/chatbot --help      # dice si el addon está instalado
+./build/release/cli/moss --help      # dice si el addon está instalado
 ```
 
 > **Si ya tenías `build/<preset>/` de antes**, CMake recuerda las opciones de entonces y puede seguir sin compilar el bot: borra la carpeta (`rm -rf build/<preset>`) o pasa `-DCHATBOT_BUILD_TELEGRAM=ON` una vez.
 
-El addon es solo el programa `chatbot-telegram`. `chatbot telegram` lo busca **junto a `chatbot`** y después en el `PATH` (en [modo portable](#modo-portable), solo junto a `chatbot`). Para instalarlo en una app compilada sin él (`-DCHATBOT_BUILD_TELEGRAM=OFF`), copia `chatbot-telegram` de otro build junto a `chatbot`, sin recompilar nada. Para quitarlo, bórralo: F2 dirá "No instalado" y el servicio sale con 69 sin reintentar. Si la app y el bot no entienden la misma versión de la configuración, F2 dice "Incompatible" y muestra los campos sin dejar editarlos.
+El addon es solo el programa `moss-telegram`. `moss telegram` lo busca **junto a `moss`** y después en el `PATH` (en [modo portable](#modo-portable), solo junto a `moss`). Para instalarlo en una app compilada sin él (`-DCHATBOT_BUILD_TELEGRAM=OFF`), copia `moss-telegram` de otro build junto a `moss`, sin recompilar nada. Para quitarlo, bórralo: F2 dirá "No instalado" y el servicio sale con 69 sin reintentar. Si la app y el bot no entienden la misma versión de la configuración, F2 dice "Incompatible" y muestra los campos sin dejar editarlos.
 
 ### Configurar desde F2 → Addons
 
@@ -500,7 +500,7 @@ Las variables `CHAT_TELEGRAM_TOKEN`, `CHAT_API_KEY` y `CHAT_SEARCH_API_KEY` gana
 
 **Guardar** escribe la configuración y deja el servicio como dice **Activado**, aunque no hayas cambiado la casilla, sin cerrar F2 (el resultado sale abajo). Si el servicio no está como dice la casilla, arriba lo avisa (por ejemplo, `Activado, pero el servicio está detenido: guarda para arrancarlo.`):
 
-- **Activado:** si falta el servicio lo instala (si hay uno hecho a mano, primero pregunta `¿Reemplazar el servicio existente? (s/n)`), si se movió `chatbot` lo actualiza, y si está detenido o deshabilitado lo arranca y lo habilita; si ya corría, le manda la configuración nueva **sin borrar las conversaciones**.
+- **Activado:** si falta el servicio lo instala (si hay uno hecho a mano, primero pregunta `¿Reemplazar el servicio existente? (s/n)`), si se movió `moss` lo actualiza, y si está detenido o deshabilitado lo arranca y lo habilita; si ya corría, le manda la configuración nueva **sin borrar las conversaciones**.
 - **Sin Activado:** si corre o está habilitado, lo detiene y lo deshabilita.
 - El **token** y **Respuestas a la vez** solo se toman al arrancar: si cambian con el bot corriendo, F2 pregunta si reiniciarlo (eso borra las conversaciones en memoria).
 - Las preguntas `(s/n)` solo se contestan con **s** o **n**; **Esc** cancela sin hacer nada.
@@ -517,7 +517,7 @@ Comandos: `/start`, `/ayuda`, `/nuevo` (conversación nueva) y `/buscar <consult
 
 ### El servicio (systemd de usuario)
 
-F2 escribe `~/.config/systemd/user/chatbot-telegram.service`, que arranca `chatbot telegram`, y lo controla con `systemctl --user`. Si se cae, systemd lo levanta otra vez a los 10 s, salvo con un error que no se arregla solo (configuración, addon borrado, archivo de invitados dañado, carpeta de datos sin permisos): ahí se queda detenido y F2 dice qué pasó. Sin red no hace falta reiniciarlo: el bot espera y reintenta solo. Después de un apagón, los mensajes que llegaron mientras estaba apagado (Telegram los guarda hasta 24 h) con más de "Min. mensaje viejo" reciben *"Estuve desconectado y se me pasó tu mensaje; mándalo otra vez."*, sin gastar el tope diario.
+F2 escribe `~/.config/systemd/user/moss-telegram.service`, que arranca `moss telegram`, y lo controla con `systemctl --user`. Si se cae, systemd lo levanta otra vez a los 10 s, salvo con un error que no se arregla solo (configuración, addon borrado, archivo de invitados dañado, carpeta de datos sin permisos): ahí se queda detenido y F2 dice qué pasó. Sin red no hace falta reiniciarlo: el bot espera y reintenta solo. Después de un apagón, los mensajes que llegaron mientras estaba apagado (Telegram los guarda hasta 24 h) con más de "Min. mensaje viejo" reciben *"Estuve desconectado y se me pasó tu mensaje; mándalo otra vez."*, sin gastar el tope diario.
 
 **Linger.** Sin él, el servicio se detiene al cerrar sesión y no arranca al prender la PC hasta que inicies sesión. F2 avisa si está apagado; actívalo tú una vez (la app nunca lo hace):
 
@@ -528,32 +528,32 @@ loginctl enable-linger "$USER"
 El registro (una línea por evento con IDs, tiempos, tamaños y tipos de error; **nunca** el texto de los alumnos, las respuestas, el token ni las keys):
 
 ```bash
-journalctl --user -u chatbot-telegram -f
+journalctl --user -u moss-telegram -f
 ```
 
 Por SSH sin sesión gráfica puede no haber systemd de usuario: F2 dice `No hay systemd de usuario en esta sesión.`
 
-También se puede correr a mano, sin servicio, con `./build/release/cli/chatbot telegram` (Ctrl+C lo apaga en menos de 2 s). Sale con 0 si está desactivado, 65 si el archivo de invitados está dañado, 69 si no encuentra `chatbot-telegram`, 73 si no puede escribir en su carpeta de datos y 78 si la configuración no sirve (incluido un token inválido); el mensaje dice qué arreglar.
+También se puede correr a mano, sin servicio, con `./build/release/cli/moss telegram` (Ctrl+C lo apaga en menos de 2 s). Sale con 0 si está desactivado, 65 si el archivo de invitados está dañado, 69 si no encuentra `moss-telegram`, 73 si no puede escribir en su carpeta de datos y 78 si la configuración no sirve (incluido un token inválido); el mensaje dice qué arreglar.
 
 ### Si venías de `telegram.json`
 
 El bot ya no lee `telegram.json`, `--config` ni `CHAT_TELEGRAM_CONFIG`, y no hay migración. Detén y borra lo de antes, y configura todo otra vez desde F2:
 
 ```bash
-systemctl --user disable --now chatbot-telegram     # si tenías el servicio hecho a mano
-rm ~/.config/systemd/user/chatbot-telegram.service
+systemctl --user disable --now moss-telegram     # si tenías el servicio hecho a mano
+rm ~/.config/systemd/user/moss-telegram.service
 systemctl --user daemon-reload
-rm -r ~/.config/chatbot-telegram                    # telegram.json y su credentials.json
+rm -r ~/.config/moss-telegram                    # telegram.json y su credentials.json
 ```
 
 Los invitados de antes (`<data_dir>/invitados.json`) no se leen: vuelven a entrar con el código, o pon sus IDs en "IDs autorizados".
 
 ### Probar cómo se ven los mensajes
 
-`chatbot-telegram-probe` manda a un chat unos mensajes de prueba (el signo de pesos, fórmulas, escapes, una vista previa con streaming) para revisar en el celular cómo los muestra Telegram. Solo se corre a mano, con el token de un bot de prueba y tu ID (te lo dice el bot si le escribes sin estar autorizado):
+`moss-telegram-probe` manda a un chat unos mensajes de prueba (el signo de pesos, fórmulas, escapes, una vista previa con streaming) para revisar en el celular cómo los muestra Telegram. Solo se corre a mano, con el token de un bot de prueba y tu ID (te lo dice el bot si le escribes sin estar autorizado):
 
 ```bash
-CHAT_TELEGRAM_TOKEN=123456789:AA... ./build/release/cli/chatbot-telegram-probe --chat <tu ID>
+CHAT_TELEGRAM_TOKEN=123456789:AA... ./build/release/cli/moss-telegram-probe --chat <tu ID>
 ```
 
 Los mensajes con formato llegaron a Telegram en junio de 2026 (Bot API 10.1); en una app desactualizada podrían no verse bien. Falta probarlo con un celular real.

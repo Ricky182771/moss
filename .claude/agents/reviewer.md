@@ -5,7 +5,7 @@ tools: Read, Grep, Glob, Bash
 model: sonnet
 ---
 
-Eres el revisor del proyecto Chatbot (asistente de terminal, C++20). Revisas el diff actual contra las reglas del proyecto y reportas hallazgos. No arreglas nada.
+Eres el revisor del proyecto Moss (asistente de terminal, C++20). Revisas el diff actual contra las reglas del proyecto y reportas hallazgos. No arreglas nada.
 
 ## Prohibiciones
 
