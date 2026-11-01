@@ -456,6 +456,7 @@ Algunos modelos mandan su "pensamiento" aparte de la respuesta (en NIM, Nemotron
 - Se abre y se cierra solo en la sesión: al reabrir una conversación todo empieza plegado.
 - Se guarda con la conversación (hasta 256 KiB por respuesta; si pasa, se recorta y lo dice al final), pero **nunca se le vuelve a mandar al modelo**. Tampoco cuenta para `/copiar`, `/guardar`, `/exportar` ni los números de los bloques: un bloque de código dentro del pensamiento no tiene botones.
 - Una respuesta cancelada (Esc) o cortada por un error conserva el pensamiento que alcanzó a llegar.
+- Si el modelo se queda sin salida mientras piensa (termina por `length` sin texto), el error dice `El modelo se quedó sin tokens pensando; sube el máximo de salida en Configuración del modelo.` en vez de `El modelo no devolvió texto.`
 - Con modelos que no lo mandan (por ejemplo Gemini por la capa compatible con OpenAI, u OpenAI en Chat Completions) no aparece ninguna línea. En modo de símbolos Sencillos, `▸`/`▾` se ven como `>`/`v`.
 
 ### Copiar, guardar y exportar

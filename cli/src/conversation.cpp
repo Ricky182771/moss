@@ -82,12 +82,16 @@ bool Conversation::attach_search(SearchResponse response, std::string date, std:
     return true;
 }
 
-Entry* Conversation::current_answer() {
+const Entry* Conversation::current_answer() const {
     if (entries_.empty()) {
         return nullptr;
     }
-    Entry& last = entries_.back();
+    const Entry& last = entries_.back();
     return last.kind == EntryKind::Assistant && last.in_progress ? &last : nullptr;
+}
+
+Entry* Conversation::current_answer() {
+    return const_cast<Entry*>(std::as_const(*this).current_answer());
 }
 
 Entry* Conversation::answer_for_delta(std::string_view text) {
@@ -177,8 +181,7 @@ std::optional<std::string> Conversation::finish_success(std::string_view finish_
     }
     Entry* answer = current_answer();
     if (answer == nullptr || answer->text.empty()) {
-        return finish_error(ChatError{ErrorKind::BadResponse, 0,
-                                      std::string{kEmptyAnswer}, std::nullopt});
+        return finish_error(empty_answer_error(finish_reason));
     }
     answer->in_progress = false;
     answer->note = finish_note(finish_reason);
@@ -203,6 +206,15 @@ std::optional<std::string> Conversation::finish_success(std::string_view finish_
     pending_user_text_.clear();
     busy_ = false;
     return std::nullopt;
+}
+
+ChatError Conversation::empty_answer_error(std::string_view finish_reason) const {
+    const Entry* answer = current_answer();
+    const bool thought = answer != nullptr && !answer->reasoning.empty();
+    return ChatError{ErrorKind::BadResponse, 0,
+                     std::string{thought && finish_reason == "length" ? kOutOfTokensThinking
+                                                                      : kEmptyAnswer},
+                     std::nullopt};
 }
 
 void Conversation::add_error(std::string text) {

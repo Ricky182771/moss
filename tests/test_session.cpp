@@ -679,6 +679,27 @@ TEST_CASE("Session::Finished: finish_reason, respuesta sin texto y guardado que 
         CHECK(h.finished.back().error->message == chatbot::cli::kEmptyAnswer);
         CHECK(h.finished.back().finish_reason.empty());
     }
+    SECTION("sin texto, con pensamiento: con length, sin tokens pensando; si no, kEmptyAnswer") {
+        const std::string reason = GENERATE(std::string{"length"}, std::string{"stop"});
+        chatbot::HttpResponse thinking;
+        thinking.status = 200;
+        thinking.body =
+            "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"pienso\"}}]}\n\n"
+            "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"" + reason +
+            "\"}]}\n\ndata: [DONE]\n\n";
+        h.responses = {thinking};
+        h.start();
+        CHECK_FALSE(h.exchange("hola"));
+        CHECK(h.finished.back().restored == "hola");
+        REQUIRE(h.finished.back().error.has_value());
+        CHECK(h.finished.back().error->kind == chatbot::ErrorKind::BadResponse);
+        CHECK(h.finished.back().error->message == (reason == "length"
+                                                       ? chatbot::cli::kOutOfTokensThinking
+                                                       : chatbot::cli::kEmptyAnswer));
+        // La entrada de error de la TUI dice lo mismo.
+        const std::string& shown = h.session->conversation().entries().back().text;
+        CHECK(shown.find(h.finished.back().error->message) != std::string::npos);
+    }
     SECTION("guardado que falla: terminó bien, pero saved es false y hay un error") {
         // La carpeta de conversaciones es un archivo: store.save falla.
         std::ofstream{h.path("conversations")} << "x";

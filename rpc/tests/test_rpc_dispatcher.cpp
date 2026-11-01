@@ -2571,3 +2571,26 @@ TEST_CASE("RPC: texto y después pensamiento en la misma ventana salen en ese or
     rpc.call(3, "chat.cancel", {{"conversation", "c1"}});
     REQUIRE(rpc.finish());
 }
+
+TEST_CASE("RPC: sin texto, con pensamiento → bad_response según finish_reason",
+          "[rpc][pensamiento]") {
+    Rpc rpc;
+    const std::string reason = GENERATE(std::string{"length"}, std::string{"stop"});
+    chatbot::HttpResponse thinking;
+    thinking.status = 200;
+    thinking.body =
+        "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"pienso\"}}]}\n\n"
+        "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"" + reason +
+        "\"}]}\n\ndata: [DONE]\n\n";
+    rpc.responses = {thinking};
+    rpc.initialize();
+    rpc.call(2, "chat.send", {{"conversation", "c1"}, {"text", "hola"}});
+    REQUIRE(rpc.finish());
+    const Json& finished = rpc.out.back()["params"];
+    CHECK(finished["outcome"] == "error");
+    CHECK(finished["error"]["kind"] == "bad_response");
+    CHECK(finished["error"]["message"] == (reason == "length" ? chatbot::cli::kOutOfTokensThinking
+                                                               : chatbot::cli::kEmptyAnswer));
+    CHECK(finished["restore_text"] == "hola");
+    CHECK(finished["finish_reason"] == "");
+}

@@ -1154,3 +1154,26 @@ TEST_CASE("collect_code_blocks: un bloque dentro del pensamiento no se numera",
     REQUIRE(blocks.size() == 1);
     CHECK(blocks[0].code.find("print") != std::string::npos);
 }
+
+TEST_CASE("Conversation: sin texto, con pensamiento y length: se quedó sin tokens pensando",
+          "[conversacion][pensamiento]") {
+    Conversation conversation{kDefaultSystemPrompt};
+    REQUIRE(conversation.submit("Hola").has_value());
+    const bool thought = GENERATE(true, false);
+    const std::string reason = GENERATE(std::string{"length"}, std::string{"stop"});
+    if (thought) {
+        conversation.append_reasoning("pienso y pienso");
+    }
+    const bool out_of_tokens = thought && reason == "length";
+    CHECK(conversation.empty_answer_error(reason).message ==
+          (out_of_tokens ? chatbot::cli::kOutOfTokensThinking : chatbot::cli::kEmptyAnswer));
+    REQUIRE(conversation.finish_success(reason, "m") == "Hola");
+    // La entrada de error que dibuja la TUI.
+    const Entry& error = conversation.entries().back();
+    CHECK(error.kind == EntryKind::Error);
+    const std::string_view expected =
+        out_of_tokens ? chatbot::cli::kOutOfTokensThinking : chatbot::cli::kEmptyAnswer;
+    CHECK(error.text.size() > expected.size());
+    CHECK(error.text.substr(error.text.size() - expected.size()) == expected);
+    CHECK_FALSE(conversation.has_turns());
+}

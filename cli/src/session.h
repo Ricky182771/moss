@@ -173,7 +173,8 @@ public:
         /// resultados, respuesta sin texto), o nullopt si el par terminó bien.
         std::optional<std::string> restored;
         /// nullopt si terminó bien; una respuesta sin texto es BadResponse
-        /// con kEmptyAnswer, como la entrada de error.
+        /// con kEmptyAnswer (o kOutOfTokensThinking: Conversation::empty_answer_error),
+        /// como la entrada de error.
         std::optional<ChatError> error;
         std::string finish_reason; ///< Solo si terminó bien ("" si no llegó).
         std::size_t dropped = 0;   ///< Mensajes omitidos por el recorte.

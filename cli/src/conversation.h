@@ -20,6 +20,11 @@ namespace chatbot::cli {
 
 /// Error de una respuesta que terminó bien pero sin texto (finish_success).
 inline constexpr std::string_view kEmptyAnswer = "El modelo no devolvió texto.";
+/// Lo mismo cuando llegó pensamiento y finish_reason es "length": se le
+/// acabó la salida pensando.
+inline constexpr std::string_view kOutOfTokensThinking =
+    "El modelo se quedó sin tokens pensando; sube el máximo de salida en Configuración del "
+    "modelo.";
 
 /// Tipo de una entrada de la pantalla.
 enum class EntryKind {
@@ -116,13 +121,17 @@ public:
     void toggle_all_reasoning();
 
     /// Cierra la respuesta y la agrega al historial. Si no llegó texto, se
-    /// trata como error ("El modelo no devolvió texto.") y devuelve el texto
+    /// trata como error (empty_answer_error) y devuelve el texto
     /// del usuario, igual que finish_error(); si salió bien, nullopt.
     /// finish_reason ("stop", "length", ...) solo agrega una nota a la
     /// entrada: el texto entra al historial porque es texto real. model es el
     /// modelo configurado, que se guarda con la respuesta.
     [[nodiscard]] std::optional<std::string> finish_success(std::string_view finish_reason = {},
                                                             std::string_view model = {});
+    /// El error de terminar ahora sin texto (BadResponse): kOutOfTokensThinking
+    /// si la respuesta en curso trae pensamiento y finish_reason es "length";
+    /// si no, kEmptyAnswer. Session lo pide antes de finish_success.
+    [[nodiscard]] ChatError empty_answer_error(std::string_view finish_reason) const;
 
     /// Quita del historial el último mensaje de usuario (no de la pantalla),
     /// marca como incompleta la respuesta parcial si la hubo y agrega una
@@ -172,6 +181,7 @@ public:
 private:
     /// Respuesta del asistente en curso, o nullptr si aún no llega texto.
     Entry* current_answer();
+    [[nodiscard]] const Entry* current_answer() const;
     /// La respuesta en curso para un delta, creándola si hace falta; nullptr
     /// si el delta se ignora.
     Entry* answer_for_delta(std::string_view text);
