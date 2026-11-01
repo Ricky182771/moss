@@ -2,6 +2,7 @@
 #include "chatbot/config.h"
 #include "chatbot/model_params.h"
 #include "fake_transport.hpp"
+#include "model_params_form.h"
 #include "temp_dir.hpp"
 
 #include <nlohmann/json.hpp>
@@ -480,4 +481,51 @@ TEST_CASE("Leer y escribir el objeto de ajustes", "[ajustes]") {
     CHECK(parsed.value().unknown_fields == std::vector<std::string>{"x"});
     CHECK(chatbot::model_params_from_json("[]").is_error());
     CHECK(chatbot::model_params_to_json({}) == "{}");
+}
+
+TEST_CASE("Formulario de Parámetros: textos, errores y Restaurar todo", "[ajustes][formulario]") {
+    ModelParams saved;
+    saved.temperature = 0.6;
+    saved.seed = 42;
+    saved.reasoning = Reasoning::Medium;
+    saved.extra = R"({"a":1})";
+    chatbot::cli::ModelParamsForm form{saved};
+    CHECK(form.numbers[0] == "0.6");
+    CHECK(form.numbers[6] == "42");
+    CHECK(form.reasoning == 3);
+    CHECK(form.extra == "{\n  \"a\": 1\n}");
+    CHECK_FALSE(form.dirty());
+    CHECK(form.draft() == ModelParams{Reasoning::Medium, 0.6, {}, {}, {}, {}, {}, 42,
+                                      "{\n  \"a\": 1\n}"});
+
+    form.numbers[2] = "2.5"; // Top K tiene que ser entero.
+    form.numbers[1] = " 0,9 ";
+    form.numbers[3] = "1e3x";
+    std::vector<chatbot::FieldProblem> problems;
+    const ModelParams draft = form.draft(&problems);
+    CHECK(draft.top_p == 0.9);
+    CHECK_FALSE(draft.top_k.has_value());
+    CHECK(problems == std::vector<chatbot::FieldProblem>{
+                          {"top_k", "Escribe un número entero."},
+                          {"max_tokens", "Escribe un número entero."}});
+    CHECK(form.dirty());
+
+    form.restore_all();
+    CHECK(form.draft().empty());
+    CHECK(form.dirty());
+    form.mark_saved();
+    CHECK_FALSE(form.dirty());
+}
+
+TEST_CASE("Ayuda del razonamiento por proveedor", "[ajustes][formulario]") {
+    CHECK_THAT(chatbot::cli::reasoning_help("nvidia"),
+               Catch::Matchers::ContainsSubstring("solo lo encienden"));
+    CHECK_THAT(chatbot::cli::reasoning_help("anthropic"),
+               Catch::Matchers::ContainsSubstring("1024, 4096 y 16384"));
+    CHECK_THAT(chatbot::cli::reasoning_help("openrouter"),
+               Catch::Matchers::ContainsSubstring("reasoning.effort"));
+    CHECK_THAT(chatbot::cli::reasoning_help("custom:x"),
+               Catch::Matchers::ContainsSubstring("reasoning_effort"));
+    CHECK(chatbot::cli::limit_hint(chatbot::model_param_limits("x")[1]) == "más de 0, hasta 1");
+    CHECK(chatbot::cli::limit_hint(chatbot::model_param_limits("anthropic")[0]) == "0 a 1");
 }

@@ -556,6 +556,15 @@ int main(int argc, char** argv) {
         });
 
     settings.set_portable_dir(chatbot::process_portable_data_dir());
+    settings.set_model_params_handlers(
+        [&](const chatbot::ModelParams& draft) { return session.check_model_params(draft); },
+        [&](const chatbot::ModelParams& draft) {
+            std::optional<std::string> error = session.save_model_params(draft);
+            if (!error.has_value()) {
+                scroll.to_bottom();
+            }
+            return error;
+        });
     settings.set_on_delete_endpoint([&](const std::string& id) {
         chatbot::cli::SettingsScreen::EndpointDeleted result;
         const chatbot::cli::EndpointDeletion deletion = session.delete_endpoint(id);
@@ -603,8 +612,14 @@ int main(int argc, char** argv) {
             return;
         }
         right_tab = 1;
+        chatbot::cli::ModelParamsPage model;
+        model.problem = session.model_params_problem();
+        model.model = session.config().model;
+        model.provider = session.config().provider;
+        model.provider_label = provider.value().provider_label();
+        model.saved = session.model_params();
         settings.open(provider.value(), session.config(), appearance, session.system_prompt(),
-                      search.value(), std::move(notice));
+                      search.value(), std::move(notice), std::move(model));
     };
 
     // Ejecuta lo que pidió la barra de conversaciones.

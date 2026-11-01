@@ -60,6 +60,10 @@ struct Harness {
     int search_key_saves = 0;
     std::string saved_search_key; ///< Lo que recibió el último guardado de la key de búsqueda.
     int closes = 0;
+    /// Configuración del modelo: por defecto, sin modelo (kNoModelForParams).
+    chatbot::cli::ModelParamsPage model_page;
+    int params_saves = 0;
+    std::optional<chatbot::ModelParams> saved_params; ///< Lo que recibió el último guardado.
     bool wait_models = true; ///< open() espera la lista de modelos.
     std::string base_url = "http://localhost:8080/v1"; ///< La de open(), en el endpoint "lab".
     chatbot::Config base; ///< El Config de la sesión que recibe open().
@@ -134,9 +138,25 @@ struct Harness {
                                 more_endpoints.end());
         chatbot::cli::ProviderSettings provider(values, {}, {});
         (void)provider.set_key(std::move(key));
+        // Como Session: validate_model_params y la vista previa con 2 mensajes.
+        settings.set_model_params_handlers(
+            [this](const chatbot::ModelParams& draft) {
+                chatbot::cli::ModelParamsCheck check;
+                check.problems = chatbot::validate_model_params(draft, model_page.provider);
+                if (check.problems.empty()) {
+                    check.preview = chatbot::request_preview(model_page.model, model_page.provider,
+                                                             draft, 2);
+                }
+                return check;
+            },
+            [this](const chatbot::ModelParams& draft) -> std::optional<std::string> {
+                ++params_saves;
+                saved_params = draft;
+                return std::nullopt;
+            });
         settings.open(std::move(provider), config,
                       chatbot::cli::resolve_appearance("catppuccin-mocha", "theme"),
-                      std::move(system_prompt), std::move(search));
+                      std::move(system_prompt), std::move(search), {}, model_page);
         if (wait_models) {
             REQUIRE(queue.run_until([this] { return !loader.busy(); }));
         }
@@ -168,12 +188,19 @@ struct Harness {
 
     bool key(const ftxui::Event& event) { return settings.component()->OnEvent(event); }
 
-    /// Elige "Instrucciones del sistema" y pasa al campo de texto con Tab.
+    /// Elige "Configuración del modelo" (pestaña Instrucciones) y pasa al
+    /// campo de texto con Tab: la barra de pestañas y luego el campo.
     void go_to_prompt() {
-        REQUIRE(key(ftxui::Event::ArrowDown));
-        REQUIRE(key(ftxui::Event::ArrowDown));
-        REQUIRE(find(draw(), "● Instrucciones del sistema").x >= 0);
+        go_to_model();
         REQUIRE(key(ftxui::Event::Tab));
+        REQUIRE(key(ftxui::Event::Tab));
+    }
+
+    /// Elige "Configuración del modelo" (sin pasar a la página).
+    void go_to_model() {
+        REQUIRE(key(ftxui::Event::ArrowDown));
+        REQUIRE(key(ftxui::Event::ArrowDown));
+        REQUIRE(find(draw(), "● Configuración del modelo").x >= 0);
     }
 
     /// Elige "Búsqueda web" (sin pasar al campo).
@@ -849,6 +876,7 @@ TEST_CASE("configuración: ningún placeholder es más ancho que su campo", "[aj
     CHECK(find(screen, "escribe el modelo").x >= 0);
     h.go_to_prompt();
     CHECK(find(h.draw(), "escribe las instrucciones").x >= 0);
+    REQUIRE(h.key(ftxui::Event::TabReverse)); // La barra de pestañas.
     REQUIRE(h.key(ftxui::Event::TabReverse)); // De vuelta a las categorías.
     REQUIRE(h.key(ftxui::Event::ArrowDown));
     screen = h.draw();
@@ -1220,4 +1248,226 @@ TEST_CASE("configuración: [Borrar endpoint] pregunta con s/n", "[ajustes][endpo
         CHECK(find(screen, "Se borró el endpoint Falso B.").x >= 0);
         CHECK(find(screen, "Servidor del lab").x >= 0); // De regreso al guardado.
     }
+}
+
+namespace {
+
+/// El modelo "modelo-0" del endpoint "lab", con estos ajustes guardados.
+chatbot::cli::ModelParamsPage lab_model(chatbot::ModelParams saved = {}) {
+    chatbot::cli::ModelParamsPage page;
+    page.problem.reset();
+    page.model = "modelo-0";
+    page.provider = "custom:lab";
+    page.provider_label = "Servidor del lab";
+    page.saved = std::move(saved);
+    return page;
+}
+
+/// En Configuración del modelo, pasa a la pestaña tab (0, 1 o 2) con ←/→
+/// desde la barra; el foco se queda en la barra.
+void go_to_tab(Harness& h, int tab) {
+    h.go_to_model();
+    REQUIRE(h.key(ftxui::Event::Tab)); // La barra de pestañas.
+    for (int i = 0; i < tab; ++i) {
+        REQUIRE(h.key(ftxui::Event::ArrowRight));
+    }
+}
+
+void type(Harness& h, const std::string& text) {
+    for (const char c : text) {
+        REQUIRE(h.key(ftxui::Event::Character(c)));
+    }
+}
+
+} // namespace
+
+TEST_CASE("configuración del modelo: las tres pestañas en 80×24", "[ajustes][modelo]") {
+    const chatbot_test::NoColorGuard environment(nullptr);
+    Harness h;
+    chatbot::ModelParams saved;
+    saved.temperature = 0.6;
+    saved.reasoning = chatbot::Reasoning::High;
+    saved.extra = R"({"chat_template_kwargs":{"thinking":true}})";
+    h.model_page = lab_model(saved);
+    h.open("modelo-0");
+    go_to_tab(h, 0);
+    auto screen = h.draw(80, 24);
+    CHECK(find(screen, "Configuración del modelo — modelo-0 (Servidor del").x >= 0);
+    CHECK(find(h.draw(), "Configuración del modelo — modelo-0 (Servidor del lab)").x >= 0);
+    CHECK(find(screen, "[Instrucciones]").x >= 0);
+    CHECK(find(screen, " Parámetros ").x >= 0);
+    CHECK(find(screen, "Para todos los modelos").x >= 0);
+    CHECK(find(screen, "[ Restaurar predeterminado ]").x >= 0);
+    CHECK(find(screen, "[ Guardar ]").x >= 0);
+
+    REQUIRE(h.key(ftxui::Event::ArrowRight));
+    screen = h.draw(80, 24);
+    CHECK(find(screen, "[Parámetros]").x >= 0);
+    for (const char* text : {"Razonamiento", "Alto", "Temperatura", "0.6", "Top P", "Top K",
+                             "1 a 1000", "No todos los proveedores lo", "Máx. tokens",
+                             "Pen. frecuencia", "Pen. presencia", "Semilla", "0 a 2147483647",
+                             "[ Restaurar todo ]", "[ Guardar ]"}) {
+        INFO(text);
+        CHECK(find(screen, text).x >= 0);
+    }
+
+    REQUIRE(h.key(ftxui::Event::ArrowRight));
+    screen = h.draw(80, 24);
+    CHECK(find(screen, "[Avanzado]").x >= 0);
+    CHECK(find(screen, "\"chat_template_kwargs\": {").x >= 0);
+    CHECK(find(screen, "\"model\": \"modelo-0\",").x >= 0);
+    CHECK(find(screen, "\"messages\": \"[…2 mensajes…]\",").x >= 0);
+    CHECK(find(screen, "\"temperature\": 0.6,").x >= 0);
+    CHECK(find(screen, "[ Guardar ]").x >= 0);
+
+    // Angosta: lo de arriba no se pierde y los botones se ven.
+    screen = h.draw(60, 24);
+    CHECK(find(screen, "[Avanzado]").x >= 0);
+    CHECK(find(screen, "[ Guardar ]").x >= 0);
+}
+
+TEST_CASE("configuración del modelo: clic en una pestaña", "[ajustes][modelo]") {
+    const chatbot_test::NoColorGuard environment(nullptr);
+    Harness h;
+    h.model_page = lab_model();
+    h.open("modelo-0");
+    h.go_to_model();
+    const Position tab = find(h.draw(), " Avanzado ");
+    REQUIRE(tab.x >= 0);
+    REQUIRE(h.mouse({tab.x + 1, tab.y}, ftxui::Mouse::Left));
+    CHECK(find(h.draw(), "[Avanzado]").x >= 0);
+}
+
+TEST_CASE("configuración del modelo: sin modelo, Parámetros y Avanzado lo dicen",
+          "[ajustes][modelo]") {
+    const chatbot_test::NoColorGuard environment(nullptr);
+    Harness h; // model_page sin modelo.
+    h.open("modelo-0");
+    go_to_tab(h, 1);
+    auto screen = h.draw();
+    CHECK(find(screen, "Elige un modelo en Proveedor de IA (o con /model) para ajustarlo.").x >= 0);
+    CHECK(find(screen, "Temperatura").x < 0);
+    REQUIRE(h.key(ftxui::Event::ArrowRight));
+    CHECK(find(h.draw(), "Elige un modelo en Proveedor de IA (o con /model) para ajustarlo.").x >=
+          0);
+    // Las instrucciones siguen funcionando.
+    REQUIRE(h.key(ftxui::Event::ArrowLeft));
+    REQUIRE(h.key(ftxui::Event::ArrowLeft));
+    CHECK(find(h.draw(), "[Instrucciones]").x >= 0);
+}
+
+TEST_CASE("configuración del modelo: errores junto al campo y Guardar", "[ajustes][modelo]") {
+    const chatbot_test::NoColorGuard environment(nullptr);
+    Harness h;
+    h.model_page = lab_model();
+    h.open("modelo-0");
+    go_to_tab(h, 1);
+    REQUIRE(h.key(ftxui::Event::Tab)); // Razonamiento.
+    REQUIRE(h.key(ftxui::Event::Tab)); // Temperatura.
+    type(h, "abc");
+    CHECK(find(h.draw(), "Escribe un número.").x >= 0);
+    for (int i = 0; i < 3; ++i) {
+        REQUIRE(h.key(ftxui::Event::Backspace));
+    }
+    type(h, "5");
+    CHECK(find(h.draw(), "Debe ser un número entre 0 y 2.").x >= 0);
+    h.save();
+    CHECK(h.params_saves == 0);
+    CHECK(find(h.draw(), "Revisa los ajustes marcados en Configuración del modelo.").x >= 0);
+    CHECK(h.closes == 0);
+
+    // Guardar se llevó el foco: de vuelta al campo con un clic.
+    const Position field = find(h.draw(), "5 ");
+    REQUIRE(field.x >= 0);
+    REQUIRE(h.mouse(field, ftxui::Mouse::Left));
+    REQUIRE(h.key(ftxui::Event::End));
+    REQUIRE(h.key(ftxui::Event::Backspace));
+    type(h, "0,3"); // También con coma.
+    REQUIRE(h.key(ftxui::Event::Tab)); // Top P.
+    type(h, "0.9");
+    CHECK(find(h.draw(), "Debe ser").x < 0);
+    h.save();
+    REQUIRE(h.params_saves == 1);
+    CHECK(h.saved_params->temperature == 0.3);
+    CHECK(h.saved_params->top_p == 0.9);
+    CHECK_FALSE(h.saved_params->top_k.has_value());
+    CHECK(h.closes == 1);
+}
+
+TEST_CASE("configuración del modelo: JSON avanzado con vista previa y error", "[ajustes][modelo]") {
+    const chatbot_test::NoColorGuard environment(nullptr);
+    Harness h;
+    h.model_page = lab_model();
+    h.open("modelo-0");
+    go_to_tab(h, 2);
+    REQUIRE(h.key(ftxui::Event::Tab)); // El JSON.
+    REQUIRE(h.settings.paste_target() == chatbot::cli::PasteTarget::MultiLine);
+    REQUIRE(h.key(ftxui::Event::Character(R"({"model": "x"})")));
+    auto screen = h.draw();
+    CHECK(find(screen, "«model» la pone Moss; no se puede cambiar desde el JSON avanzado.").x >= 0);
+    CHECK(find(screen, "Corrige los errores para ver el cuerpo.").x >= 0);
+    h.save();
+    CHECK(h.params_saves == 0);
+
+    const Position field = find(h.draw(), R"({"model": "x"})");
+    REQUIRE(field.x >= 0);
+    REQUIRE(h.mouse({field.x + 14, field.y}, ftxui::Mouse::Left));
+    REQUIRE(h.key(ftxui::Event::End));
+    for (int i = 0; i < 14; ++i) {
+        REQUIRE(h.key(ftxui::Event::Backspace));
+    }
+    REQUIRE(h.key(ftxui::Event::Character(R"({"repetition_penalty": 1.1})")));
+    screen = h.draw();
+    CHECK(find(screen, "\"repetition_penalty\": 1.1").x >= 0);
+    h.save();
+    REQUIRE(h.params_saves == 1);
+    CHECK(h.saved_params->extra == R"({"repetition_penalty": 1.1})");
+}
+
+TEST_CASE("configuración del modelo: Restaurar todo deja el modelo sin ajustes",
+          "[ajustes][modelo]") {
+    const chatbot_test::NoColorGuard environment(nullptr);
+    Harness h;
+    chatbot::ModelParams saved;
+    saved.seed = 7;
+    saved.reasoning = chatbot::Reasoning::Off;
+    saved.extra = R"({"a":1})";
+    h.model_page = lab_model(saved);
+    h.open("modelo-0");
+    go_to_tab(h, 1);
+    CHECK(find(h.draw(), "[ Apagado").x >= 0);
+    const Position restore = find(h.draw(), "[ Restaurar todo ]");
+    REQUIRE(restore.x >= 0);
+    REQUIRE(h.mouse({restore.x + 2, restore.y}, ftxui::Mouse::Left));
+    auto screen = h.draw();
+    CHECK(find(screen, "[ Apagado").x < 0);
+    CHECK(find(screen, "[ Predeterminado").x >= 0);
+    h.save();
+    REQUIRE(h.params_saves == 1);
+    CHECK(h.saved_params->empty());
+}
+
+TEST_CASE("configuración del modelo: sin cambios no se guarda y descartar pregunta",
+          "[ajustes][modelo]") {
+    const chatbot_test::NoColorGuard environment(nullptr);
+    Harness h;
+    chatbot::ModelParams saved;
+    saved.top_k = 40;
+    h.model_page = lab_model(saved);
+    h.open("modelo-0");
+    h.save();
+    CHECK(h.params_saves == 0);
+    CHECK(h.closes == 1);
+
+    h.open("modelo-0");
+    go_to_tab(h, 1);
+    for (int i = 0; i < 4; ++i) {
+        REQUIRE(h.key(ftxui::Event::Tab)); // Razonamiento, Temperatura, Top P, Top K.
+    }
+    type(h, "1");
+    CHECK_FALSE(h.settings.request_close());
+    CHECK(find(h.draw(), "¿Descartar los cambios? (s/n)").x >= 0);
+    REQUIRE(h.key(ftxui::Event::Character("s")));
+    CHECK(h.closes == 2);
+    CHECK(h.params_saves == 0);
 }

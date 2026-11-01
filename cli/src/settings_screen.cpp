@@ -23,8 +23,14 @@ namespace {
 constexpr int kLabelWidth = 12;
 /// Filas del aviso bajo la URL base (base_url_hint): caben a 100 columnas.
 constexpr int kHintRows = 2;
-/// Ancho de la columna de categorías ("● Instrucciones del sistema" y un espacio).
-constexpr int kSectionsWidth = 28;
+/// Ancho de la columna de categorías ("● Configuración del modelo" y un espacio).
+constexpr int kSectionsWidth = 27;
+/// Etiquetas de Parámetros ("Pen. frecuencia" y un espacio).
+constexpr int kParamLabelWidth = 16;
+/// Campos numéricos: lo que mide el placeholder "Predeterminado".
+constexpr int kNumberWidth = 14;
+/// Alto del JSON avanzado: crece hasta aquí y después se desplaza.
+constexpr int kExtraRows = 6;
 /// Ancho del campo de la key.
 constexpr int kKeyWidth = 24;
 /// Alto mínimo del campo de las instrucciones (si la terminal lo permite).
@@ -34,9 +40,10 @@ constexpr SymbolMode kSymbolModes[] = {SymbolMode::Auto, SymbolMode::Unicode,
                                        SymbolMode::Simple};
 
 /// Etiqueta de un campo en su columna; con el foco, con la selección.
-ftxui::Element label(const char* text, bool focused, const Palette& palette) {
+ftxui::Element label(std::string_view text, bool focused, const Palette& palette,
+                     int width = kLabelWidth) {
     return ftxui::hbox({field_label(text, focused, palette)}) |
-           ftxui::size(ftxui::WIDTH, ftxui::EQUAL, kLabelWidth);
+           ftxui::size(ftxui::WIDTH, ftxui::EQUAL, width);
 }
 
 /// Texto de una línea, sin controles de terminal.
@@ -92,8 +99,12 @@ SettingsScreen::SettingsScreen(ModelsLoader& loader, const Palette& palette, OnS
       addons_(
           palette, [this](std::string notice) { status_ = std::move(notice); },
           [this] { save(); }) {
-    category_names_ = {"Proveedor", "Colores y Accesibilidad", "Instrucciones del sistema",
+    category_names_ = {"Proveedor", "Colores y Accesibilidad", "Configuración del modelo",
                        "Búsqueda web", "Addons"};
+    model_tab_names_ = {"Instrucciones", "Parámetros", "Avanzado"};
+    for (const std::string_view choice : kReasoningChoices) {
+        reasoning_names_.emplace_back(choice);
+    }
     for (const Theme& theme : themes()) {
         theme_names_.emplace_back(theme.name);
     }
@@ -159,14 +170,15 @@ SettingsScreen::SettingsScreen(ModelsLoader& loader, const Palette& palette, OnS
         }
         return state.focused ? row | palette_.selection() : row;
     };
-    dropdown.checkbox.transform = [this](const ftxui::EntryState& state) {
+    const auto closed_transform = [this](const ftxui::EntryState& state) {
         const std::string arrow{
             palette_.glyph(state.state ? Glyph::DropdownOpen : Glyph::DropdownClosed)};
         ftxui::Element element = ftxui::hbox({ftxui::text("[ "), ftxui::text(state.label) | ftxui::flex,
                                               ftxui::text(" " + arrow + "]")});
         return state.focused ? element | ftxui::bold : element;
     };
-    dropdown.transform = [this](bool open, ftxui::Element checkbox, ftxui::Element radiobox) {
+    const auto open_transform = [this](bool open, ftxui::Element checkbox,
+                                       ftxui::Element radiobox) {
         if (!open) {
             return checkbox;
         }
@@ -174,7 +186,23 @@ SettingsScreen::SettingsScreen(ModelsLoader& loader, const Palette& palette, OnS
                             palette_.vscroll(std::move(radiobox)) | ftxui::frame |
                                 ftxui::size(ftxui::HEIGHT, ftxui::LESS_THAN, 10)});
     };
+    dropdown.checkbox.transform = closed_transform;
+    dropdown.transform = open_transform;
     dropdown_ = ftxui::Dropdown(dropdown);
+
+    // Razonamiento: la misma lista desplegable que la del proveedor.
+    ftxui::DropdownOption reasoning;
+    reasoning.checkbox.checked = &reasoning_open_;
+    reasoning.radiobox.entries = &reasoning_names_;
+    reasoning.radiobox.selected = &model_form_.reasoning;
+    reasoning.radiobox.transform = [this](const ftxui::EntryState& state) {
+        ftxui::Element row =
+            ftxui::hbox({chosen_mark(state.state, palette_), ftxui::text(state.label)});
+        return state.focused ? row | palette_.selection() : row;
+    };
+    reasoning.checkbox.transform = closed_transform;
+    reasoning.transform = open_transform;
+    reasoning_dropdown_ = ftxui::Dropdown(reasoning);
 
     name_input_ = ftxui::Input(&name_text_, "nombre del endpoint", field_option(palette_, [this] {
                                    if (settings_) {
@@ -245,6 +273,45 @@ SettingsScreen::SettingsScreen(ModelsLoader& loader, const Palette& palette, OnS
             status_.clear();
         },
         button_option(palette_));
+    // Pestañas de Configuración del modelo: ←/→ o clic (Tab mueve el foco, como en todo F2).
+    ftxui::MenuOption tabs = ftxui::MenuOption::Horizontal();
+    tabs.entries = &model_tab_names_;
+    tabs.selected = &model_tab_;
+    tabs.elements_infix = [] { return ftxui::text(" "); };
+    tabs.entries_option.transform = [this](const ftxui::EntryState& state) {
+        ftxui::Element tab = ftxui::text(state.active ? "[" + state.label + "]"
+                                                      : " " + state.label + " ");
+        if (state.active) {
+            tab = tab | ftxui::bold;
+        } else {
+            tab = tab | palette_.ink(&Theme::notice);
+        }
+        return state.focused ? tab | palette_.selection() : tab;
+    };
+    model_tabs_ = ftxui::Menu(tabs);
+    for (std::string& number : model_form_.numbers) {
+        number_inputs_.push_back(
+            ftxui::Input(&number, "Predeterminado", field_option(palette_, [] {})));
+    }
+    restore_all_button_ = ftxui::Button(
+        "Restaurar todo",
+        [this] {
+            model_form_.restore_all();
+            extra_input_->set_text("", 0);
+            status_.clear();
+        },
+        button_option(palette_));
+    TextAreaOption extra_option;
+    extra_option.palette = &palette_;
+    extra_option.min_rows = 3;
+    extra_option.max_rows = kExtraRows;
+    extra_option.enter = EnterKey::Newline;
+    extra_option.on_change = [this] { model_form_.extra = extra_input_->text(); };
+    extra_option.placeholder = [](int columns) {
+        return std::string{columns >= 30 ? R"({"chat_template_kwargs": {…}})" : "{…}"};
+    };
+    extra_input_ = make_text_area(std::move(extra_option));
+
     ftxui::InputOption search_key_option =
         field_option(palette_, [this] { (void)search_.set_key(search_key_text_); });
     search_key_option.password = true; // Nunca se dibuja la key en claro.
@@ -276,12 +343,23 @@ SettingsScreen::SettingsScreen(ModelsLoader& loader, const Palette& palette, OnS
     });
     const ftxui::Component prompt_form =
         ftxui::Container::Vertical({prompt_input_, restore_button_});
+    ftxui::Components params_fields{reasoning_dropdown_};
+    params_fields.insert(params_fields.end(), number_inputs_.begin(), number_inputs_.end());
+    params_fields.push_back(restore_all_button_);
+    const auto ready = [this] { return model_params_ready(); };
+    const ftxui::Component model_form = ftxui::Container::Vertical({
+        model_tabs_,
+        ftxui::Container::Tab({prompt_form,
+                               ftxui::Maybe(ftxui::Container::Vertical(params_fields), ready),
+                               ftxui::Maybe(ftxui::Container::Vertical({extra_input_}), ready)},
+                              &model_tab_),
+    });
     const ftxui::Component search_form = ftxui::Container::Vertical({
         ftxui::Maybe(search_key_input_, [this] { return !search_.key_locked(); }),
     });
     const ftxui::Component form = ftxui::Container::Vertical({
         ftxui::Container::Tab(
-            {provider_form, appearance_form, prompt_form, search_form, addons_.component()},
+            {provider_form, appearance_form, model_form, search_form, addons_.component()},
             &category_),
         ftxui::Container::Horizontal({save_button_, cancel_button_}),
     });
@@ -292,7 +370,8 @@ SettingsScreen::SettingsScreen(ModelsLoader& loader, const Palette& palette, OnS
 }
 
 void SettingsScreen::open(ProviderSettings settings, Config base, Appearance appearance,
-                          std::string system_prompt, SearchSettings search, std::string notice) {
+                          std::string system_prompt, SearchSettings search, std::string notice,
+                          ModelParamsPage model) {
     settings_ = std::move(settings);
     base_ = std::move(base);
     no_color_ = no_color_enabled();
@@ -322,6 +401,12 @@ void SettingsScreen::open(ProviderSettings settings, Config base, Appearance app
     prompt_input_->set_text(std::move(system_prompt), 0);
     search_ = std::move(search);
     search_key_text_.clear();
+    model_page_ = std::move(model);
+    model_form_ = ModelParamsForm{model_page_.saved}; // Los campos apuntan a sus textos.
+    extra_input_->set_text(model_form_.extra, 0);
+    checked_draft_.reset();
+    model_tab_ = 0;
+    reasoning_open_ = false;
     addons_.open(base_.model);
     dropdown_open_ = false;
     confirm_discard_ = false;
@@ -338,14 +423,20 @@ void SettingsScreen::open(ProviderSettings settings, Config base, Appearance app
 void SettingsScreen::focus() { categories_->TakeFocus(); }
 
 PasteTarget SettingsScreen::paste_target() const {
-    if (!settings_ || confirm_discard_ || confirm_delete_ || dropdown_open_ || addons_.question()) {
+    if (!settings_ || confirm_discard_ || confirm_delete_ || dropdown_open_ || reasoning_open_ ||
+        addons_.question()) {
         return PasteTarget::None;
     }
     if (addons_.text_field_focused()) {
         return PasteTarget::SingleLine;
     }
-    if (prompt_input_->Focused()) {
+    if (prompt_input_->Focused() || extra_input_->Focused()) {
         return PasteTarget::MultiLine;
+    }
+    for (const ftxui::Component& field : number_inputs_) {
+        if (field->Focused()) {
+            return PasteTarget::SingleLine;
+        }
     }
     for (const ftxui::Component& field :
          {name_input_, url_input_, key_input_, filter_input_, model_input_, search_key_input_}) {
@@ -364,6 +455,7 @@ std::vector<std::pair<std::string_view, bool>> SettingsScreen::debug_focus() con
             {"filter", filter_input_->Focused()},
             {"model", model_input_->Focused()},
             {"prompt", prompt_input_->Focused()},
+            {"extra", extra_input_->Focused()},
             {"search_key", search_key_input_->Focused()}};
 }
 
@@ -397,7 +489,7 @@ bool SettingsScreen::background_enabled() const {
 bool SettingsScreen::request_close() {
     if (settings_ &&
         (settings_->dirty() || appearance_dirty() || system_prompt_dirty() || search_.dirty() ||
-         addons_.dirty())) {
+         addons_.dirty() || model_params_dirty())) {
         confirm_discard_ = true;
         return false;
     }
@@ -414,6 +506,7 @@ void SettingsScreen::close() {
     confirm_discard_ = false;
     confirm_delete_ = false;
     dropdown_open_ = false;
+    reasoning_open_ = false;
     status_.clear();
     addons_.close();
     on_close_();
@@ -498,6 +591,7 @@ void SettingsScreen::save() {
     const bool prompt_changed = system_prompt_dirty();
     const bool search_changed = search_.dirty();
     const bool addons_changed = addons_.pending();
+    const bool params_changed = model_params_dirty();
     // Las instrucciones, la key de búsqueda y los addons se revisan antes de
     // guardar nada: un error no deja guardada solo una parte.
     if (prompt_changed) {
@@ -515,18 +609,39 @@ void SettingsScreen::save() {
         status_ = *error;
         return;
     }
+    std::optional<ModelParams> params;
+    if (params_changed) {
+        if (!model_check().problems.empty()) {
+            status_ = "Revisa los ajustes marcados en Configuración del modelo.";
+            return;
+        }
+        params = model_form_.draft();
+    }
     if (addons_.ask_before_saving()) {
         return; // "Se descartarán: …": al contestar que sí, se vuelve a guardar.
     }
     // Si solo cambió la apariencia, las instrucciones o la key de búsqueda,
     // el proveedor no se guarda (ni se reconstruye el cliente); si no cambió
     // nada, se guarda como siempre.
-    if (settings_->dirty() ||
-        (!appearance_changed && !prompt_changed && !search_changed && !addons_changed)) {
+    const bool provider_changed =
+        settings_->dirty() || (!appearance_changed && !prompt_changed && !search_changed &&
+                               !addons_changed && !params_changed);
+    if (provider_changed) {
         if (const std::optional<std::string> error = settings_->validate()) {
+            status_ = *error; // Antes de escribir nada.
+            return;
+        }
+    }
+    // Los ajustes antes que el proveedor: guardar el proveedor puede cambiar
+    // de modelo, y estos son del modelo con que se abrió F2.
+    if (params.has_value()) {
+        if (const std::optional<std::string> error = on_save_model_params_(*params)) {
             status_ = *error;
             return;
         }
+        model_form_.mark_saved();
+    }
+    if (provider_changed) {
         if (const std::optional<std::string> error = on_save_(*settings_)) {
             status_ = *error;
             return;
@@ -581,9 +696,18 @@ void SettingsScreen::move_focus(int step) {
             order.push_back(background_list_);
         }
         order.push_back(symbol_list_);
-    } else if (category_ == kSystemPrompt) {
-        order.push_back(prompt_input_);
-        order.push_back(restore_button_);
+    } else if (category_ == kModel) {
+        order.push_back(model_tabs_);
+        if (model_tab_ == 0) {
+            order.push_back(prompt_input_);
+            order.push_back(restore_button_);
+        } else if (model_params_ready() && model_tab_ == 1) {
+            order.push_back(reasoning_dropdown_);
+            order.insert(order.end(), number_inputs_.begin(), number_inputs_.end());
+            order.push_back(restore_all_button_);
+        } else if (model_params_ready()) {
+            order.push_back(extra_input_);
+        }
     } else if (category_ == kSearch) {
         if (!search_.key_locked()) {
             order.push_back(search_key_input_);
@@ -664,11 +788,12 @@ bool SettingsScreen::handle_event(const ftxui::Event& event) {
         }
         return true;
     }
-    if (dropdown_open_) {
+    if (dropdown_open_ || reasoning_open_) {
         if (event != ftxui::Event::Tab && event != ftxui::Event::TabReverse) {
             return false; // ↑/↓, Enter y Esc son de la lista abierta.
         }
         dropdown_open_ = false;
+        reasoning_open_ = false;
     }
     if (event == ftxui::Event::Escape) {
         (void)request_close();
@@ -920,8 +1045,6 @@ ftxui::Element SettingsScreen::render_system_prompt() const {
     }
 
     return ftxui::vbox({
-        ftxui::text("Instrucciones del sistema") | ftxui::bold,
-        ftxui::text(""),
         // El campo ocupa el alto que sobra (flex) y se puede encoger: los
         // botones de abajo nunca quedan fuera de la pantalla.
         ftxui::hbox({label("Texto", prompt_input_->Focused(), palette_),
@@ -930,8 +1053,124 @@ ftxui::Element SettingsScreen::render_system_prompt() const {
         ftxui::hbox({label("", false, palette_), std::move(counter)}),
         ftxui::hbox({label("", false, palette_),
                      ftxui::text("Vacío: sin instrucciones de sistema") | notice}),
+        ftxui::hbox({label("", false, palette_), ftxui::text("Para todos los modelos") | notice}),
         ftxui::hbox({label("", false, palette_), ftxui::vbox(std::move(checks)) | ftxui::flex}),
         ftxui::hbox({label("", false, palette_), restore_button_->Render()}),
+    });
+}
+
+ModelParamsCheck SettingsScreen::model_check() const {
+    std::vector<FieldProblem> parse_problems;
+    const ModelParams draft = model_form_.draft(&parse_problems);
+    if (!checked_draft_.has_value() || *checked_draft_ != draft) {
+        // Solo cuando cambió el borrador: el JSON avanzado no se vuelve a
+        // leer en cada cuadro.
+        checked_ = on_check_model_params_(draft);
+        checked_draft_ = draft;
+    }
+    if (parse_problems.empty()) {
+        return checked_;
+    }
+    // Lo que no es número va primero; Session no lo vio (quedó en Predeterminado).
+    ModelParamsCheck check{std::move(parse_problems), std::nullopt};
+    check.problems.insert(check.problems.end(), checked_.problems.begin(), checked_.problems.end());
+    return check;
+}
+
+ftxui::Element SettingsScreen::render_model() const {
+    std::string title = "Configuración del modelo";
+    if (!model_page_.problem.has_value()) {
+        title += " — " + clean(model_page_.model) + " (" + clean(model_page_.provider_label) + ")";
+    }
+    ftxui::Element page;
+    if (model_tab_ == 0) {
+        page = render_system_prompt();
+    } else if (!model_params_ready()) {
+        page = ftxui::paragraph(clean(model_page_.problem.value_or(
+                   std::string{kNoModelForParams}))) |
+               palette_.ink(&Theme::notice);
+    } else if (model_tab_ == 1) {
+        page = render_params();
+    } else {
+        page = render_advanced();
+    }
+    return ftxui::vbox({
+        ftxui::text(title) | ftxui::bold,
+        // Angosta: la barra se desplaza para que la pestaña elegida se vea.
+        model_tabs_->Render() | ftxui::xframe,
+        std::move(page) | ftxui::flex,
+    });
+}
+
+ftxui::Element SettingsScreen::render_params() const {
+    const ftxui::Decorator notice = palette_.ink(&Theme::notice);
+    const ModelParamsCheck check = model_check();
+    const auto problem_of = [&check](std::string_view field) -> const std::string* {
+        for (const FieldProblem& problem : check.problems) {
+            if (problem.field == field) {
+                return &problem.message;
+            }
+        }
+        return nullptr;
+    };
+    const auto row = [this](std::string_view name, bool focused, ftxui::Element content) {
+        return ftxui::hbox({label(name, focused, palette_, kParamLabelWidth), std::move(content)});
+    };
+    ftxui::Elements rows{
+        row("Razonamiento", reasoning_dropdown_->Focused(),
+            reasoning_dropdown_->Render() | ftxui::size(ftxui::WIDTH, ftxui::EQUAL, 20)),
+        row("", false, ftxui::paragraph(reasoning_help(model_page_.provider)) | notice | ftxui::flex),
+    };
+    const std::vector<ParamLimit> limits = model_param_limits(model_page_.provider);
+    for (std::size_t i = 0; i < limits.size() && i < number_inputs_.size(); ++i) {
+        const ftxui::Component& input = number_inputs_[i];
+        ftxui::Element hint = ftxui::text(limit_hint(limits[i])) | notice;
+        if (const std::string* problem = problem_of(limits[i].field)) {
+            hint = ftxui::paragraph(clean(*problem)) | ftxui::bold | ftxui::flex;
+        }
+        rows.push_back(row(param_label(limits[i].field), input->Focused(),
+                           ftxui::hbox({input->Render() |
+                                            ftxui::size(ftxui::WIDTH, ftxui::EQUAL, kNumberWidth),
+                                        ftxui::text("  "), std::move(hint) | ftxui::flex})));
+        if (limits[i].field == "top_k") {
+            rows.push_back(row("", false,
+                               ftxui::paragraph("No todos los proveedores lo aceptan.") | notice |
+                                   ftxui::flex));
+        }
+    }
+    rows.push_back(row("", false, restore_all_button_->Render()));
+    return ftxui::vbox(std::move(rows));
+}
+
+ftxui::Element SettingsScreen::render_advanced() const {
+    const ftxui::Decorator notice = palette_.ink(&Theme::notice);
+    const ModelParamsCheck check = model_check();
+    ftxui::Element below = ftxui::paragraph("Se mezcla al final del cuerpo (JSON Merge Patch): "
+                                            "gana sobre el formulario y null quita una llave.") |
+                           notice;
+    for (const FieldProblem& problem : check.problems) {
+        if (problem.field == "extra") {
+            below = ftxui::paragraph(clean(problem.message)) | ftxui::bold;
+        }
+    }
+    ftxui::Element preview;
+    if (check.preview.has_value()) {
+        ftxui::Elements lines;
+        std::string_view rest = *check.preview;
+        while (!rest.empty()) {
+            const std::size_t end = rest.find('\n');
+            lines.push_back(ftxui::text(clean(rest.substr(0, end))));
+            rest = end == std::string_view::npos ? std::string_view{} : rest.substr(end + 1);
+        }
+        preview = ftxui::vbox(std::move(lines)) | ftxui::frame;
+    } else {
+        preview = ftxui::text("Corrige los errores para ver el cuerpo.") | notice;
+    }
+    return ftxui::vbox({
+        ftxui::hbox({label("JSON", extra_input_->Focused(), palette_), extra_input_->Render() | ftxui::flex}),
+        ftxui::hbox({label("", false, palette_), std::move(below) | ftxui::flex}),
+        ftxui::text("Vista previa (lo que se manda, sin la conversación)") | ftxui::bold,
+        std::move(preview) | ftxui::flex,
     });
 }
 
@@ -979,7 +1218,13 @@ ftxui::Element SettingsScreen::render() const {
     } else if (category_ == kAppearance) {
         status = ftxui::text("Tab: campo · ↑/↓: mover · Enter: elegir · Esc: cerrar") |
                  palette_.ink(&Theme::notice);
-    } else if (category_ == kSystemPrompt) {
+    } else if (category_ == kModel && model_tabs_->Focused()) {
+        status = ftxui::text("Flechas: pestaña · Tab: campo · Esc: cerrar") |
+                 palette_.ink(&Theme::notice);
+    } else if (category_ == kModel && model_tab_ == 1) {
+        status = ftxui::text("Tab: campo · Vacío: predeterminado · Esc: cerrar") |
+                 palette_.ink(&Theme::notice);
+    } else if (category_ == kModel) {
         status = ftxui::text("Tab: campo · Enter: nueva línea · Esc: cerrar") |
                  palette_.ink(&Theme::notice);
     } else if (category_ == kSearch || category_ == kAddons) {
@@ -994,8 +1239,8 @@ ftxui::Element SettingsScreen::render() const {
     case kAppearance:
         page = render_appearance();
         break;
-    case kSystemPrompt:
-        page = render_system_prompt();
+    case kModel:
+        page = render_model();
         break;
     case kSearch:
         page = render_search();

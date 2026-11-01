@@ -6,6 +6,7 @@
 #include "commands.h"
 #include "conversation.h"
 #include "conversation_store.h"
+#include "model_params_form.h"
 #include "provider_settings.h"
 #include "request_runner.h"
 #include "search_settings.h"
@@ -111,18 +112,6 @@ inline constexpr std::string_view kNoKeyNote = "sin key";
 
 /// El aviso de save_provider y switch_model.
 [[nodiscard]] std::string provider_switched_notice(std::string_view model, std::string_view label);
-
-/// Sin proveedor o sin modelo: Parámetros y Avanzado no se pueden ajustar.
-inline constexpr std::string_view kNoModelForParams =
-    "Elige un modelo en Proveedor de IA (o con /model) para ajustarlo.";
-
-/// Lo que dio Session::check_model_params.
-struct ModelParamsCheck {
-    std::vector<FieldProblem> problems; ///< Por campo ("extra" incluido); vacío si se puede guardar.
-    /// El cuerpo que se mandaría con la conversación abierta (request_preview),
-    /// o nullopt si hay problemas.
-    std::optional<std::string> preview;
-};
 
 /// La pista que agrega Session a un 400/422 si la petición llevó ajustes.
 [[nodiscard]] std::string model_params_hint(std::string_view model);

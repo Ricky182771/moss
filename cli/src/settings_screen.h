@@ -2,6 +2,7 @@
 #define CHATBOT_CLI_SETTINGS_SCREEN_H
 
 #include "addons_panel.h"
+#include "model_params_form.h"
 #include "models_loader.h"
 #include "paste.h"
 #include "provider_settings.h"
@@ -26,8 +27,19 @@ namespace chatbot::cli {
 
 inline constexpr std::string_view kDiscardCancelled = "Cancelado: no se descartó nada.";
 
+/// Lo que "Configuración del modelo" necesita al abrir: el modelo efectivo y
+/// sus ajustes guardados (de Session).
+struct ModelParamsPage {
+    /// Por qué no se puede ajustar (kNoModelForParams), o nullopt.
+    std::optional<std::string> problem{std::string{kNoModelForParams}};
+    std::string model;
+    std::string provider;       ///< El id ("nvidia", "custom:<id>").
+    std::string provider_label; ///< Su nombre en pantalla.
+    ModelParams saved;
+};
+
 /// Pantalla de configuración (FTXUI): categorías a la izquierda
-/// ("Proveedor", "Colores y Accesibilidad", "Instrucciones del sistema",
+/// ("Proveedor", "Colores y Accesibilidad", "Configuración del modelo",
 /// "Búsqueda web" y "Addons", en AddonsPanel) y el formulario de la elegida a la derecha. La lógica del proveedor está en ProviderSettings; la lista de
 /// modelos se pide con ModelsLoader, en su hilo. Se dibuja con la paleta
 /// vigente (la de main.cpp, que cambia al guardar). Se usa solo desde el
@@ -58,6 +70,10 @@ public:
     };
     /// Borra el endpoint id ("custom:<id>"), como Session::delete_endpoint.
     using OnDeleteEndpoint = std::function<EndpointDeleted(const std::string& id)>;
+    /// Session::check_model_params: errores y vista previa del borrador.
+    using OnCheckModelParams = std::function<ModelParamsCheck(const ModelParams&)>;
+    /// Session::save_model_params: el error para mostrar, o nullopt.
+    using OnSaveModelParams = std::function<std::optional<std::string>(const ModelParams&)>;
 
     /// palette debe vivir más que la pantalla.
     SettingsScreen(ModelsLoader& loader, const Palette& palette, OnSave on_save,
@@ -69,10 +85,18 @@ public:
     /// volcado, límite del historial) para pedir los modelos. appearance: el
     /// tema y el fondo vigentes. system_prompt: las instrucciones vigentes
     /// (vacías: ninguna). search: la key de búsqueda guardada y la del
-    /// entorno. notice: aviso inicial, si hay. Pide la lista de modelos si ya
-    /// hay URL y key.
+    /// entorno. notice: aviso inicial, si hay. model: el modelo efectivo y sus
+    /// ajustes (sin él, Parámetros y Avanzado dicen kNoModelForParams). Pide
+    /// la lista de modelos si ya hay URL y key.
     void open(ProviderSettings settings, Config base, Appearance appearance,
-              std::string system_prompt, SearchSettings search, std::string notice = {});
+              std::string system_prompt, SearchSettings search, std::string notice = {},
+              ModelParamsPage model = {});
+    /// Revisar y guardar los ajustes del modelo; sin llamarla, Parámetros y
+    /// Avanzado no se pueden ajustar.
+    void set_model_params_handlers(OnCheckModelParams check, OnSaveModelParams save) {
+        on_check_model_params_ = std::move(check);
+        on_save_model_params_ = std::move(save);
+    }
     /// Modo portable: la carpeta datos/ (chatbot::process_portable_data_dir),
     /// que se muestra atenuada al pie de "Proveedor de IA". nullopt (por
     /// defecto): sin modo portable, no se muestra nada.
@@ -103,7 +127,7 @@ public:
     /// Da el foco al primer campo.
     void focus();
     /// A dónde iría un pegado: el campo de texto con el foco (MultiLine en
-    /// "Instrucciones del sistema", SingleLine en los demás) o None si el
+    /// las instrucciones y el JSON avanzado, SingleLine en los demás) o None si el
     /// foco no está en un campo, hay una lista abierta o se está
     /// preguntando "¿Descartar los cambios?".
     [[nodiscard]] PasteTarget paste_target() const;
@@ -118,7 +142,7 @@ private:
     enum Category : int {
         kProvider = 0,
         kAppearance = 1,
-        kSystemPrompt = 2,
+        kModel = 2, ///< Configuración del modelo: instrucciones, parámetros y avanzado.
         kSearch = 3,
         kAddons = 4,
     };
@@ -144,7 +168,20 @@ private:
     [[nodiscard]] ftxui::Element render_appearance() const;
     /// Fila "Símbolos" de Colores y Accesibilidad (también con NO_COLOR).
     [[nodiscard]] ftxui::Element render_symbols() const;
+    [[nodiscard]] ftxui::Element render_model() const;
     [[nodiscard]] ftxui::Element render_system_prompt() const;
+    [[nodiscard]] ftxui::Element render_params() const;
+    [[nodiscard]] ftxui::Element render_advanced() const;
+    /// Se pueden ajustar Parámetros y Avanzado (hay modelo y handlers).
+    [[nodiscard]] bool model_params_ready() const {
+        return !model_page_.problem.has_value() && on_check_model_params_ != nullptr;
+    }
+    /// Errores del formulario (los que no son número y los de Session) y la
+    /// vista previa; se vuelve a revisar solo si el borrador cambió.
+    [[nodiscard]] ModelParamsCheck model_check() const;
+    [[nodiscard]] bool model_params_dirty() const {
+        return model_params_ready() && model_form_.dirty();
+    }
     [[nodiscard]] ftxui::Element render_search() const;
     /// Tema y fondo elegidos en el formulario.
     [[nodiscard]] Appearance chosen_appearance() const;
@@ -163,6 +200,14 @@ private:
     OnSaveSearchKey on_save_search_key_;
     OnClose on_close_;
     OnDeleteEndpoint on_delete_endpoint_;
+    OnCheckModelParams on_check_model_params_;
+    OnSaveModelParams on_save_model_params_;
+    ModelParamsPage model_page_;
+    ModelParamsForm model_form_;
+    /// El borrador que revisó Session por última vez y lo que dio (caché
+    /// entre cuadros: no se revisa por cada tecla que no cambia nada).
+    mutable std::optional<ModelParams> checked_draft_;
+    mutable ModelParamsCheck checked_;
     std::optional<ProviderSettings> settings_;
     SearchSettings search_;
     Config base_;
@@ -171,6 +216,7 @@ private:
     std::string status_;          ///< Aviso o error bajo el formulario.
     bool confirm_discard_ = false; ///< Se preguntó "¿Descartar los cambios?".
     bool confirm_delete_ = false;  ///< Se preguntó "¿Borrar el endpoint …?".
+    bool reasoning_open_ = false;  ///< La lista del razonamiento está abierta.
     bool no_color_ = false;
     std::optional<std::string> portable_dir_; ///< set_portable_dir.
     AddonsPanel addons_;
@@ -178,6 +224,9 @@ private:
     // Lo que editan los componentes.
     std::vector<std::string> category_names_;
     int category_ = kProvider;
+    std::vector<std::string> model_tab_names_;
+    int model_tab_ = 0; ///< Instrucciones, Parámetros o Avanzado.
+    std::vector<std::string> reasoning_names_;
     std::vector<std::string> theme_names_;
     int theme_selected_ = 0;
     std::vector<std::string> background_names_;
@@ -212,6 +261,11 @@ private:
     /// Varias líneas con ajuste de línea (text_area.h): el texto es suyo.
     std::shared_ptr<TextArea> prompt_input_;
     ftxui::Component restore_button_;
+    ftxui::Component model_tabs_;
+    ftxui::Component reasoning_dropdown_;
+    std::vector<ftxui::Component> number_inputs_; ///< En el orden de ModelParamsForm::numbers.
+    ftxui::Component restore_all_button_;
+    std::shared_ptr<TextArea> extra_input_;
     ftxui::Component search_key_input_;
     ftxui::Component save_button_;
     ftxui::Component cancel_button_;
