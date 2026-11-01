@@ -266,6 +266,8 @@ private:
     std::vector<ftxui::Component> number_inputs_; ///< En el orden de ModelParamsForm::numbers.
     ftxui::Component restore_all_button_;
     std::shared_ptr<TextArea> extra_input_;
+    /// La vista previa del cuerpo: solo lectura, con barra, PgUp/PgDn y rueda.
+    std::shared_ptr<TextArea> preview_view_;
     ftxui::Component search_key_input_;
     ftxui::Component save_button_;
     ftxui::Component cancel_button_;

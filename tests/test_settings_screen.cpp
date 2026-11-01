@@ -1471,3 +1471,76 @@ TEST_CASE("configuración del modelo: sin cambios no se guarda y descartar pregu
     CHECK(h.closes == 2);
     CHECK(h.params_saves == 0);
 }
+
+namespace {
+
+/// Un JSON avanzado con count llaves ("k01" … ): la vista previa no cabe en 80×24.
+std::string many_keys(int count) {
+    std::string extra = "{";
+    for (int i = 1; i <= count; ++i) {
+        const std::string number = (i < 10 ? "0" : "") + std::to_string(i);
+        extra += std::string{i > 1 ? ", " : ""} + "\"k" + number + "\": " + std::to_string(i);
+    }
+    return extra + "}";
+}
+
+} // namespace
+
+TEST_CASE("configuración del modelo: la vista previa se desplaza", "[ajustes][modelo][ajuste]") {
+    const chatbot_test::NoColorGuard environment(nullptr);
+    Harness h;
+    chatbot::ModelParams saved;
+    saved.extra = many_keys(30);
+    h.model_page = lab_model(saved);
+    h.open("modelo-0");
+    go_to_tab(h, 2);
+    REQUIRE(h.key(ftxui::Event::Tab)); // El JSON.
+    REQUIRE(h.key(ftxui::Event::Tab)); // La vista previa.
+    CHECK(h.settings.paste_target() == chatbot::cli::PasteTarget::None);
+
+    for (const int width : {80, 60}) {
+        INFO("ancho " << width);
+        auto screen = h.draw(width, 24);
+        const Position first = find(screen, "\"model\": \"modelo-0\",");
+        REQUIRE(first.x >= 0);
+        CHECK(find(screen, "┃").x >= 0); // Barra: no cabe.
+        CHECK(find(screen, "\"k30\": 30").x < 0);
+        CHECK(find(screen, "[ Guardar ]").x >= 0);
+        CHECK(find(screen, "PgUp/PgDn y rueda: desplazar").x >= 0);
+
+        // Solo lectura: escribir no cambia nada ni se lo lleva otro campo.
+        CHECK_FALSE(h.key(ftxui::Event::Character("x")));
+        CHECK_FALSE(h.key(ftxui::Event::Backspace));
+        CHECK_FALSE(h.key(ftxui::Event::Return));
+
+        for (int i = 0; i < 20; ++i) { // A 60 columnas la vista mide 3 filas.
+            (void)h.key(ftxui::Event::PageDown);
+        }
+        screen = h.draw(width, 24);
+        CHECK(find(screen, "\"model\": \"modelo-0\",").x < 0);
+        CHECK(find(screen, "\"k30\": 30").x >= 0);
+        CHECK(find(screen, "[ Guardar ]").x >= 0);
+        for (int i = 0; i < 20; ++i) {
+            (void)h.key(ftxui::Event::PageUp);
+        }
+        screen = h.draw(width, 24);
+        CHECK(find(screen, "\"model\": \"modelo-0\",").y == first.y);
+
+        // La rueda sobre la vista previa la mueve sin moverse de pestaña.
+        REQUIRE(h.mouse(first, ftxui::Mouse::WheelDown));
+        screen = h.draw(width, 24);
+        CHECK(find(screen, "\"model\": \"modelo-0\",").x < 0);
+        CHECK(find(screen, "[Avanzado]").x >= 0);
+        REQUIRE(h.mouse(first, ftxui::Mouse::WheelUp));
+        CHECK(find(h.draw(width, 24), "\"model\": \"modelo-0\",").y == first.y);
+    }
+    // La rueda sobre el JSON avanzado (editable) también lo desplaza.
+    auto screen = h.draw(80, 24);
+    const Position extra = find(screen, "\"k01\": 1,");
+    REQUIRE(extra.x >= 0);
+    REQUIRE(h.mouse(extra, ftxui::Mouse::WheelDown));
+    CHECK(find(h.draw(80, 24), "\"k01\": 1,").y != extra.y);
+    CHECK(h.params_saves == 0);
+    h.save();
+    CHECK(h.params_saves == 0); // Nada cambió.
+}

@@ -311,6 +311,12 @@ SettingsScreen::SettingsScreen(ModelsLoader& loader, const Palette& palette, OnS
         return std::string{columns >= 30 ? R"({"chat_template_kwargs": {…}})" : "{…}"};
     };
     extra_input_ = make_text_area(std::move(extra_option));
+    TextAreaOption preview_option;
+    preview_option.palette = &palette_;
+    preview_option.min_rows = 3;
+    preview_option.max_rows = 0; // El alto que deja la página; si no cabe, barra.
+    preview_option.read_only = true;
+    preview_view_ = make_text_area(std::move(preview_option));
 
     ftxui::InputOption search_key_option =
         field_option(palette_, [this] { (void)search_.set_key(search_key_text_); });
@@ -351,7 +357,8 @@ SettingsScreen::SettingsScreen(ModelsLoader& loader, const Palette& palette, OnS
         model_tabs_,
         ftxui::Container::Tab({prompt_form,
                                ftxui::Maybe(ftxui::Container::Vertical(params_fields), ready),
-                               ftxui::Maybe(ftxui::Container::Vertical({extra_input_}), ready)},
+                               ftxui::Maybe(ftxui::Container::Vertical({extra_input_, preview_view_}),
+                                            ready)},
                               &model_tab_),
     });
     const ftxui::Component search_form = ftxui::Container::Vertical({
@@ -456,6 +463,7 @@ std::vector<std::pair<std::string_view, bool>> SettingsScreen::debug_focus() con
             {"model", model_input_->Focused()},
             {"prompt", prompt_input_->Focused()},
             {"extra", extra_input_->Focused()},
+            {"preview", preview_view_->Focused()},
             {"search_key", search_key_input_->Focused()}};
 }
 
@@ -707,6 +715,7 @@ void SettingsScreen::move_focus(int step) {
             order.push_back(restore_all_button_);
         } else if (model_params_ready()) {
             order.push_back(extra_input_);
+            order.push_back(preview_view_);
         }
     } else if (category_ == kSearch) {
         if (!search_.key_locked()) {
@@ -1153,24 +1162,18 @@ ftxui::Element SettingsScreen::render_advanced() const {
             below = ftxui::paragraph(clean(problem.message)) | ftxui::bold;
         }
     }
-    ftxui::Element preview;
-    if (check.preview.has_value()) {
-        ftxui::Elements lines;
-        std::string_view rest = *check.preview;
-        while (!rest.empty()) {
-            const std::size_t end = rest.find('\n');
-            lines.push_back(ftxui::text(clean(rest.substr(0, end))));
-            rest = end == std::string_view::npos ? std::string_view{} : rest.substr(end + 1);
-        }
-        preview = ftxui::vbox(std::move(lines)) | ftxui::frame;
-    } else {
-        preview = ftxui::text("Corrige los errores para ver el cuerpo.") | notice;
+    // Solo cuando cambió (set_text lleva la vista al principio): desplazarse
+    // no se pierde en cada cuadro. El JSON ya trae los controles escapados.
+    const std::string preview =
+        check.preview.value_or("Corrige los errores para ver el cuerpo.");
+    if (preview_view_->text() != preview) {
+        preview_view_->set_text(preview, 0);
     }
     return ftxui::vbox({
         ftxui::hbox({label("JSON", extra_input_->Focused(), palette_), extra_input_->Render() | ftxui::flex}),
         ftxui::hbox({label("", false, palette_), std::move(below) | ftxui::flex}),
         ftxui::text("Vista previa (lo que se manda, sin la conversación)") | ftxui::bold,
-        std::move(preview) | ftxui::flex,
+        preview_view_->Render() | ftxui::flex,
     });
 }
 
@@ -1220,6 +1223,9 @@ ftxui::Element SettingsScreen::render() const {
                  palette_.ink(&Theme::notice);
     } else if (category_ == kModel && model_tabs_->Focused()) {
         status = ftxui::text("Flechas: pestaña · Tab: campo · Esc: cerrar") |
+                 palette_.ink(&Theme::notice);
+    } else if (category_ == kModel && preview_view_->Focused()) {
+        status = ftxui::text("PgUp/PgDn y rueda: desplazar · Tab: campo · Esc: cerrar") |
                  palette_.ink(&Theme::notice);
     } else if (category_ == kModel && model_tab_ == 1) {
         status = ftxui::text("Tab: campo · Vacío: predeterminado · Esc: cerrar") |

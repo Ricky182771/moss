@@ -40,6 +40,10 @@ struct TextAreaOption {
     /// Placeholder con el texto vacío, según las columnas del campo (la
     /// versión corta en pantallas angostas). Vacío: sin placeholder.
     std::function<std::string(int columns)> placeholder;
+    /// Solo lectura: las teclas que editan (caracteres, Enter, Backspace,
+    /// Supr, Insert) no hacen nada y siguen de largo; el cursor, PgUp/PgDn,
+    /// la barra y la rueda funcionan igual. El texto cambia solo con set_text.
+    bool read_only = false;
 };
 
 /// Campo de texto de varias líneas con ajuste por palabras (text_edit.h):
