@@ -134,13 +134,18 @@ ActionResult run_block_action(const std::vector<CodeBlock>& blocks, int number,
 
 ActionResult export_conversation(const Conversation& conversation, std::time_t now,
                                  const std::string& download_base, const std::string& home) {
-    if (!conversation.has_turns()) {
+    return export_conversation(conversation.to_stored(format_iso8601(now)), now, download_base,
+                               home);
+}
+
+ActionResult export_conversation(const StoredConversation& conversation, std::time_t now,
+                                 const std::string& download_base, const std::string& home) {
+    if (conversation.messages.empty()) {
         return {"Todavía no hay respuestas que exportar.", true};
     }
-    const std::string markdown = export_markdown(conversation.to_stored(format_iso8601(now)),
-                                                 export_date(format_iso8601(now)));
+    const std::string markdown = export_markdown(conversation, export_date(format_iso8601(now)));
     const WriteResult written =
-        write_download(download_base, export_file_name(conversation.id(), now), markdown);
+        write_download(download_base, export_file_name(conversation.id, now), markdown);
     if (!written.error.empty()) {
         return {written.error, true};
     }

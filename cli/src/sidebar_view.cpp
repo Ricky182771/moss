@@ -21,6 +21,9 @@ constexpr std::string_view kNewKey = "  (Ctrl+N)";
 constexpr std::string_view kSettings = "Configuración"; ///< Con Glyph::Gear delante.
 constexpr std::string_view kSettingsKey = "  (F2)";
 constexpr std::string_view kUnreadable = " (ilegible)";
+/// Columnas que el título conserva antes de que la marca de búsqueda se quite.
+constexpr int kMinTitleWithMark = 8;
+constexpr std::string_view kMenuIndent = "    ";
 
 std::string repeat(std::string_view piece, int count) {
     std::string out;
@@ -40,7 +43,7 @@ std::string clean_title(const std::string& title) {
 /// Contenido de una fila, de content_width columnas (con relleno). Cada
 /// tramo lleva su estilo; el relleno, ninguno.
 ftxui::Element row_content(const Sidebar& sidebar, const SidebarRow& row, int content_width,
-                           const Palette& palette) {
+                           const Palette& palette, const ftxui::Element& rename_field) {
     const ftxui::Decorator notice = palette.ink(&Theme::notice);
     ftxui::Elements parts;
     int used = 0;
@@ -78,7 +81,18 @@ ftxui::Element row_content(const Sidebar& sidebar, const SidebarRow& row, int co
         used += ftxui::string_width(kNotChosenMark);
         parts.push_back(chosen_mark(current, palette));
         const std::string title = clean_title(item.title);
-        if (item.readable) {
+        if (rename_field && item.id == sidebar.renaming() && title_width > 0) {
+            parts.push_back(rename_field | ftxui::size(ftxui::WIDTH, ftxui::EQUAL, title_width));
+            used += title_width;
+            break;
+        }
+        // La marca de búsqueda se quita antes de recortar mucho el título.
+        const std::string mark = " " + std::string{palette.glyph(Glyph::SearchMark)};
+        const int mark_width = ftxui::string_width(mark);
+        if (item.readable && item.used_search && title_width - mark_width >= kMinTitleWithMark) {
+            add(fit_width(title, title_width - mark_width), {});
+            add(mark, notice);
+        } else if (item.readable) {
             add(fit_width(title, title_width), {});
         } else {
             // Las ilegibles van tenues y con "(ilegible)", que no se recorta
@@ -92,6 +106,11 @@ ftxui::Element row_content(const Sidebar& sidebar, const SidebarRow& row, int co
         }
         break;
     }
+    case SidebarRow::Kind::MenuItem:
+        add(fit_width(std::string{kMenuIndent} + std::string{menu_item_label(row.item)},
+                      content_width),
+            {});
+        break;
     }
     if (used < content_width) {
         parts.push_back(ftxui::text(std::string(static_cast<std::size_t>(content_width - used), ' ')));
@@ -129,7 +148,8 @@ std::string fit_width(std::string_view text, int width) {
 int sidebar_view_height(int height) { return std::max(height - 2, 1); }
 
 ftxui::Element render_sidebar(const Sidebar& sidebar, const std::vector<SidebarRow>& rows,
-                              int width, int height, bool focused, const Palette& palette) {
+                              int width, int height, bool focused, const Palette& palette,
+                              const ftxui::Element& rename_field) {
     const ftxui::Decorator border = palette.ink(&Theme::border);
     width = std::max(width, 4);
     const int view = sidebar_view_height(height);
@@ -150,8 +170,10 @@ ftxui::Element render_sidebar(const Sidebar& sidebar, const std::vector<SidebarR
         const std::size_t r = sidebar.top() + static_cast<std::size_t>(line);
         ftxui::Element content;
         if (r < rows.size()) {
-            content = row_content(sidebar, rows[r], content_width, palette);
-            if (focused && r == selected) {
+            content = row_content(sidebar, rows[r], content_width, palette, rename_field);
+            const bool editing = rename_field && rows[r].kind == SidebarRow::Kind::Conversation &&
+                                 sidebar.list().items()[rows[r].index].id == sidebar.renaming();
+            if (focused && r == selected && !editing) {
                 content = content | palette.selection(); // Cursor, a todo lo ancho.
             }
         } else if (sidebar.list().empty() && r == rows.size()) {

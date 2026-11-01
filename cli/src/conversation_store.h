@@ -65,6 +65,7 @@ struct ConversationSummary {
     std::string last_model;
     bool readable = true;
     std::string error; ///< Motivo, si no se pudo leer.
+    bool used_search = false; ///< Algún mensaje del usuario se hizo con /buscar.
 };
 
 /// Resultado de cargar: la conversación o un mensaje de error en español.
@@ -111,6 +112,17 @@ struct LoadResult {
 /// sin partir un carácter UTF-8, más "…" si se truncó.
 [[nodiscard]] std::string make_title(std::string_view first_user_message);
 
+/// Resultado de normalize_title.
+struct TitleCheck {
+    std::string title; ///< Normalizado; vacío si hay error.
+    std::string error; ///< Vacío si es válido.
+};
+/// Título que escribió el usuario (renombrar), normalizado como make_title
+/// (extremos recortados, espacios y saltos colapsados a uno), o el error en
+/// español: vacío, más de kTitleMaxCodePoints puntos de código (nunca se
+/// recorta en silencio), UTF-8 inválido o con caracteres de control.
+[[nodiscard]] TitleCheck normalize_title(std::string_view title);
+
 /// Fecha ISO 8601 local con desfase ("2026-10-02T23:58:00-06:00"), con
 /// chatbot::local_time + strftime ("%z" da "-0600" en POSIX y en UCRT).
 [[nodiscard]] std::string format_iso8601(std::time_t time);
@@ -146,6 +158,13 @@ public:
     /// no toca sus permisos. Nunca sobrescribe un archivo ilegible. Devuelve
     /// el error o nullopt.
     [[nodiscard]] std::optional<std::string> save(const StoredConversation& conversation) const;
+
+    /// Cambia el título (normalize_title) y guarda de forma atómica, sin tocar
+    /// updated_at: renombrar no es actividad. Nunca toca un archivo ilegible.
+    /// El error es una oración para el usuario (el de normalize_title, el de
+    /// load o "No se pudo guardar el título: …").
+    [[nodiscard]] std::optional<std::string> rename(const std::string& id,
+                                                    std::string_view title) const;
 
     /// Borra la conversación. Nunca borra un archivo ilegible.
     [[nodiscard]] std::optional<std::string> remove(const std::string& id) const;

@@ -1,5 +1,6 @@
 #include "sidebar.h"
 
+#include "chatbot/markdown/markdown.h"
 #include "chatbot/platform.h"
 
 #include <algorithm>
@@ -16,7 +17,9 @@ std::chrono::sys_days to_days(CalendarDay day) {
                                  std::chrono::day{day.day}};
 }
 
-bool selectable(const SidebarRow& row) { return row.kind != SidebarRow::Kind::Header; }
+bool selectable(const SidebarRow& row) {
+    return row.kind != SidebarRow::Kind::Header && row.kind != SidebarRow::Kind::MenuItem;
+}
 
 } // namespace
 
@@ -79,7 +82,21 @@ std::string group_label(CalendarDay day, CalendarDay today) {
     return label;
 }
 
+std::string_view menu_item_label(ConversationMenuItem item) {
+    switch (item) {
+    case ConversationMenuItem::Rename:
+        return "Renombrar";
+    case ConversationMenuItem::Export:
+        return "Exportar";
+    case ConversationMenuItem::Delete:
+        break;
+    }
+    return "Borrar";
+}
+
 void Sidebar::open(std::vector<ConversationSummary> items, std::string current_id) {
+    close_menu();
+    stop_rename();
     list_.open(std::move(items), std::move(current_id));
     pick_ = list_.empty() || !list_.is_current(list_.selected()) ? Pick::New
                                                                   : Pick::Conversation;
@@ -87,8 +104,14 @@ void Sidebar::open(std::vector<ConversationSummary> items, std::string current_i
 }
 
 void Sidebar::refresh(std::vector<ConversationSummary> items, std::string current_id) {
+    close_menu(); // Las filas cambian.
     list_.refresh(std::move(items));
     list_.set_current(std::move(current_id));
+    const auto& now = list_.items();
+    if (std::none_of(now.begin(), now.end(),
+                     [&](const ConversationSummary& item) { return item.id == renaming_id_; })) {
+        stop_rename(); // Se borró la que se estaba renombrando.
+    }
     if (list_.empty() && pick_ == Pick::Conversation) {
         pick_ = Pick::New;
     }
@@ -116,11 +139,25 @@ std::vector<SidebarRow> Sidebar::rows(CalendarDay today) const {
             previous = label;
         }
         rows.push_back(SidebarRow{SidebarRow::Kind::Conversation, {}, i});
+        if (menu_open() && item.id == menu_id_) {
+            for (std::size_t k = 0; k < kConversationMenuSize; ++k) {
+                rows.push_back(SidebarRow{SidebarRow::Kind::MenuItem, {}, i,
+                                          static_cast<ConversationMenuItem>(k)});
+            }
+        }
     }
     return rows;
 }
 
 std::size_t Sidebar::selected_row(const std::vector<SidebarRow>& rows) const {
+    if (menu_open()) { // El cursor va en la opción del menú.
+        for (std::size_t r = 0; r < rows.size(); ++r) {
+            if (rows[r].kind == SidebarRow::Kind::MenuItem &&
+                static_cast<std::size_t>(rows[r].item) == menu_choice_) {
+                return r;
+            }
+        }
+    }
     if (pick_ == Pick::Conversation) {
         for (std::size_t r = 0; r < rows.size(); ++r) {
             if (rows[r].kind == SidebarRow::Kind::Conversation &&
@@ -144,7 +181,77 @@ void Sidebar::pick_conversation(std::size_t index) {
     list_.select(index);
 }
 
+void Sidebar::start_rename() {
+    close_menu();
+    if (pick_ == Pick::Conversation && list_.can_open(list_.selected())) {
+        const ConversationSummary& item = list_.items()[list_.selected()];
+        renaming_id_ = item.id;
+        // El Input lo dibuja tal cual: sin controles de terminal (texto del archivo).
+        rename_text_ = md::sanitize(item.title);
+        std::replace(rename_text_.begin(), rename_text_.end(), '\n', ' ');
+    }
+}
+
+void Sidebar::stop_rename() {
+    renaming_id_.clear();
+    rename_text_.clear();
+}
+
+ListAction Sidebar::choose(ConversationMenuItem item, std::size_t page_size) {
+    close_menu();
+    switch (item) {
+    case ConversationMenuItem::Rename:
+        start_rename();
+        return {};
+    case ConversationMenuItem::Export:
+        return list_.handle(ListKey::Other, "e", page_size);
+    case ConversationMenuItem::Delete:
+        break;
+    }
+    return list_.handle(ListKey::Delete, {}, page_size);
+}
+
+bool Sidebar::open_menu(std::size_t line, const std::vector<SidebarRow>& rows) {
+    const std::size_t r = top_ + line;
+    if (r >= rows.size() || rows[r].kind != SidebarRow::Kind::Conversation ||
+        !list_.can_open(rows[r].index)) {
+        return false;
+    }
+    stop_rename();
+    select_row(rows[r]);
+    menu_id_ = list_.items()[rows[r].index].id;
+    menu_choice_ = 0;
+    return true;
+}
+
 ListAction Sidebar::handle(ListKey key, std::string_view character, std::size_t page_size) {
+    if (!renaming_id_.empty()) {
+        if (key == ListKey::Enter) {
+            return ListAction{ListAction::Type::Rename, renaming_id_, rename_text_};
+        }
+        if (key == ListKey::Escape) {
+            stop_rename();
+        }
+        return {};
+    }
+    if (menu_open()) {
+        switch (key) {
+        case ListKey::Up:
+            menu_choice_ = menu_choice_ > 0 ? menu_choice_ - 1 : 0;
+            return {};
+        case ListKey::Down:
+            menu_choice_ = std::min(menu_choice_ + 1, kConversationMenuSize - 1);
+            return {};
+        case ListKey::Enter:
+            return choose(static_cast<ConversationMenuItem>(menu_choice_), page_size);
+        case ListKey::Escape:
+            close_menu();
+            return {};
+        default:
+            close_menu(); // Y la tecla hace lo suyo.
+            break;
+        }
+    }
     // Con una confirmación pendiente, la lista decide (yes_no.h). Esc sin
     // confirmación devuelve el foco.
     if (list_.confirmation().has_value() || key == ListKey::Escape) {
@@ -191,6 +298,10 @@ ListAction Sidebar::handle(ListKey key, std::string_view character, std::size_t 
     // Desde la primera conversación, ↑ y PgUp suben a "⚙ Configuración".
     if ((key == ListKey::Up || key == ListKey::PageUp) && list_.selected() == 0) {
         pick_ = Pick::Settings;
+        return {};
+    }
+    if (key == ListKey::Other && (character == "r" || character == "R")) {
+        start_rename();
         return {};
     }
     return list_.handle(key, character, page_size);
@@ -241,6 +352,17 @@ void Sidebar::scroll(int lines, const std::vector<SidebarRow>& rows, std::size_t
 
 ListAction Sidebar::click(std::size_t line, const std::vector<SidebarRow>& rows) {
     const std::size_t r = top_ + line;
+    if (r < rows.size() && rows[r].kind == SidebarRow::Kind::MenuItem) {
+        return choose(rows[r].item, 1);
+    }
+    if (!renaming_id_.empty()) {
+        if (r < rows.size() && rows[r].kind == SidebarRow::Kind::Conversation &&
+            list_.items()[rows[r].index].id == renaming_id_) {
+            return {}; // En el campo: no se cierra.
+        }
+        stop_rename();
+    }
+    close_menu();
     if (r >= rows.size() || !selectable(rows[r])) {
         return {};
     }
@@ -258,6 +380,7 @@ ListAction Sidebar::click(std::size_t line, const std::vector<SidebarRow>& rows)
 }
 
 void Sidebar::select_row(const SidebarRow& row) {
+    close_menu();
     if (row.kind == SidebarRow::Kind::New || row.kind == SidebarRow::Kind::Settings) {
         pick_ = row.kind == SidebarRow::Kind::New ? Pick::New : Pick::Settings;
         list_.select(list_.selected()); // Cancela una confirmación pendiente.

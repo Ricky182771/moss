@@ -111,9 +111,13 @@ ListAction ConversationList::handle(ListKey key, std::string_view character,
     case ListKey::Delete:
         confirming_delete_ = can_open(selected_);
         break;
+    case ListKey::Other:
+        if ((character == "e" || character == "E") && can_open(selected_)) {
+            return ListAction{ListAction::Type::Export, items_[selected_].id};
+        }
+        break;
     case ListKey::Escape:
     case ListKey::Tab:
-    case ListKey::Other:
         break;
     }
     return {};

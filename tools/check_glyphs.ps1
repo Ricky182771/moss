@@ -40,6 +40,7 @@ $faltan = @(
     0x25E6, # BulletLevel2
     0x25AA, # BulletLevel3
     0x25B8, # ReasoningClosed
+    0x2315, # SearchMark
     0x256D, # RoundedTopLeft
     0x256E, # RoundedTopRight
     0x2570, # RoundedBottomLeft

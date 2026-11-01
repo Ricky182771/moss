@@ -256,6 +256,25 @@ nlohmann::ordered_json to_json(const StoredConversation& conversation) {
     return document;
 }
 
+/// Colapsa cada secuencia de espacios en blanco a un solo espacio y quita
+/// los del inicio y el final.
+std::string collapse_whitespace(std::string_view text) {
+    std::string collapsed;
+    bool pending_space = false;
+    for (const char c : text) {
+        if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\v' || c == '\f') {
+            pending_space = !collapsed.empty();
+            continue;
+        }
+        if (pending_space) {
+            collapsed.push_back(' ');
+            pending_space = false;
+        }
+        collapsed.push_back(c);
+    }
+    return collapsed;
+}
+
 /// Días desde 1970-01-01 para una fecha civil (algoritmo de H. Hinnant).
 long long days_from_civil(long long year, unsigned month, unsigned day) {
     year -= month <= 2 ? 1 : 0;
@@ -362,20 +381,7 @@ std::optional<std::string> default_data_dir() {
 }
 
 std::string make_title(std::string_view first_user_message) {
-    // Colapsa cualquier secuencia de espacios en blanco a un solo espacio.
-    std::string collapsed;
-    bool pending_space = false;
-    for (const char c : first_user_message) {
-        if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\v' || c == '\f') {
-            pending_space = !collapsed.empty();
-            continue;
-        }
-        if (pending_space) {
-            collapsed.push_back(' ');
-            pending_space = false;
-        }
-        collapsed.push_back(c);
-    }
+    const std::string collapsed = collapse_whitespace(first_user_message);
     // Cuenta puntos de código: los bytes de continuación (10xxxxxx) no cuentan.
     std::size_t code_points = 0;
     for (std::size_t i = 0; i < collapsed.size(); ++i) {
@@ -388,6 +394,29 @@ std::string make_title(std::string_view first_user_message) {
         }
     }
     return collapsed;
+}
+
+TitleCheck normalize_title(std::string_view title) {
+    std::string collapsed = collapse_whitespace(title);
+    if (collapsed.empty()) {
+        return {{}, "Escribe un título."};
+    }
+    std::size_t code_points = 0;
+    std::size_t i = 0;
+    while (i < collapsed.size()) {
+        const std::optional<std::uint32_t> code = utf8::next_code_point(collapsed, i);
+        if (!code.has_value()) {
+            return {{}, "El título no es UTF-8 válido."};
+        }
+        if (*code < 0x20 || (*code >= 0x7F && *code <= 0x9F)) {
+            return {{}, "El título tiene un carácter de control no permitido."};
+        }
+        ++code_points;
+    }
+    if (code_points > kTitleMaxCodePoints) {
+        return {{}, "El título puede tener hasta 60 caracteres."};
+    }
+    return {std::move(collapsed), {}};
 }
 
 std::string format_iso8601(std::time_t time) {
@@ -483,6 +512,9 @@ std::vector<ConversationSummary> ConversationStore::list() const {
                 summary.title = conversation.title;
                 summary.updated_at = conversation.updated_at;
                 summary.message_count = conversation.messages.size();
+                summary.used_search = std::any_of(
+                    conversation.messages.begin(), conversation.messages.end(),
+                    [](const StoredMessage& message) { return message.search.has_value(); });
                 for (auto message = conversation.messages.rbegin();
                      message != conversation.messages.rend(); ++message) {
                     if (message->role == Role::Assistant && !message->model.empty()) {
@@ -569,6 +601,23 @@ std::optional<std::string> ConversationStore::save(const StoredConversation& con
     } catch (...) {
         return "error inesperado al guardar";
     }
+}
+
+std::optional<std::string> ConversationStore::rename(const std::string& id,
+                                                     std::string_view title) const {
+    TitleCheck checked = normalize_title(title);
+    if (!checked.error.empty()) {
+        return checked.error;
+    }
+    LoadResult loaded = load(id); // Un archivo ilegible no carga y no se toca.
+    if (!loaded.conversation.has_value()) {
+        return loaded.error;
+    }
+    loaded.conversation->title = std::move(checked.title); // updated_at no cambia.
+    if (const std::optional<std::string> error = save(*loaded.conversation)) {
+        return "No se pudo guardar el título: " + *error;
+    }
+    return std::nullopt;
 }
 
 std::optional<std::string> ConversationStore::remove(const std::string& id) const {

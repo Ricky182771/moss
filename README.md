@@ -300,7 +300,7 @@ Cada conversación se guarda sola después de cada respuesta completa, en un arc
 - si no, `~/.local/share/moss/conversations`;
 - en Windows, si no defines `CHAT_DATA_DIR`, `%LOCALAPPDATA%\moss\conversations`.
 
-Los archivos contienen **el texto completo de tus conversaciones**. Por eso la carpeta se crea con permisos 0700 y los archivos con 0600 (solo tu usuario puede leerlos). Para borrar una conversación, usa Supr en la barra de conversaciones (Ctrl+O); para borrarlas todas, borra la carpeta. Si un archivo está dañado o es de una versión más nueva del programa, aparece en la barra como ilegible y el programa nunca lo modifica.
+Los archivos contienen **el texto completo de tus conversaciones**. Por eso la carpeta se crea con permisos 0700 y los archivos con 0600 (solo tu usuario puede leerlos). Para borrar una conversación, usa Supr (o el clic derecho → Borrar) en la barra de conversaciones (Ctrl+O); para borrarlas todas, borra la carpeta. Si un archivo está dañado o es de una versión más nueva del programa, aparece en la barra como ilegible y el programa nunca lo modifica.
 
 #### Modo portable
 
@@ -362,13 +362,15 @@ Teclas:
 
 #### Barra de conversaciones
 
-A la izquierda está la lista de conversaciones guardadas, agrupadas por fecha: **Hoy**, **Ayer**, **Últimos 7 días** y después un grupo por día (`2 oct`, o `15 dic 2025` si es de otro año). La primera fila, `+ Nueva`, empieza una conversación nueva, y la segunda, `⚙ Configuración` (`* Configuración` con símbolos sencillos), abre la configuración. `●` (`•` con símbolos sencillos) marca la conversación abierta, y las ilegibles aparecen tenues, con `(ilegible)`, en el grupo **Sin fecha** al final.
+A la izquierda está la lista de conversaciones guardadas, agrupadas por fecha: **Hoy**, **Ayer**, **Últimos 7 días** y después un grupo por día (`2 oct`, o `15 dic 2025` si es de otro año). La primera fila, `+ Nueva`, empieza una conversación nueva, y la segunda, `⚙ Configuración` (`* Configuración` con símbolos sencillos), abre la configuración. `●` (`•` con símbolos sencillos) marca la conversación abierta, `⌕` (`@` con símbolos sencillos) al final del título marca las que usaron `/buscar` (en una barra angosta se quita antes de recortar mucho el título), y las ilegibles aparecen tenues, con `(ilegible)`, en el grupo **Sin fecha** al final.
 
 - Se ve al arrancar si la terminal mide 100 columnas o más. Si la terminal se angosta a menos de 100, se oculta sola, y reaparece al volver a ensancharla (salvo que la hayas ocultado tú con Ctrl+B).
 - Para cambiar su ancho, arrastra con el ratón su borde derecho (de 18 a 60 columnas, o hasta la mitad de la terminal). El ancho no se guarda al salir.
-- Con Ctrl+O la barra toma el foco: ↑/↓, PgUp/PgDn y Home/End para moverte (los encabezados de grupo se saltan); Enter abre; Supr borra (pide confirmación en la línea de estado: **s** borra, **n** o **Esc** no; las demás teclas y el ratón no la contestan); Esc vuelve a la caja de entrada. La fila seleccionada solo se resalta mientras la barra tiene el foco.
-- Con el ratón: un clic en una conversación la abre, en `+ Nueva` empieza una nueva y en `⚙ Configuración` abre la configuración.
-- Mientras hay una respuesta en curso, abrir, borrar o crear una conversación (desde la barra o con Ctrl+N) no hace nada: espera la respuesta o cancélala con Esc. Moverte por la lista sí se puede.
+- Con Ctrl+O la barra toma el foco: ↑/↓, PgUp/PgDn y Home/End para moverte (los encabezados de grupo se saltan); Enter abre; **r** renombra; **e** exporta; Supr borra (pide confirmación en la línea de estado: **s** borra, **n** o **Esc** no; las demás teclas y el ratón no la contestan); Esc vuelve a la caja de entrada. La fila seleccionada solo se resalta mientras la barra tiene el foco.
+- **Renombrar** (**r**): el título se vuelve un campo con el cursor al final; Enter guarda y Esc cancela. Los espacios y saltos de más se quitan; hasta 60 caracteres (uno más largo da un error en la línea de estado y el campo sigue abierto, no se recorta). Renombrar no cuenta como actividad: la conversación no sube en la lista. Se puede también con una respuesta en curso.
+- **Exportar** (**e**): igual que `/exportar`, pero de la conversación seleccionada, esté abierta o no; exporta lo que está guardado. El aviso sale en la línea de estado.
+- Con el ratón: un clic en una conversación la abre, en `+ Nueva` empieza una nueva y en `⚙ Configuración` abre la configuración. Un **clic derecho** en una conversación abre debajo de ella un menú con **Renombrar**, **Exportar** y **Borrar**: se elige con clic, o con ↑/↓ y Enter; Esc o cualquier otra tecla lo cierra, y también se cierra si la barra pierde el foco.
+- Mientras hay una respuesta en curso, abrir, borrar o crear una conversación (desde la barra o con Ctrl+N) no hace nada: espera la respuesta o cancélala con Esc. Moverte por la lista, renombrar y exportar sí se puede.
 
 #### Caja de entrada y pegar
 

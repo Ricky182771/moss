@@ -102,7 +102,9 @@ void check_all_palettes(const Draw& draw_with, bool replaced) {
 
 TEST_CASE("símbolos sencillos: barra lateral", "[simbolos][barra]") {
     chatbot::cli::Sidebar sidebar;
-    sidebar.open({item("a", "Recursividad en C++"), item("b", "Otra conversación")}, "a");
+    chatbot::cli::ConversationSummary searched = item("b", "Otra conversación");
+    searched.used_search = true;
+    sidebar.open({item("a", "Recursividad en C++"), searched}, "a");
     const auto rows = sidebar.rows(chatbot::cli::CalendarDay{2026, 10, 4});
     const auto draw_with = [&](const Palette& palette) {
         return draw(ftxui::hbox({chatbot::cli::render_sidebar(sidebar, rows, 24, 10, true, palette),
@@ -119,6 +121,9 @@ TEST_CASE("símbolos sencillos: barra lateral", "[simbolos][barra]") {
     // La abierta: "●" falta en Lucida Console; con Sencillos, "•".
     CHECK(screen_text(unicode).find("● Recursividad") != std::string::npos);
     CHECK(screen_text(simple).find("• Recursividad") != std::string::npos);
+    // La marca de búsqueda: "⌕" falta en las dos fuentes; con Sencillos, "@".
+    CHECK(screen_text(unicode).find("Otra conversación ⌕") != std::string::npos);
+    CHECK(screen_text(simple).find("Otra conversación @") != std::string::npos);
 }
 
 TEST_CASE("símbolos sencillos: menú de comandos", "[simbolos][menu]") {

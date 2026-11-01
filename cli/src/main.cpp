@@ -22,6 +22,7 @@
 #include "glyphs.h"
 #include "history_view.h"
 #include "input_edit.h"
+#include "input_style.h"
 #include "key_log.h"
 #include "models_loader.h"
 #include "paste.h"
@@ -449,6 +450,21 @@ int main(int argc, char** argv) {
         sidebar.refresh(session.store().list(), session.conversation().id());
     };
 
+    // Campo de renombrar de la barra: edita Sidebar::rename_text(). Enter y
+    // Esc los decide Sidebar::handle; las demás teclas van a este Input, que
+    // no está en el árbol de componentes (sin padre, siempre "enfocado").
+    int rename_cursor = 0;
+    std::string rename_shown; ///< Id del campo dibujado: al cambiar, el cursor va al final.
+    ftxui::InputOption rename_option;
+    rename_option.content = &sidebar.rename_text();
+    rename_option.multiline = false;
+    rename_option.cursor_position = &rename_cursor;
+    rename_option.transform = [&palette](ftxui::InputState state) {
+        return chatbot::cli::input_transform(std::move(state.element), state.hovered,
+                                             state.focused, state.is_placeholder, palette);
+    };
+    const ftxui::Component rename_input = ftxui::Input(rename_option);
+
     input_area->set_on_enter([&] {
         send();
         screen.PostEvent(ftxui::Event::Custom);
@@ -640,6 +656,22 @@ int main(int argc, char** argv) {
             open_settings({});
             return;
         }
+        // Exportar y renombrar no tocan la conversación en curso.
+        if (action.type == Type::Export) {
+            flash = session.export_stored(action.id).result.message;
+            return;
+        }
+        if (action.type == Type::Rename) {
+            const chatbot::cli::RenameOutcome renamed =
+                session.rename_conversation(action.id, action.text);
+            if (renamed.status != chatbot::cli::RenameOutcome::Status::Renamed) {
+                flash = renamed.message; // El campo sigue abierto.
+                return;
+            }
+            sidebar.stop_rename();
+            refresh_sidebar();
+            return;
+        }
         if (session.busy()) {
             // Abrir, borrar o crear cambiaría la conversación en curso.
             flash = std::string{chatbot::cli::kWaitOrCancel};
@@ -656,6 +688,8 @@ int main(int argc, char** argv) {
         case Type::Close:
         case Type::Settings:
         case Type::Cancelled:
+        case Type::Export:
+        case Type::Rename:
             break;
         case Type::New:
         case Type::Open:
@@ -697,14 +731,24 @@ int main(int argc, char** argv) {
     // maneja root, que no le pasa esos eventos (si no, tomaría el foco con
     // solo pasar el puntero).
     const ftxui::Component sidebar_panel = ftxui::Renderer([&](bool focused) {
+        if (!focused || !sidebar_visible) {
+            // El menú y el campo de renombrar se cierran al perder el foco.
+            sidebar.close_menu();
+            sidebar.stop_rename();
+        }
+        if (sidebar.renaming() != rename_shown) {
+            rename_shown = sidebar.renaming();
+            rename_cursor = static_cast<int>(sidebar.rename_text().size());
+        }
         if (!sidebar_visible) {
             sidebar_box = ftxui::Box{};
             return ftxui::emptyElement();
         }
         const std::vector<chatbot::cli::SidebarRow> rows = sidebar.rows(today());
         sidebar.fit(rows, sidebar_rows_visible());
-        return chatbot::cli::render_sidebar(sidebar, rows, split_size,
-                                            ftxui::Terminal::Size().dimy, focused, palette) |
+        return chatbot::cli::render_sidebar(
+                   sidebar, rows, split_size, ftxui::Terminal::Size().dimy, focused, palette,
+                   sidebar.renaming().empty() ? nullptr : rename_input->Render()) |
                ftxui::reflect(sidebar_box);
     });
 
@@ -723,9 +767,19 @@ int main(int argc, char** argv) {
         if (sidebar_visible && sidebar_panel->Focused()) {
             if (const std::optional<std::string> question = sidebar.confirmation()) {
                 status.push_back({*question, ftxui::bold});
+            } else if (flash.empty() && !sidebar.renaming().empty()) {
+                status.push_back({"Enter guarda · Esc cancela", notice});
+            } else if (flash.empty() && sidebar.menu_open()) {
+                status.push_back({"Enter elige · Esc cierra el menú", notice});
             } else if (flash.empty() && !session.busy()) {
                 // La ayuda solo si no hay otro aviso: juntos no caben.
-                status.push_back({"Enter abre · Supr borra · Esc vuelve a la caja", notice});
+                const bool on_conversation = !sidebar.new_selected() &&
+                                             !sidebar.settings_selected() &&
+                                             sidebar.list().can_open(sidebar.list().selected());
+                status.push_back({on_conversation ? "Enter abre · r renombrar · e exportar · "
+                                                    "Supr borrar · Esc vuelve a la caja"
+                                                  : "Enter abre · Supr borra · Esc vuelve a la caja",
+                                  notice});
             }
         }
         if (!flash.empty()) {
@@ -922,16 +976,22 @@ int main(int argc, char** argv) {
                 sidebar.scroll(-kWheelStep, rows, sidebar_rows_visible());
             } else if (mouse.button == ftxui::Mouse::WheelDown) {
                 sidebar.scroll(kWheelStep, rows, sidebar_rows_visible());
-            } else if (mouse.button == ftxui::Mouse::Left &&
+            } else if ((mouse.button == ftxui::Mouse::Left ||
+                        mouse.button == ftxui::Mouse::Right) &&
                        mouse.motion == ftxui::Mouse::Pressed) {
                 // Línea 0: el borde de arriba; luego, las filas visibles.
                 const int line = mouse.y - sidebar_box.y_min - 1;
                 if (line >= 0 && static_cast<std::size_t>(line) < sidebar_rows_visible()) {
-                    apply_sidebar_action(
-                        sidebar.click(static_cast<std::size_t>(line), rows));
+                    const auto at = static_cast<std::size_t>(line);
+                    if (mouse.button == ftxui::Mouse::Left) {
+                        apply_sidebar_action(sidebar.click(at, rows));
+                    } else if (sidebar.open_menu(at, rows)) {
+                        // El menú se maneja con el teclado: necesita el foco.
+                        sidebar_panel->TakeFocus();
+                    }
                 }
             }
-            return true; // Ningún evento del ratón sobre la barra cambia el foco.
+            return true; // Solo el clic derecho (el menú) cambia el foco.
         }
         if (settings.is_open()) {
             return false;
@@ -1207,6 +1267,16 @@ int main(int argc, char** argv) {
         if (event == ftxui::Event::CtrlT) {
             // Abre o cierra el pensamiento de todas las respuestas.
             session.toggle_all_reasoning();
+            return true;
+        }
+        if (sidebar_visible && sidebar_panel->Focused() && !sidebar.renaming().empty()) {
+            // Campo de renombrar: Enter y Esc son de la barra; lo demás, del Input.
+            const chatbot::cli::ListKey key = list_key(event);
+            if (key == chatbot::cli::ListKey::Enter || key == chatbot::cli::ListKey::Escape) {
+                apply_sidebar_action(sidebar.handle(key, {}, sidebar_rows_visible()));
+            } else {
+                (void)rename_input->OnEvent(event);
+            }
             return true;
         }
         if (sidebar_visible && sidebar_panel->Focused()) {

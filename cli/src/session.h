@@ -149,10 +149,23 @@ struct FileOutcome {
         Attempted, ///< Se intentó escribir: result dice si salió bien (y su path).
         Invalid,   ///< Número de bloque que no existe, nombre inválido o sin pares.
         NoFolder,  ///< No hay carpeta de descargas (no_download_dir_message).
+        Unreadable, ///< export_stored: no se pudo cargar (ilegible o no existe).
     };
     Status status = Status::Attempted;
     ActionResult result; ///< El aviso (Wording::Long) o el motivo; error si no se escribió.
 };
+
+/// Lo que pasó con Session::rename_conversation.
+struct RenameOutcome {
+    enum class Status {
+        Renamed, ///< message: el título ya normalizado.
+        Invalid, ///< Título inválido o conversación sin guardar.
+        Failed,  ///< Ilegible, no existe o no se pudo escribir.
+    };
+    Status status = Status::Invalid;
+    std::string message;
+};
+inline constexpr std::string_view kNothingToRename = "Todavía no hay nada guardado que renombrar.";
 
 /// La lógica de la app sin FTXUI: configuración vigente, cliente y runner,
 /// búsqueda web, la conversación abierta (una sola) y su almacén, los
@@ -250,12 +263,20 @@ public:
                                               std::string_view file_name);
     /// export_conversation de la conversación abierta.
     [[nodiscard]] FileOutcome export_to_downloads();
+    /// export_conversation de la guardada con ese id, abierta o no: lo que
+    /// hay en disco (los pares de una respuesta en curso no están ahí todavía).
+    [[nodiscard]] FileOutcome export_stored(const std::string& id);
 
     // --- Conversaciones: un error para la línea de estado, o nullopt ---
     [[nodiscard]] std::optional<std::string> new_conversation();
     [[nodiscard]] std::optional<std::string> open(const std::string& id);
     /// Si era la abierta, empieza una nueva.
     [[nodiscard]] std::optional<std::string> remove(const std::string& id);
+    /// ConversationStore::rename; si es la abierta, también su título en
+    /// memoria, para que el siguiente guardado no regrese al viejo. Se
+    /// permite con una respuesta en curso. id vacío: kNothingToRename.
+    [[nodiscard]] RenameOutcome rename_conversation(const std::string& id,
+                                                    std::string_view title);
 
     // --- Configuración (F2) ---
     /// Formularios con lo guardado y las CHAT_*; un error si no se puede leer.

@@ -32,10 +32,15 @@ inline constexpr int kSidebarMinTerminal = 100;
 /// sidebar_divider(), el divisor que se arrastra con el ratón. width son las
 /// columnas sin ese borde y height el alto total. Muestra las filas visibles
 /// desde sidebar.top(); la fila del cursor lleva la selección solo si
-/// focused, y la conversación abierta, "● " (list_style.h).
+/// focused, y la conversación abierta, "● " (list_style.h). Una que usó
+/// /buscar lleva Glyph::SearchMark al final del título si este conserva al
+/// menos 8 columnas; si no, la marca se quita primero. Con rename_field, la
+/// conversación de sidebar.renaming() lo dibuja en lugar del título (sin el
+/// resaltado del cursor). Las opciones del menú van con sangría.
 [[nodiscard]] ftxui::Element render_sidebar(const Sidebar& sidebar,
                                             const std::vector<SidebarRow>& rows, int width,
-                                            int height, bool focused, const Palette& palette);
+                                            int height, bool focused, const Palette& palette,
+                                            const ftxui::Element& rename_field = nullptr);
 
 /// Borde derecho de la barra ("┐", "│"…, "┘"), que también es el divisor de
 /// ResizableSplit.

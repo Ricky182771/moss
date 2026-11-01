@@ -209,6 +209,32 @@ TEST_CASE("export_conversation: sin pares es un error; con pares escribe el Mark
     CHECK(text.find("sistema") == std::string::npos);
 }
 
+TEST_CASE("export_conversation: una guardada da el mismo archivo que la abierta",
+          "[block_actions]") {
+    const chatbot_test::ScopedTempDir dir;
+    const std::time_t now = 1767225600;
+    chatbot::cli::StoredConversation stored;
+    stored.id = "20260101-000000-abcdef";
+    stored.created_at = "2026-01-01T00:00:00Z";
+    ActionResult result = chatbot::cli::export_conversation(stored, now, dir.string(), "");
+    CHECK(result.error);
+    CHECK(result.message == "Todavía no hay respuestas que exportar.");
+    CHECK_FALSE(fs::exists(dir.path() / "moss"));
+
+    chatbot::cli::Conversation conversation{"sistema"};
+    REQUIRE(conversation.submit("hola").has_value());
+    conversation.append_delta("¡Hola!");
+    REQUIRE_FALSE(conversation.finish_success("stop", "m").has_value());
+    conversation.set_identity(stored.id, stored.created_at);
+    result = chatbot::cli::export_conversation(conversation, now, dir.string(), "");
+    REQUIRE_FALSE(result.error);
+    const std::string from_open = read_text(*result.path);
+    fs::remove(*result.path);
+    result = chatbot::cli::export_conversation(conversation.to_stored("x"), now, dir.string(), "");
+    REQUIRE_FALSE(result.error);
+    CHECK(read_text(*result.path) == from_open);
+}
+
 TEST_CASE("run_block_action: copia o guarda el bloque con ese número", "[block_actions]") {
     using chatbot::cli::BlockAction;
     FakeClipboard fake;

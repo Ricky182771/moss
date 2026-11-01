@@ -393,6 +393,20 @@ FileOutcome Session::export_to_downloads() {
             export_conversation(conversation_, env_.now(), *base, env_.home)};
 }
 
+FileOutcome Session::export_stored(const std::string& id) {
+    const LoadResult loaded = store_.load(id);
+    if (!loaded.conversation.has_value()) {
+        return {FileOutcome::Status::Unreadable, {loaded.error, true}};
+    }
+    const std::optional<std::string> base = env_.download_base();
+    if (!base.has_value()) {
+        return {FileOutcome::Status::NoFolder,
+                {std::string{no_download_dir_message(current_os())}, true}};
+    }
+    return {FileOutcome::Status::Attempted,
+            export_conversation(*loaded.conversation, env_.now(), *base, env_.home)};
+}
+
 void Session::cancel() {
     if (runner_ != nullptr) {
         runner_->cancel(); // Sin petición en curso no hace nada.
@@ -446,6 +460,23 @@ std::optional<std::string> Session::remove(const std::string& id) {
         (void)new_conversation(); // Se borró la que estaba abierta.
     }
     return std::nullopt;
+}
+
+RenameOutcome Session::rename_conversation(const std::string& id, std::string_view title) {
+    if (id.empty()) {
+        return {RenameOutcome::Status::Invalid, std::string{kNothingToRename}};
+    }
+    TitleCheck checked = normalize_title(title);
+    if (!checked.error.empty()) {
+        return {RenameOutcome::Status::Invalid, std::move(checked.error)};
+    }
+    if (const std::optional<std::string> error = store_.rename(id, checked.title)) {
+        return {RenameOutcome::Status::Failed, *error};
+    }
+    if (id == conversation_.id()) {
+        conversation_.set_title(checked.title);
+    }
+    return {RenameOutcome::Status::Renamed, std::move(checked.title)};
 }
 
 Result<ProviderSettings> Session::provider_form() const {

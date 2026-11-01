@@ -94,6 +94,12 @@ struct ClipboardAccess {
 [[nodiscard]] ActionResult export_conversation(const Conversation& conversation, std::time_t now,
                                                const std::string& download_base,
                                                const std::string& home);
+/// Lo mismo con una conversación guardada (ConversationStore::load), para
+/// exportar una que no está abierta.
+[[nodiscard]] ActionResult export_conversation(const StoredConversation& conversation,
+                                               std::time_t now,
+                                               const std::string& download_base,
+                                               const std::string& home);
 
 } // namespace chatbot::cli
 

@@ -515,12 +515,41 @@ void Dispatcher::dispatch(const std::string& method, const Json* params, const J
         }
         reply(id, has_id, {{"replaced_by", std::move(replaced_by)}});
         write_(notification("conversations.changed", Json::object()));
-    } else if (method == "conversation.export") {
-        if (const auto bad = check_params(params, {{"conversation"}})) {
+    } else if (method == "conversation.rename") {
+        if (const auto bad = check_params(params, {{"id"}, {"title"}})) {
             fail(id, has_id, RpcError::InvalidParams, *bad);
             return;
         }
-        if (check_handle(*params, id, has_id)) {
+        const std::string target = params->at("id").get<std::string>();
+        const cli::RenameOutcome renamed =
+            session_->rename_conversation(target, params->at("title").get<std::string>());
+        if (renamed.status != cli::RenameOutcome::Status::Renamed) {
+            fail(id, has_id,
+                 renamed.status == cli::RenameOutcome::Status::Invalid
+                     ? RpcError::ValidationFailed
+                     : RpcError::StorageError,
+                 message_data(renamed.message));
+            return;
+        }
+        reply(id, has_id, {{"title", renamed.message}});
+        if (target == session_->conversation().id()) {
+            emit_conversation("conversation.renamed", {{"title", renamed.message}});
+        }
+        write_(notification("conversations.changed", Json::object()));
+    } else if (method == "conversation.export") {
+        // Uno de los dos: la abierta por su handle o una guardada por su id.
+        const auto bad = check_params(params, {{"conversation", Param::Type::String, false},
+                                               {"id", Param::Type::String, false}});
+        const bool by_handle = !bad && params != nullptr && params->contains("conversation");
+        const bool by_id = !bad && params != nullptr && params->contains("id");
+        if (bad || by_handle == by_id) {
+            fail(id, has_id, RpcError::InvalidParams,
+                 bad ? *bad : Json{{"fields", Json::array({"conversation", "id"})}});
+            return;
+        }
+        if (by_id) {
+            reply_file(session_->export_stored(params->at("id").get<std::string>()), id, has_id);
+        } else if (check_handle(*params, id, has_id)) {
             reply_file(session_->export_to_downloads(), id, has_id);
         }
     } else if (method == "commands.list") {
@@ -1346,7 +1375,7 @@ void Dispatcher::fail_send(cli::SendResult result, const Json& id, bool has_id,
 void Dispatcher::reply_file(const cli::FileOutcome& file, const Json& id, bool has_id) {
     if (file.status == cli::FileOutcome::Status::Invalid) {
         fail(id, has_id, RpcError::ValidationFailed, message_data(file.result.message));
-    } else if (file.result.error) { // Sin carpeta de descargas o falló la escritura.
+    } else if (file.result.error) { // Sin carpeta, falló la escritura o no se pudo cargar.
         fail(id, has_id, RpcError::StorageError, message_data(file.result.message));
     } else {
         reply(id, has_id, {{"path", optional_string(file.result.path)},
@@ -1369,6 +1398,7 @@ Json Dispatcher::conversation_list() const {
              {"readable", summary.readable},
              {"error", summary.error},
              {"group", cli::group_for(summary, today)},
+             {"used_search", summary.used_search},
              {"open_as", !open_id.empty() && summary.id == open_id ? Json(handle_) : Json(nullptr)}});
     }
     return items;

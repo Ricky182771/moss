@@ -1388,3 +1388,81 @@ TEST_CASE("Session: el reintento por contexto con ajustes del modelo", "[session
         CHECK(h.session->last_dropped() == 0);
     }
 }
+
+TEST_CASE("Session renombra la abierta y otras, también con una respuesta en curso",
+          "[session][renombrar]") {
+    using Status = chatbot::cli::RenameOutcome::Status;
+    Harness h;
+    h.start();
+
+    // Nueva sin guardar: no hay id.
+    chatbot::cli::RenameOutcome got = h.session->rename_conversation("", "Algo");
+    CHECK(got.status == Status::Invalid);
+    CHECK(got.message == chatbot::cli::kNothingToRename);
+
+    REQUIRE(h.exchange("uno"));
+    const std::string other = h.session->conversation().id();
+    REQUIRE(h.session->new_conversation() == std::nullopt);
+    REQUIRE(h.exchange("dos"));
+    const std::string open = h.session->conversation().id();
+
+    // Otra: solo el disco; la abierta no cambia.
+    got = h.session->rename_conversation(other, "  Otra   cosa ");
+    CHECK(got.status == Status::Renamed);
+    CHECK(got.message == "Otra cosa");
+    CHECK(h.session->store().load(other).conversation->title == "Otra cosa");
+    CHECK(h.session->conversation().title() == "dos");
+
+    got = h.session->rename_conversation(open, "");
+    CHECK(got.status == Status::Invalid);
+    CHECK(got.message == "Escribe un título.");
+    got = h.session->rename_conversation("20260101-000000-abcdef", "X");
+    CHECK(got.status == Status::Failed);
+    CHECK(got.message == h.session->store().load("20260101-000000-abcdef").error);
+
+    // La abierta, con una respuesta en curso: el par que termina se guarda
+    // con el título nuevo.
+    REQUIRE(h.session->submit("tres").type == Type::Started);
+    got = h.session->rename_conversation(open, "Título nuevo");
+    CHECK(got.status == Status::Renamed);
+    CHECK(h.session->conversation().title() == "Título nuevo");
+    CHECK(h.session->store().load(open).conversation->title == "Título nuevo");
+    REQUIRE(h.finish());
+    REQUIRE(h.finished.back().saved);
+    const chatbot::cli::LoadResult saved = h.session->store().load(open);
+    REQUIRE(saved.conversation.has_value());
+    CHECK(saved.conversation->title == "Título nuevo");
+    CHECK(saved.conversation->messages.size() == 4);
+}
+
+TEST_CASE("Session exporta una conversación guardada por id", "[session]") {
+    using Status = chatbot::cli::FileOutcome::Status;
+    Harness h;
+    h.start();
+    REQUIRE(h.exchange("uno"));
+    const std::string id = h.session->conversation().id();
+    REQUIRE(h.session->new_conversation() == std::nullopt);
+    const std::size_t entries = h.session->conversation().entries().size();
+
+    CHECK(h.session->export_stored(id).status == Status::NoFolder);
+    h.download_base = h.path("descargas");
+    std::filesystem::create_directory(*h.download_base);
+
+    chatbot::cli::FileOutcome got = h.session->export_stored(id);
+    CHECK(got.status == Status::Attempted);
+    CHECK_FALSE(got.result.error);
+    CHECK(got.result.message.rfind("Conversación exportada a ", 0) == 0);
+    CHECK(got.result.path ==
+          (h.dir.path() / "descargas" / "moss" / ("conversacion-" + id + ".md")).string());
+    CHECK(h.session->conversation().entries().size() == entries); // Sin tocar el historial.
+
+    // Ilegible: su error y nada escrito.
+    const std::string bad = "20260101-000000-abcdef";
+    std::ofstream{h.dir.path() / "conversations" / (bad + ".json")} << "{no es json";
+    got = h.session->export_stored(bad);
+    CHECK(got.status == Status::Unreadable);
+    CHECK(got.result.error);
+    CHECK(got.result.message == h.session->store().load(bad).error);
+    CHECK_FALSE(std::filesystem::exists(h.dir.path() / "descargas" / "moss" /
+                                        ("conversacion-" + bad + ".md")));
+}
