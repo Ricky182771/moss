@@ -306,7 +306,7 @@ TEST_CASE("addons_environment: moss-rpc escribe la misma unidad que la TUI", "[a
 
 TEST_CASE("TelegramAddon: el registro usa el detalle de errores guardado", "[addons][registro]") {
     constexpr const char* kJournal =
-        "journalctl --user -u moss-telegram.service -n 200 -o short-iso --no-pager";
+        "journalctl --user -u moss-telegram.service -n 200 -r -o short-iso --no-pager";
     const bool details = GENERATE(false, true);
     Fixture fixture;
     nlohmann::json section = enabled_section();

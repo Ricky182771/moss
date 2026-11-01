@@ -95,6 +95,10 @@ struct ServiceLog {
 [[nodiscard]] std::string last_error_line(std::string_view journal,
                                           std::string_view executable);
 
+/// Una línea de ServiceControl::log (short-iso) es de error del bot: con
+/// nivel "error" o fatal, como las que lee last_error_line.
+[[nodiscard]] bool log_line_is_error(std::string_view line, std::string_view executable);
+
 /// El servicio corre según is-active: todo menos "inactive", "failed" y
 /// nada (también "activating", el reinicio tras una falla).
 [[nodiscard]] bool service_running(std::string_view active);
@@ -130,7 +134,7 @@ public:
     [[nodiscard]] ServiceAction restart(const CancelToken* cancel = nullptr) const;
     /// reload, solo si está activo (al guardar).
     [[nodiscard]] ServiceAction reload_if_active(const CancelToken* cancel = nullptr) const;
-    /// Las últimas lines del registro (journalctl -o short-iso), sin
+    /// Las últimas lines del registro (journalctl -r -o short-iso), sin
     /// controles, cada una con kMaxLogLineBytes y en total kMaxLogBytes como
     /// mucho. Sin details, sin lo que va desde " detalle=" (texto de los
     /// alumnos).

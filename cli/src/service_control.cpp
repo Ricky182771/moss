@@ -54,6 +54,19 @@ bool has_log_stamp(std::string_view line) {
     return true;
 }
 
+/// Lo que sigue al nivel en una línea del bot (StreamLog) con nivel "error",
+/// o al nombre en una fatal ("moss-telegram: …"); nullopt si es otra.
+std::optional<std::string_view> bot_error(std::string_view line, std::string_view executable) {
+    if (has_log_stamp(line) && line.substr(20, 6) == "error ") {
+        return line.substr(26);
+    }
+    if (line.size() > executable.size() + 1 && line.substr(0, executable.size()) == executable &&
+        line.substr(executable.size(), 2) == ": ") {
+        return line.substr(executable.size() + 2);
+    }
+    return std::nullopt;
+}
+
 /// Por qué falló un programa, en una línea corta.
 std::string failure_detail(const ProcessResult& result) {
     switch (result.status) {
@@ -136,26 +149,17 @@ std::optional<std::string> show_property(std::string_view show, std::string_view
 }
 
 std::string last_error_line(std::string_view journal, std::string_view executable) {
-    const std::string fatal = std::string{executable} + ": ";
     std::string last;
     while (!journal.empty()) {
         const std::size_t end = journal.find('\n');
-        std::string_view line = journal.substr(0, end);
-        bool error = false;
-        if (has_log_stamp(line) && line.substr(20, 6) == "error ") {
-            line.remove_prefix(26);
-            error = true;
-        } else if (line.substr(0, fatal.size()) == fatal) {
-            line.remove_prefix(fatal.size());
-            error = true;
-        }
-        if (error) {
+        if (std::optional<std::string_view> line =
+                bot_error(journal.substr(0, end), executable)) {
             // El detalle puede repetir lo que escribió un alumno.
             const std::size_t cut =
-                line.substr(0, 8) == "detalle=" ? 0 : line.find(" detalle=");
-            line = trim(line.substr(0, cut));
-            if (!line.empty()) {
-                last = std::string{line};
+                line->substr(0, 8) == "detalle=" ? 0 : line->find(" detalle=");
+            *line = trim(line->substr(0, cut));
+            if (!line->empty()) {
+                last = std::string{*line};
             }
         }
         if (end == std::string_view::npos) {
@@ -164,6 +168,13 @@ std::string last_error_line(std::string_view journal, std::string_view executabl
         journal.remove_prefix(end + 1);
     }
     return last;
+}
+
+bool log_line_is_error(std::string_view line, std::string_view executable) {
+    // short-iso: "<fecha> <equipo> <programa>[<pid>]: <mensaje>".
+    const std::size_t colon = line.find(": ");
+    return colon != std::string_view::npos &&
+           bot_error(line.substr(colon + 2), executable).has_value();
 }
 
 bool service_running(std::string_view active) {
@@ -329,27 +340,31 @@ ServiceAction ServiceControl::reload_if_active(const CancelToken* cancel) const 
 }
 
 ServiceLog ServiceControl::log(int lines, bool details, const CancelToken* cancel) const {
+    // -r: de la más nueva a la más vieja, así lo que run_process no guarda
+    // (pasado kMaxProcessOutput) son las más viejas.
     const ProcessResult result =
         run({"journalctl", "--user", "-u", std::string{addon_.unit}, "-n",
-             std::to_string(std::clamp(lines, 1, kMaxLogLines)), "-o", "short-iso", "--no-pager"},
+             std::to_string(std::clamp(lines, 1, kMaxLogLines)), "-r", "-o", "short-iso",
+             "--no-pager"},
             cancel);
-    ServiceLog log;
+    ServiceLog read;
     if (no_user_systemd(result)) {
-        log.kind = ServiceAction::Kind::NoSystemd;
-        log.message = std::string{kNoUserSystemd};
-        return log;
+        read.kind = ServiceAction::Kind::NoSystemd;
+        read.message = std::string{kNoUserSystemd};
+        return read;
     }
     if (!result.ok()) {
-        log.kind = ServiceAction::Kind::Failed;
-        log.message = "No se pudo leer el registro: " + failure_detail(result);
-        return log;
+        read.kind = ServiceAction::Kind::Failed;
+        read.message = "No se pudo leer el registro: " + failure_detail(result);
+        return read;
     }
     std::string_view out = result.out;
     if (out.size() >= kMaxProcessOutput) {
-        // shortcut: run_process guarda el principio, no el final; con líneas
-        // del bot (< 1 KiB) 1000 caben de sobra. Se tira la línea partida.
-        out = out.substr(0, out.rfind('\n') + 1);
-        log.truncated = true;
+        // Se cortó: la última (la más vieja) puede estar partida.
+        if (const std::size_t last = out.rfind('\n'); last != std::string_view::npos) {
+            out = out.substr(0, last + 1);
+        }
+        read.truncated = true;
     }
     const std::string clean = md::sanitize(out);
     std::string_view rest = clean;
@@ -364,24 +379,25 @@ ServiceLog ServiceControl::log(int lines, bool details, const CancelToken* cance
             continue;
         }
         const std::string_view kept = utf8::prefix(line, kMaxLogLineBytes);
-        log.truncated = log.truncated || kept.size() < line.size();
-        log.lines.emplace_back(kept);
+        read.truncated = read.truncated || kept.size() < line.size();
+        read.lines.emplace_back(kept);
     }
+    std::reverse(read.lines.begin(), read.lines.end()); // De la más vieja a la más nueva.
     // Las más nuevas que quepan en kMaxLogBytes.
     std::size_t total = 0;
-    std::size_t first = log.lines.size();
-    while (first > 0 && total + log.lines[first - 1].size() <= kMaxLogBytes) {
-        total += log.lines[--first].size();
+    std::size_t first = read.lines.size();
+    while (first > 0 && total + read.lines[first - 1].size() <= kMaxLogBytes) {
+        total += read.lines[--first].size();
     }
     if (first > 0) {
-        log.lines.erase(log.lines.begin(),
-                        log.lines.begin() + static_cast<std::ptrdiff_t>(first));
-        log.truncated = true;
+        read.lines.erase(read.lines.begin(),
+                        read.lines.begin() + static_cast<std::ptrdiff_t>(first));
+        read.truncated = true;
     }
-    if (log.lines.empty()) {
-        log.message = std::string{kEmptyLog};
+    if (read.lines.empty()) {
+        read.message = std::string{kEmptyLog};
     }
-    return log;
+    return read;
 }
 
 ServiceWorker::ServiceWorker(Post post)
