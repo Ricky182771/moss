@@ -3,9 +3,13 @@
 // por CHAT_*, filtro de modelos y cambios sin guardar.
 
 #include "provider_settings.h"
+#include "chatbot/config.h"
 #include "chatbot/providers.h"
 
+#include "session_fakes.hpp"
+
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <optional>
@@ -473,4 +477,32 @@ TEST_CASE("ajustes: aviso de URL base sin ruta, sin bloquear", "[proveedor][ajus
     env.base_url = "https://h";
     ProviderSettings locked(lab("https://h/v1"), {}, env);
     CHECK(locked.base_url_hint().has_value());
+}
+
+TEST_CASE("ajustes: request_config no arrastra el provider_error de config.json",
+          "[proveedor][ajustes][endpoints]") {
+    const std::string provider = GENERATE("custom", "custom:no-existe");
+    CAPTURE(provider);
+    const chatbot_test::SessionFakes fakes;
+    const chatbot::Config base = fakes.load_with_provider(provider);
+    const chatbot::Result<ConfigFileValues> values =
+        chatbot::load_config_file_values(fakes.config_path());
+    REQUIRE(values.is_ok());
+    ProviderSettings settings(values.value(), credentials_with("nvidia", kSecret), {});
+
+    // Uno nuevo (Agregar endpoint…), con URL y key.
+    settings.select_provider(*settings.find_provider("custom:"));
+    REQUIRE(settings.set_name("Mi GW"));
+    REQUIRE(settings.set_base_url("https://gw.example/v1"));
+    REQUIRE(settings.set_key("sk-clave-del-gateway-0000"));
+    chatbot::Config config = settings.request_config(base);
+    CHECK(config.provider == "custom:mi-gw");
+    CHECK(config.provider_error.empty());
+
+    // Uno de la tabla, con la key guardada.
+    settings.select_provider(provider_index("nvidia"));
+    config = settings.request_config(base);
+    CHECK(config.provider == "nvidia");
+    CHECK(config.api_key == kSecret);
+    CHECK(config.provider_error.empty());
 }

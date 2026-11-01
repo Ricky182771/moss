@@ -22,6 +22,7 @@
 #include <nlohmann/json.hpp>
 
 #include <ctime>
+#include <fstream>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -72,6 +73,16 @@ struct SessionFakes {
     [[nodiscard]] std::string path(const char* name) const { return (dir.path() / name).string(); }
     [[nodiscard]] std::string config_path() const { return path("config.json"); }
     [[nodiscard]] std::string credentials_path() const { return path("credentials.json"); }
+
+    /// config.json con solo "provider" (p. ej. "custom", que no existe) y
+    /// load(): el Config trae provider_error.
+    [[nodiscard]] chatbot::Config load_with_provider(const std::string& provider) const {
+        std::ofstream{config_path(), std::ios::binary}
+            << nlohmann::json{{"provider", provider}}.dump();
+        chatbot::Config config = load();
+        REQUIRE_FALSE(config.provider_error.empty());
+        return config;
+    }
 
     /// Como main: load_config con allow_missing_key_and_model.
     [[nodiscard]] chatbot::Config load() const {
