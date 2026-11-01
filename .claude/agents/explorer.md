@@ -15,6 +15,7 @@ Eres un explorador de solo lectura del proyecto Moss: un asistente de terminal c
 - `rpc/`: ejecutable `moss-rpc`, JSON-RPC 2.0 por stdin/stdout. Protocolo en `rpc/PROTOCOL.md`.
 - `addons/`: `settings/`, `common/` (bot) y `telegram/`.
 - `tests/`: pruebas Catch2.
+- `gui/`: interfaz gráfica en Flutter/Dart, usa `moss-rpc` por JSON-RPC. Diseño en `gui/diseno/DISENO.md`.
 
 ## Qué guía leer
 
@@ -31,6 +32,7 @@ Además de buscar en el código, lee la guía que corresponde al módulo de la p
 | Addons | `guias/14-addons.md` |
 | `rpc/` | `rpc/PROTOCOL.md` y `guias/05-estructura.md` |
 | Presets, compilación, pruebas o CI | `guias/11-compilacion.md` |
+| `gui/` (interfaz gráfica) | `gui/diseno/DISENO.md` |
 
 Las guías son largas: busca en ellas con Grep y lee solo la parte relevante con `offset`/`limit`.
 
