@@ -5,6 +5,7 @@
 
 #include "chatbot/credentials.h"
 #include "chatbot/error.h"
+#include "chatbot/markdown/markdown.h"
 #include "chatbot/platform.h"
 #include "chatbot/search_context.h"
 #include "chatbot/system_prompt.h"
@@ -61,6 +62,11 @@ std::string provider_switched_notice(std::string_view model, std::string_view la
     return "Ahora se usa " + std::string{model} + " de " + std::string{label} + ".";
 }
 
+std::string model_params_hint(std::string_view model) {
+    return "Puede ser un ajuste de " + std::string{model} +
+           ": revísalo en Configuración del modelo.";
+}
+
 std::optional<std::string> gui_settings_problem(std::string_view json) {
     // ordered_json: se guarda con las llaves en el orden en que llegaron.
     const nlohmann::ordered_json value = nlohmann::ordered_json::parse(json, nullptr, false);
@@ -90,7 +96,8 @@ Session::Session(SessionEnvironment environment, Config initial, Post post,
         conversation_ = Conversation{system_prompt_};
     }
     for (const std::string& warning : config_.warnings) {
-        append_warning(startup_warnings_, warning); // Endpoints ignorados de config.json.
+        // Endpoints y ajustes ignorados de config.json: traen texto del archivo.
+        append_warning(startup_warnings_, md::sanitize(warning));
     }
     std::string search_warning;
     search_provider_ = load_search(search_warning);
@@ -237,8 +244,15 @@ SendResult Session::send(std::string_view text, std::optional<std::string> searc
                 finished.finish_reason = result.value().finish_reason;
             }
         } else {
-            finished.error = result.error();
-            finished.restored = conversation_.finish_error(result.error());
+            ChatError error = result.error();
+            // config_ no cambia con una respuesta en curso: es lo que llevó la petición.
+            if (error.kind == ErrorKind::InvalidRequest &&
+                (error.http_status == 400 || error.http_status == 422) &&
+                !config_.model_params.empty()) {
+                error.message += " " + model_params_hint(model_);
+            }
+            finished.error = error;
+            finished.restored = conversation_.finish_error(error);
         }
         if (!finished.restored.has_value()) {
             // Par usuario/asistente completo: es lo único que se guarda.
@@ -538,6 +552,10 @@ EndpointDeletion Session::delete_endpoint(std::string_view id) {
             return {Status::Failed, error->message};
         }
     }
+    // Al último sus ajustes: un endpoint nuevo con el mismo id no los hereda.
+    if (const auto error = remove_provider_params(*env_.config_path, provider)) {
+        return {Status::Failed, error->message};
+    }
     return {Status::Deleted, "Se borró el endpoint " + name + "."};
 }
 
@@ -650,6 +668,59 @@ ModelSwitch Session::switch_model(const std::optional<std::string>& provider,
         return {Status::Failed, std::move(*error)};
     }
     return {Status::Switched, provider_switched_notice(model_, form.provider_label())};
+}
+
+std::optional<std::string> Session::model_params_problem() const {
+    if (config_.provider.empty() || !config_.provider_error.empty() || config_.model.empty()) {
+        return std::string{kNoModelForParams};
+    }
+    return std::nullopt;
+}
+
+ModelParamsCheck Session::check_model_params(const ModelParams& draft) const {
+    ModelParamsCheck check;
+    if (std::optional<std::string> problem = model_params_problem()) {
+        check.problems.push_back({"model", std::move(*problem)});
+        return check;
+    }
+    check.problems = validate_model_params(draft, config_.provider);
+    if (check.problems.empty()) {
+        // El historial (con el mensaje de sistema) más el siguiente mensaje.
+        check.preview = request_preview(config_.model, config_.provider, draft,
+                                        conversation_.history().size() + 1);
+    }
+    return check;
+}
+
+std::optional<std::string> Session::save_model_params(const ModelParams& draft) {
+    if (busy()) {
+        return std::string{kWaitOrCancel};
+    }
+    if (std::optional<std::string> problem = model_params_problem()) {
+        return problem;
+    }
+    if (!env_.config_path.has_value()) {
+        return missing_config_dir_message(current_os());
+    }
+    if (const std::vector<FieldProblem> problems = validate_model_params(draft, config_.provider);
+        !problems.empty()) {
+        return problems.front().message;
+    }
+    if (const auto error =
+            chatbot::save_model_params(*env_.config_path, config_.provider, config_.model, draft)) {
+        return error->message;
+    }
+    // Lo que quedó escrito (extra compacto), como al arrancar.
+    std::vector<std::string> ignored;
+    Result<ModelParams> stored =
+        load_model_params(*env_.config_path, config_.provider, config_.model, ignored);
+    config_.model_params = stored.is_ok() ? stored.value() : draft;
+    if (configured()) {
+        connect(); // El cliente tiene su copia de Config.
+    }
+    conversation_.add_notice("Ajustes de " + config_.model +
+                             " guardados: valen desde el siguiente mensaje.");
+    return std::nullopt;
 }
 
 std::optional<std::string> Session::save_system_prompt(const std::optional<std::string>& stored) {

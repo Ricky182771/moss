@@ -62,6 +62,7 @@ add_library(chatbot_cli_lib STATIC
     src/glyphs.cpp
     src/input_edit.cpp
     src/key_log.cpp
+    src/model_params_form.cpp
     src/model_picker.cpp
     src/models_loader.cpp
     src/paste.cpp

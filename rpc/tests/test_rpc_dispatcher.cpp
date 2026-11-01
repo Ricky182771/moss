@@ -31,6 +31,7 @@
 #include "chatbot/addon_settings/token.h"
 #include "chatbot/config.h"
 #include "chatbot/credentials.h"
+#include "chatbot/model_params.h"
 #include "chatbot/platform.h"
 #include "chatbot/search_context.h"
 #include "chatbot/system_prompt.h"
@@ -2339,4 +2340,110 @@ TEST_CASE("RPC: un proveedor que no existe es el problem de initialize", "[rpc][
     const Json state = only(rpc)["result"];
     CHECK(state["ready"] == false);
     CHECK(state["problem"] == "Proveedor desconocido en config.json: custom. Elige uno en F2.");
+}
+
+TEST_CASE("RPC: settings.model_params.*", "[rpc][settings][ajustes]") {
+    Rpc rpc;
+    rpc.config.provider = "nvidia";
+    rpc.config.model = "z-ai/glm5";
+    SECTION("sin modelo: -32004") {
+        rpc.config.model.clear();
+        rpc.initialize();
+        rpc.call(2, "settings.model_params.get");
+        check_error(only(rpc), -32004, std::string{chatbot::cli::kNoModelForParams});
+        rpc.call(3, "settings.model_params.check", {{"params", Json::object()}});
+        check_error(only(rpc), -32004, std::string{chatbot::cli::kNoModelForParams});
+        rpc.call(4, "settings.model_params.save", {{"params", Json::object()}});
+        check_error(only(rpc), -32004, std::string{chatbot::cli::kNoModelForParams});
+    }
+    SECTION("\"models\" que no es objeto: -32007 sin tocar el archivo") {
+        const std::string content = R"({"models": [1]})";
+        std::ofstream{rpc.config_path(), std::ios::binary} << content;
+        rpc.initialize();
+        rpc.call(2, "settings.model_params.save", {{"params", {{"seed", 1}}}});
+        CHECK(only(rpc)["error"]["code"] == -32007);
+        std::ifstream in{rpc.config_path(), std::ios::binary};
+        CHECK(std::string{std::istreambuf_iterator<char>{in}, {}} == content);
+    }
+    SECTION("get, check y save") {
+        rpc.initialize();
+        rpc.call(2, "settings.model_params.get");
+        const Json got = only(rpc)["result"];
+        CHECK(got["provider"] == "nvidia");
+        CHECK(got["model"] == "z-ai/glm5");
+        CHECK(got["params"].dump() ==
+              R"({"reasoning":null,"temperature":null,"top_p":null,"top_k":null,)"
+              R"("max_tokens":null,"frequency_penalty":null,"presence_penalty":null,"seed":null})");
+        CHECK(got["extra"] == "");
+        CHECK(got["reasoning_style"] == "toggle");
+        CHECK(got["limits"]["temperature"].dump() ==
+              R"({"min":0.0,"max":2.0,"min_exclusive":false,"integer":false})");
+        CHECK(got["limits"]["top_k"].dump() ==
+              R"({"min":1,"max":1000,"min_exclusive":false,"integer":true})");
+        CHECK(got["preview"] == chatbot::request_preview("z-ai/glm5", "nvidia", {}, 2));
+
+        const Json draft{{"params", {{"temperature", 0.3}, {"top_k", 0}, {"reasoning", "high"}}},
+                         {"extra", R"({"model": "x"})"}};
+        rpc.call(3, "settings.model_params.check", draft);
+        const Json check = only(rpc)["result"];
+        CHECK(check["field_errors"].dump() ==
+              R"({"top_k":"Debe ser un número entero entre 1 y 1000."})");
+        CHECK(check["extra_error"] ==
+              "«model» la pone Moss; no se puede cambiar desde el JSON avanzado.");
+        CHECK(check["preview"].is_null());
+        rpc.call(4, "settings.model_params.save", draft);
+        check_error(only(rpc), -32005, "Debe ser un número entero entre 1 y 1000.");
+
+        const Json good{{"params", {{"temperature", 0.3}, {"top_k", nullptr}, {"reasoning", "high"}}},
+                        {"extra", R"({"chat_template_kwargs": {"thinking": true}})"}};
+        rpc.call(5, "settings.model_params.check", good);
+        chatbot::ModelParams params;
+        params.temperature = 0.3;
+        params.reasoning = chatbot::Reasoning::High;
+        params.extra = R"({"chat_template_kwargs": {"thinking": true}})";
+        CHECK(only(rpc)["result"]["preview"] ==
+              chatbot::request_preview("z-ai/glm5", "nvidia", params, 2));
+        rpc.call(6, "settings.model_params.save", good);
+        std::vector<Json> saved = rpc.take();
+        CHECK(summaries(saved) == std::vector<std::string>{"#6 result",
+                                                           "settings.changed model_params",
+                                                           "conversation.entry_added 0 notice"});
+        CHECK(saved[0]["result"].dump() == "{}");
+        CHECK(saved[2]["params"]["entry"]["text"] ==
+              "Ajustes de z-ai/glm5 guardados: valen desde el siguiente mensaje.");
+        rpc.call(7, "settings.model_params.get");
+        const Json after = only(rpc)["result"];
+        CHECK(after["params"]["temperature"] == 0.3);
+        CHECK(after["params"]["reasoning"] == "high");
+        CHECK(after["extra"] == "{\n  \"chat_template_kwargs\": {\n    \"thinking\": true\n  }\n}");
+        // Ninguna salida lleva la key.
+        for (const Json& message : saved) {
+            CHECK(message.dump().find(rpc.config.api_key) == std::string::npos);
+        }
+        CHECK(after.dump().find(rpc.config.api_key) == std::string::npos);
+    }
+    SECTION("parámetros de otro tipo o desconocidos: -32602") {
+        rpc.initialize();
+        rpc.call(2, "settings.model_params.check",
+                 {{"params", {{"temperature", "0.3"}, {"color", 1}, {"extra", Json::object()}}}});
+        const Json bad = only(rpc);
+        CHECK(bad["error"]["code"] == -32602);
+        CHECK(bad["error"]["data"]["fields"].dump() ==
+              R"(["params.temperature","params.color","params.extra"])");
+        rpc.call(3, "settings.model_params.save", {{"params", 3}});
+        CHECK(only(rpc)["error"]["code"] == -32602);
+        rpc.call(4, "settings.model_params.get", {{"x", 1}});
+        CHECK(only(rpc)["error"]["code"] == -32602);
+    }
+    SECTION("con una respuesta en curso: -32002") {
+        BlockingTransport* blocking = nullptr;
+        rpc.block(blocking);
+        rpc.initialize();
+        rpc.call(2, "chat.send", {{"conversation", "c1"}, {"text", "hola"}});
+        (void)rpc.take();
+        rpc.call(3, "settings.model_params.save", {{"params", {{"seed", 1}}}});
+        check_error(only(rpc), -32002, std::string{chatbot::cli::kWaitOrCancel});
+        rpc.call(4, "chat.cancel", {{"conversation", "c1"}});
+        REQUIRE(rpc.finish());
+    }
 }

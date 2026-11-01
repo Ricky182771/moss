@@ -9,6 +9,7 @@
 
 #include "chatbot/addon_settings/registry.h"
 #include "chatbot/addon_settings/systemd_unit.h"
+#include "chatbot/model_params.h"
 #include "chatbot/system_prompt.h"
 
 #include <algorithm>
@@ -35,6 +36,46 @@ constexpr std::string_view kSearchKeyEmpty = "Escribe la key de búsqueda.";
 
 Json optional_string(const std::optional<std::string>& value) {
     return value.has_value() ? Json(*value) : Json(nullptr);
+}
+
+/// Los ajustes como en config.json, con todas las llaves (null = Predeterminado).
+Json model_params_json(const ModelParams& params) {
+    Json out = Json::parse(model_params_to_json(params));
+    out.erase("extra"); // Va aparte, como texto.
+    for (const char* field : {"reasoning", "temperature", "top_p", "top_k", "max_tokens",
+                              "frequency_penalty", "presence_penalty", "seed"}) {
+        if (!out.contains(field)) {
+            out[field] = nullptr;
+        }
+    }
+    return out;
+}
+
+/// params y extra de settings.model_params.check/save. Un campo de otro tipo
+/// o desconocido da el data de -32602 ({"fields": ["params.<campo>"]}).
+std::optional<Json> read_model_params(const Json& params, ModelParams& out) {
+    const Result<ParsedModelParams> parsed = model_params_from_json(params.at("params").dump());
+    std::vector<std::string> fields;
+    if (parsed.is_error()) {
+        return Json{{"fields", Json::array({"params"})}};
+    }
+    {
+        for (const auto* list : {&parsed.value().invalid_fields, &parsed.value().unknown_fields}) {
+            for (const std::string& field : *list) {
+                fields.push_back("params." + field);
+            }
+        }
+        out = parsed.value().params;
+    }
+    if (params.at("params").contains("extra")) {
+        fields.emplace_back("params.extra"); // extra va aparte, como texto.
+    }
+    if (!fields.empty()) {
+        return Json{{"fields", fields}};
+    }
+    const auto extra = params.find("extra");
+    out.extra = extra != params.end() && extra->is_string() ? extra->get<std::string>() : "";
+    return std::nullopt;
 }
 
 Json non_empty_or_null(const std::string& value) {
@@ -732,6 +773,79 @@ void Dispatcher::settings(const std::string& method, const Json* params, const J
             } else {
                 reply(id, has_id, {{"mode", std::string{prompt_mode(*session_)}}});
                 changed("system_prompt");
+            }
+        }
+    } else if (method == "settings.model_params.get") {
+        if (const auto bad = check_params(params, {})) {
+            fail(id, has_id, RpcError::InvalidParams, *bad);
+            return;
+        }
+        if (const std::optional<std::string> problem = session_->model_params_problem()) {
+            fail(id, has_id, RpcError::NotConfigured, message_data(*problem));
+            return;
+        }
+        const Config& config = session_->config();
+        const ModelParams& saved = session_->model_params();
+        Json limits = Json::object();
+        for (const ParamLimit& limit : model_param_limits(config.provider)) {
+            const auto number = [&limit](double value) {
+                return limit.integer ? Json(static_cast<std::int64_t>(value)) : Json(value);
+            };
+            limits[std::string{limit.field}] = {{"min", number(limit.min)},
+                                                {"max", number(limit.max)},
+                                                {"min_exclusive", limit.min_exclusive},
+                                                {"integer", limit.integer}};
+        }
+        reply(id, has_id,
+              {{"provider", config.provider},
+               {"model", config.model},
+               {"params", model_params_json(saved)},
+               {"extra", format_extra(saved.extra)},
+               {"reasoning_style",
+                std::string{reasoning_style_name(reasoning_style(config.provider))}},
+               {"limits", std::move(limits)},
+               {"preview", optional_string(session_->check_model_params(saved).preview)}});
+    } else if (method == "settings.model_params.check" ||
+               method == "settings.model_params.save") {
+        if (const auto bad = check_params(params, {{"params", Param::Type::Object},
+                                                   {"extra", Param::Type::String, false}})) {
+            fail(id, has_id, RpcError::InvalidParams, *bad);
+            return;
+        }
+        ModelParams draft;
+        if (const auto bad = read_model_params(*params, draft)) {
+            fail(id, has_id, RpcError::InvalidParams, *bad);
+            return;
+        }
+        if (const std::optional<std::string> problem = session_->model_params_problem()) {
+            fail(id, has_id, RpcError::NotConfigured, message_data(*problem));
+            return;
+        }
+        const cli::ModelParamsCheck check = session_->check_model_params(draft);
+        if (method == "settings.model_params.check") {
+            Json field_errors = Json::object();
+            Json extra_error = nullptr;
+            for (const FieldProblem& problem : check.problems) {
+                if (problem.field == "extra") {
+                    extra_error = problem.message;
+                } else {
+                    field_errors[problem.field] = problem.message;
+                }
+            }
+            reply(id, has_id,
+                  {{"field_errors", std::move(field_errors)},
+                   {"extra_error", std::move(extra_error)},
+                   {"preview", optional_string(check.preview)}});
+        } else if (!busy()) {
+            if (!check.problems.empty()) {
+                fail(id, has_id, RpcError::ValidationFailed,
+                     message_data(check.problems.front().message));
+            } else if (const std::optional<std::string> failed =
+                           session_->save_model_params(draft)) {
+                fail(id, has_id, RpcError::StorageError, message_data(*failed));
+            } else {
+                reply(id, has_id, Json::object());
+                changed("model_params");
             }
         }
     } else if (method == "settings.search.get" || method == "settings.search.save") {

@@ -1145,3 +1145,176 @@ TEST_CASE("Session: los endpoints ignorados son avisos de arranque", "[session][
     CHECK(h.session->startup_warnings()[0] ==
           "Se ignoró un endpoint de config.json: el id no es válido.");
 }
+
+namespace {
+
+/// Ajustes de prueba: temperatura, top_p y razonamiento alto.
+chatbot::ModelParams sample_params() {
+    chatbot::ModelParams params;
+    params.temperature = 0.3;
+    params.top_p = 0.9;
+    params.reasoning = chatbot::Reasoning::High;
+    return params;
+}
+
+nlohmann::ordered_json last_body(const Harness& h) {
+    REQUIRE(h.chat != nullptr);
+    REQUIRE_FALSE(h.chat->requests.empty());
+    return nlohmann::ordered_json::parse(h.chat->requests.back().body);
+}
+
+chatbot::HttpResponse bad_request() {
+    chatbot::HttpResponse response;
+    response.status = 400;
+    response.body = R"({"error":{"message":"Parámetro inválido."}})";
+    return response;
+}
+
+} // namespace
+
+TEST_CASE("Session guarda los ajustes del modelo y el siguiente mensaje los lleva",
+          "[session][ajustes]") {
+    Harness h;
+    save_nvidia(h);
+    h.start(h.load());
+    CHECK(h.session->model_params().empty());
+    CHECK(h.session->model_params_problem() == std::nullopt);
+
+    const chatbot::cli::ModelParamsCheck check = h.session->check_model_params(sample_params());
+    CHECK(check.problems.empty());
+    REQUIRE(check.preview.has_value());
+    // El mensaje de sistema y el siguiente.
+    CHECK(*check.preview == chatbot::request_preview("m1", "nvidia", sample_params(), 2));
+    CHECK(check.preview->find("sk-clave-secreta") == std::string::npos);
+
+    const int clients = h.clients;
+    REQUIRE(h.session->save_model_params(sample_params()) == std::nullopt);
+    CHECK(h.last_entry().text == "Ajustes de m1 guardados: valen desde el siguiente mensaje.");
+    CHECK(h.session->model_params() == sample_params());
+    CHECK(h.clients == clients + 1);
+    REQUIRE(h.exchange("hola"));
+    nlohmann::ordered_json body = last_body(h);
+    CHECK(body.at("temperature") == 0.3);
+    CHECK(body.at("top_p") == 0.9);
+    CHECK(body.at("chat_template_kwargs").at("enable_thinking") == true);
+    // La vista previa es el cuerpo que se mandó, salvo messages.
+    body["messages"] = "[…2 mensajes…]";
+    CHECK(body.dump(2) == chatbot::request_preview("m1", "nvidia", sample_params(), 2));
+
+    // Restaurar todo quita el modelo de "models".
+    REQUIRE(h.session->save_model_params({}) == std::nullopt);
+    CHECK_FALSE(nlohmann::json::parse(read_file(h.config_path())).contains("models"));
+    REQUIRE(h.exchange("otra"));
+    CHECK_FALSE(last_body(h).contains("temperature"));
+}
+
+TEST_CASE("Session::check_model_params da los errores por campo", "[session][ajustes]") {
+    Harness h;
+    save_nvidia(h);
+    h.start(h.load());
+    chatbot::ModelParams params;
+    params.top_k = 0;
+    params.extra = R"({"model": "x"})";
+    const chatbot::cli::ModelParamsCheck check = h.session->check_model_params(params);
+    REQUIRE(check.problems.size() == 2);
+    CHECK(check.problems[0].field == "top_k");
+    CHECK(check.problems[1].field == "extra");
+    CHECK(check.problems[1].message ==
+          "«model» la pone Moss; no se puede cambiar desde el JSON avanzado.");
+    CHECK_FALSE(check.preview.has_value());
+    CHECK(h.session->save_model_params(params) == check.problems[0].message);
+    CHECK_FALSE(nlohmann::json::parse(read_file(h.config_path())).contains("models"));
+}
+
+TEST_CASE("Session: cambiar de modelo usa los ajustes del modelo nuevo", "[session][ajustes]") {
+    Harness h;
+    save_nvidia(h);
+    h.start(h.load());
+    REQUIRE(h.session->save_model_params(sample_params()) == std::nullopt);
+    REQUIRE(h.session->switch_model(std::nullopt, "m2").status ==
+            chatbot::cli::ModelSwitch::Status::Switched);
+    CHECK(h.session->model_params().empty());
+    REQUIRE(h.exchange("hola"));
+    CHECK_FALSE(last_body(h).contains("temperature"));
+    REQUIRE(h.session->switch_model(std::nullopt, "m1").status ==
+            chatbot::cli::ModelSwitch::Status::Switched);
+    CHECK(h.session->model_params() == sample_params());
+    REQUIRE(h.exchange("de nuevo"));
+    CHECK(last_body(h).at("temperature") == 0.3);
+}
+
+TEST_CASE("Session: con CHAT_MODEL los ajustes son los de ese modelo", "[session][ajustes]") {
+    Harness h;
+    save_nvidia(h);
+    h.env.values["CHAT_MODEL"] = "m9";
+    h.start(h.load());
+    REQUIRE(h.session->save_model_params(sample_params()) == std::nullopt);
+    const nlohmann::json saved = nlohmann::json::parse(read_file(h.config_path()));
+    CHECK(saved.at("models").at("nvidia").contains("m9"));
+    CHECK_FALSE(saved.at("models").at("nvidia").contains("m1"));
+    CHECK(h.last_entry().text == "Ajustes de m9 guardados: valen desde el siguiente mensaje.");
+}
+
+TEST_CASE("Session: ajustes sin modelo o con una respuesta en curso", "[session][ajustes]") {
+    Harness h;
+    SECTION("sin modelo") {
+        h.start(h.load());
+        CHECK(h.session->model_params_problem() ==
+              std::string{chatbot::cli::kNoModelForParams});
+        CHECK(h.session->check_model_params({}).problems.front().field == "model");
+        CHECK(h.session->save_model_params(sample_params()) ==
+              std::string{chatbot::cli::kNoModelForParams});
+    }
+    SECTION("con una respuesta en curso") {
+        save_nvidia(h);
+        BlockingTransport* blocking = nullptr;
+        h.block(blocking);
+        h.start(h.load());
+        const std::string before = read_file(h.config_path());
+        REQUIRE(h.session->submit("hola").type == Type::Started);
+        REQUIRE(blocking->started.wait_for(kThreadTimeout));
+        CHECK(h.session->save_model_params(sample_params()) ==
+              std::string{chatbot::cli::kWaitOrCancel});
+        CHECK(read_file(h.config_path()) == before);
+        h.session->cancel();
+        REQUIRE(h.finish());
+    }
+}
+
+TEST_CASE("Session: un 400 con ajustes trae la pista de Configuración del modelo",
+          "[session][ajustes]") {
+    Harness h;
+    save_nvidia(h);
+    h.responses = {bad_request()};
+    h.start(h.load());
+    SECTION("sin ajustes, el error de siempre") {
+        REQUIRE(h.session->submit("hola").type == Type::Started);
+        REQUIRE(h.finish());
+        REQUIRE(h.finished.back().error.has_value());
+        CHECK(h.finished.back().error->message == "Parámetro inválido.");
+    }
+    SECTION("con ajustes, la pista") {
+        REQUIRE(h.session->save_model_params(sample_params()) == std::nullopt);
+        REQUIRE(h.session->submit("hola").type == Type::Started);
+        REQUIRE(h.finish());
+        REQUIRE(h.finished.back().error.has_value());
+        CHECK(h.finished.back().error->message ==
+              "Parámetro inválido. Puede ser un ajuste de m1: revísalo en Configuración del "
+              "modelo.");
+    }
+}
+
+TEST_CASE("Session: borrar un endpoint borra sus ajustes", "[session][ajustes][endpoints]") {
+    Harness h;
+    save_endpoints(h);
+    chatbot::ModelParams params;
+    params.seed = 4;
+    REQUIRE_FALSE(chatbot::save_model_params(h.config_path(), "custom:a", "m-a", params));
+    REQUIRE_FALSE(chatbot::save_model_params(h.config_path(), "nvidia", "m1", params));
+    h.start(h.load());
+    REQUIRE(h.session->delete_endpoint("custom:a").status ==
+            chatbot::cli::EndpointDeletion::Status::Deleted);
+    const nlohmann::json saved = nlohmann::json::parse(read_file(h.config_path()));
+    CHECK_FALSE(saved.at("models").contains("custom:a"));
+    CHECK(saved.at("models").contains("nvidia"));
+}

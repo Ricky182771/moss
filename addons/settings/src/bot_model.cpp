@@ -5,6 +5,8 @@
 #include "chatbot/error.h"
 
 #include <optional>
+#include <string>
+#include <utility>
 
 namespace chatbot::addon_settings {
 
@@ -27,8 +29,15 @@ Result<Config> resolve_bot_model(const std::string& config_path,
     if (!config.provider_error.empty()) { // Proveedor desconocido o endpoint que no existe.
         return ChatError{ErrorKind::Config, 0, config.provider_error, std::nullopt};
     }
-    if (!section_model.empty()) {
+    if (!section_model.empty() && section_model != config.model) {
         config.model = std::string{section_model};
+        // Los ajustes son los del modelo del bot, no los del de la app.
+        Result<ModelParams> params =
+            load_model_params(config_path, config.provider, config.model, config.warnings);
+        if (params.is_error()) {
+            return params.error();
+        }
+        config.model_params = std::move(params.value());
     }
     config.api_key = resolve_model_key(env, credentials, config.api_key);
     if (config.api_key.empty() && !is_local_base_url(config.base_url)) {

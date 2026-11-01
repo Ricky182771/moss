@@ -1,6 +1,7 @@
 #include "chatbot/config.h"
 
 #include "config_internal.h"
+#include "model_params_internal.h"
 
 #include "chatbot/credentials.h"
 #include "chatbot/platform.h"
@@ -538,6 +539,17 @@ Result<Config> load_config(const ConfigOptions& options) {
         config.history_limit_bytes = static_cast<std::size_t>(*bytes);
     }
 
+    // Los ajustes del modelo efectivo (ya con CHAT_MODEL).
+    if (const std::optional<std::string> config_path = path();
+        config_path.has_value() && config.provider_error.empty()) {
+        Result<ModelParams> params =
+            load_model_params(*config_path, config.provider, config.model, config.warnings);
+        if (params.is_error()) {
+            return params.error();
+        }
+        config.model_params = std::move(params.value());
+    }
+
     // 3) Sin CHAT_API_KEY: la key guardada para el proveedor de config.json.
     if (config.api_key.empty() && !config.provider.empty() && config.provider_error.empty()) {
         std::optional<std::string> credentials_path;
@@ -614,11 +626,11 @@ namespace {
 using ordered = nlohmann::ordered_json;
 
 /// Lee config.json (o un objeto vacío si no existe), deja que change lo
-/// modifique y lo escribe de forma atómica, conservando las demás llaves, su
+/// modifique (si devuelve false, no se escribe nada) y lo escribe de forma atómica, conservando las demás llaves, su
 /// orden y los permisos del archivo. Si existe pero no es un objeto JSON
 /// válido, no lo toca y devuelve el error Config.
 std::optional<ChatError> update_config_file(const std::string& path,
-                                            const std::function<void(ordered&)>& change) {
+                                            const std::function<bool(ordered&)>& change) {
     ordered document = ordered::object();
     if (file_exists(path)) {
         const std::optional<std::string> content = read_file(path);
@@ -637,7 +649,9 @@ std::optional<ChatError> update_config_file(const std::string& path,
                              std::nullopt};
         }
     }
-    change(document);
+    if (!change(document)) {
+        return std::nullopt; // Nada que escribir (o quien llama ya tiene el motivo).
+    }
     const std::string text =
         document.dump(4, ' ', false, ordered::error_handler_t::replace) + "\n";
     // config.json no lleva secretos: conserva los permisos que tenía, o 0644.
@@ -663,7 +677,7 @@ std::optional<ChatError> save_config_file(const std::string& path,
         document["model"] = values.model;
         if (values.endpoints.empty()) {
             document.erase("endpoints");
-            return;
+            return true;
         }
         ordered list = ordered::array();
         for (const Endpoint& endpoint : values.endpoints) {
@@ -671,6 +685,7 @@ std::optional<ChatError> save_config_file(const std::string& path,
                 {{"id", endpoint.id}, {"name", endpoint.name}, {"base_url", endpoint.base_url}});
         }
         document["endpoints"] = std::move(list);
+        return true;
     });
 }
 
@@ -724,6 +739,7 @@ std::optional<ChatError> save_appearance(const std::string& path,
         set("theme", values.theme);
         set("background", values.background);
         set("symbols", values.symbols);
+        return true;
     });
 }
 
@@ -766,6 +782,7 @@ std::optional<ChatError> save_system_prompt(const std::string& path,
         } else {
             document.erase("system_prompt");
         }
+        return true;
     });
 }
 
@@ -816,6 +833,141 @@ std::optional<ChatError> save_config_section(const std::string& path, std::strin
         } else {
             document.erase(std::string{name});
         }
+        return true;
+    });
+}
+
+Result<ModelParams> load_model_params(const std::string& path, std::string_view provider,
+                                      std::string_view model,
+                                      std::vector<std::string>& warnings) {
+    if (provider.empty() || model.empty() || !file_exists(path)) {
+        return ModelParams{};
+    }
+    ordered document;
+    try {
+        const std::optional<std::string> content = read_file(path);
+        if (!content.has_value()) {
+            throw std::runtime_error("no se pudo leer");
+        }
+        document = ordered::parse(*content);
+        if (!document.is_object()) {
+            throw std::runtime_error("no es un objeto JSON");
+        }
+    } catch (const std::exception&) {
+        return ChatError{ErrorKind::Config, 0,
+                         "Archivo de configuración inválido (" + path + "): no es un objeto "
+                         "JSON válido.", std::nullopt};
+    }
+    const auto models = document.find("models");
+    if (models == document.end()) {
+        return ModelParams{};
+    }
+    if (!models->is_object()) {
+        warnings.emplace_back("Se ignoró \"models\" de config.json: no es un objeto.");
+        return ModelParams{};
+    }
+    const auto by_provider = models->find(std::string{provider});
+    if (by_provider == models->end()) {
+        return ModelParams{};
+    }
+    const std::string prefix = "Ajustes de " + std::string{model} + ": ";
+    const auto entry = by_provider->is_object() ? by_provider->find(std::string{model})
+                                                : by_provider->end();
+    if (!by_provider->is_object() || (entry != by_provider->end() && !entry->is_object())) {
+        warnings.push_back(prefix + "no son un objeto; se usan los predeterminados.");
+        return ModelParams{};
+    }
+    if (entry == by_provider->end()) {
+        return ModelParams{};
+    }
+    ParsedModelParams parsed = parse_params_object(*entry);
+    const auto invalid = [&warnings, &prefix](std::string_view field) {
+        warnings.push_back(prefix + std::string{field} +
+                           " no es válido; se usa el predeterminado.");
+    };
+    for (const std::string& field : parsed.invalid_fields) {
+        invalid(field);
+    }
+    for (const std::string& field : parsed.unknown_fields) {
+        warnings.push_back(prefix + "se ignoró «" + field + "», que no es un ajuste.");
+    }
+    // Lo que está fuera de rango vuelve a Predeterminado (también el máximo
+    // de Anthropic que no pasa del presupuesto).
+    ModelParams& params = parsed.params;
+    for (const FieldProblem& problem : validate_model_params(params, provider)) {
+        invalid(problem.field);
+        if (problem.field == "temperature") {
+            params.temperature.reset();
+        } else if (problem.field == "top_p") {
+            params.top_p.reset();
+        } else if (problem.field == "top_k") {
+            params.top_k.reset();
+        } else if (problem.field == "max_tokens") {
+            params.max_tokens.reset();
+        } else if (problem.field == "frequency_penalty") {
+            params.frequency_penalty.reset();
+        } else if (problem.field == "presence_penalty") {
+            params.presence_penalty.reset();
+        } else if (problem.field == "seed") {
+            params.seed.reset();
+        } else if (problem.field == "extra") {
+            params.extra.clear();
+        }
+    }
+    return params;
+}
+
+std::optional<ChatError> save_model_params(const std::string& path, std::string_view provider,
+                                           std::string_view model, const ModelParams& params) {
+    std::optional<ChatError> problem;
+    std::optional<ChatError> error =
+        update_config_file(path, [&](ordered& document) {
+            ordered& models = document["models"];
+            if (models.is_null()) {
+                models = ordered::object();
+            }
+            const std::string provider_key{provider};
+            if (!models.is_object() ||
+                (models.contains(provider_key) && !models[provider_key].is_object())) {
+                problem = ChatError{ErrorKind::Config, 0,
+                                    "No se guardaron los ajustes: \"models\" de config.json no "
+                                    "es válido (corrígelo o bórralo).",
+                                    std::nullopt};
+                return false;
+            }
+            const ordered values = params_object(params);
+            if (!values.empty()) {
+                models[provider_key][std::string{model}] = values;
+            } else if (models.contains(provider_key)) {
+                models[provider_key].erase(std::string{model});
+                if (models[provider_key].empty()) {
+                    models.erase(provider_key);
+                }
+            }
+            if (models.empty()) {
+                document.erase("models");
+            }
+            return true;
+        });
+    return problem.has_value() ? problem : error;
+}
+
+std::optional<ChatError> remove_provider_params(const std::string& path,
+                                                std::string_view provider) {
+    if (!file_exists(path)) {
+        return std::nullopt;
+    }
+    return update_config_file(path, [&](ordered& document) {
+        const auto models = document.find("models");
+        if (models == document.end() || !models->is_object() ||
+            !models->contains(std::string{provider})) {
+            return false; // Nada que quitar: no se reescribe el archivo.
+        }
+        models->erase(std::string{provider});
+        if (models->empty()) {
+            document.erase("models");
+        }
+        return true;
     });
 }
 

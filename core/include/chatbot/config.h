@@ -1,6 +1,7 @@
 #ifndef CHATBOT_CONFIG_H
 #define CHATBOT_CONFIG_H
 
+#include "chatbot/model_params.h"
 #include "chatbot/platform.h"
 #include "chatbot/providers.h"
 #include "chatbot/result.h"
@@ -35,6 +36,10 @@ struct Config {
     /// Avisos de arranque al leer config.json (endpoints que se ignoraron).
     std::vector<std::string> warnings;
     std::string model;    ///< Sin valor por defecto a propósito (sección 7).
+    /// Ajustes del modelo efectivo (provider y model, ya con CHAT_MODEL) de
+    /// "models" en config.json; lo inválido queda en Predeterminado con su
+    /// aviso en warnings.
+    ModelParams model_params{};
     std::chrono::seconds timeout_seconds{120};
     /// Límite del historial que se envía, en bytes UTF-8 de los content
     /// (aproximadamente caracteres). 0 significa sin límite.
