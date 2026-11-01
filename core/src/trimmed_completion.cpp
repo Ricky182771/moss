@@ -20,12 +20,32 @@ std::string lowercase(std::string_view text) {
     return out;
 }
 
+bool word_char(char c) {
+    return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_';
+}
+
+/// key aparece en text (los dos en minúsculas) como palabra completa: antes y
+/// después, el borde del texto o algo que no es [a-z0-9_].
+bool contains_word(std::string_view text, std::string_view key) {
+    if (key.empty()) {
+        return false;
+    }
+    for (std::size_t at = text.find(key); at != std::string_view::npos;
+         at = text.find(key, at + 1)) {
+        const std::size_t end = at + key.size();
+        if ((at == 0 || !word_char(text[at - 1])) && (end == text.size() || !word_char(text[end]))) {
+            return true;
+        }
+    }
+    return false;
+}
+
 /// El error nombra una de las llaves que pusieron los ajustes del modelo
 /// ("Unsupported parameter: temperature"): recortar el historial no lo arregla.
 bool names_param_key(const ChatError& error, const std::vector<std::string>& keys) {
     const std::string message = lowercase(error.message);
     return std::any_of(keys.begin(), keys.end(), [&message](const std::string& key) {
-        return message.find(lowercase(key)) != std::string::npos;
+        return contains_word(message, lowercase(key));
     });
 }
 

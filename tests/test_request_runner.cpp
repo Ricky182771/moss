@@ -742,6 +742,7 @@ namespace {
 chatbot::Config config_with_params() {
     chatbot::Config config = chatbot_test::test_config();
     config.model_params.temperature = 0.3;
+    config.model_params.top_k = 40;
     config.model_params.reasoning = chatbot::Reasoning::High;
     return config;
 }
@@ -757,6 +758,8 @@ TEST_CASE("RequestRunner: un 400 que nombra un ajuste no reintenta por contexto"
           "[runner][hilos][contexto][ajustes]") {
     // Sin distinguir mayúsculas; también las llaves del razonamiento.
     const std::string message = GENERATE(std::string{"Unsupported parameter: Temperature."},
+                                         std::string{"Unsupported parameter: temperature"},
+                                         std::string{"'top_k' is not supported"},
                                          std::string{"Unknown field REASONING_EFFORT"});
     auto transport = std::make_unique<chatbot_test::FakeTransport>();
     chatbot_test::FakeTransport* fake = transport.get();
@@ -866,4 +869,24 @@ TEST_CASE("complete_trimmed: un reintento cancelado o que ya entregó texto da s
         CHECK(done.result.error().kind == ErrorKind::Server);
         CHECK(done.dropped == 2);
     }
+}
+
+TEST_CASE("RequestRunner: una llave corta de extra dentro de otra palabra no apaga el reintento",
+          "[runner][hilos][contexto][ajustes]") {
+    chatbot::Config config = config_with_params();
+    config.model_params.extra = GENERATE(std::string{R"({"n": 1})"},
+                                         std::string{R"({"stop": ["fin"]})"});
+    auto transport = std::make_unique<chatbot_test::FakeTransport>();
+    chatbot_test::FakeTransport* fake = transport.get();
+    fake->responses.push_back(error_400("maximum context length is 8192 tokens"));
+    fake->responses.push_back(HttpResponse{200, sse_flow({"ok"}), std::nullopt, false, ""});
+    RunnerHarness harness(std::move(transport), std::make_unique<chatbot_test::FakeSleeper>(),
+                          1000, config);
+
+    REQUIRE(harness.start(history_with_old_turn()));
+    REQUIRE(harness.wait_done());
+
+    REQUIRE(harness.outcome.result->is_ok());
+    CHECK(fake->requests.size() == 2);
+    CHECK(harness.outcome.dropped == 2);
 }
