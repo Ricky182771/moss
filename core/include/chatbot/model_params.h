@@ -92,6 +92,10 @@ struct FieldProblem {
 /// unos ajustes que pasaron validate_model_params.
 [[nodiscard]] std::string model_params_to_json(const ModelParams& params);
 
+/// El JSON avanzado guardado (compacto) con sangría de 2, para editarlo; ""
+/// si está vacío, y tal cual si no es JSON.
+[[nodiscard]] std::string format_extra(std::string_view extra);
+
 /// Lo que dio leer un objeto de ajustes (de config.json o del RPC).
 struct ParsedModelParams {
     ModelParams params;

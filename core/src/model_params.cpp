@@ -403,6 +403,17 @@ std::string model_params_to_json(const ModelParams& params) {
     return params_object(params).dump(-1, ' ', false, ordered::error_handler_t::replace);
 }
 
+std::string format_extra(std::string_view extra) {
+    if (extra_is_empty(extra)) {
+        return {};
+    }
+    const ordered value = ordered::parse(extra, nullptr, false);
+    if (value.is_discarded()) {
+        return std::string{extra};
+    }
+    return value.dump(2, ' ', false, ordered::error_handler_t::replace);
+}
+
 Result<ParsedModelParams> model_params_from_json(std::string_view json) {
     const ordered value = ordered::parse(json, nullptr, false);
     if (value.is_discarded() || !value.is_object()) {

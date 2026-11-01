@@ -22,6 +22,7 @@ Versión del protocolo: **1**.
 | Eventos `conversation.entry_added`, `entry_delta`, `entry_updated`, `phase`, `saved`, `closed`; `chat.finished`; `conversations.changed` | 7 | Implementado |
 | Evento `settings.changed` (`provider`, `system_prompt`, `search`, `gui`) | 7 | Implementado |
 | Evento `service.changed`; `settings.changed` con `telegram` | 7 | Implementado |
+| `settings.model_params.*`; `settings.changed` con `model_params` | 6.7, 7 | Implementado |
 | `CHAT_DEBUG_RPC` | 10 | Implementado |
 | Windows: stdio en modo binario | 2 | Implementado, probado en la CI con pipes (`tools/check-rpc-pipes.sh`) |
 
@@ -348,7 +349,7 @@ La numeración es la de `collect_code_blocks`, la misma `#3 · cpp` de la TUI. L
 
 Todo es **sin estado**: la GUI tiene su formulario y manda el borrador completo. Por dentro, el servidor arma un `ProviderSettings` (o `SearchSettings`) nuevo por llamada con `Session::provider_form` (o `search_form`), le aplica el borrador con sus setters y usa su `validate`; guarda con los mismos métodos de `Session` que F2. Así las reglas no se copian a Dart.
 
-**Guardar proveedor, instrucciones o búsqueda no se permite con una respuesta en curso** (`-32002` con `kWaitOrCancel`), igual que F2, que no abre en ese caso. Las preferencias de la GUI sí, porque no tocan el chat. Al guardar, el servidor **aplica sin reiniciar**, como la TUI. **Orden:** la respuesta, `settings.changed {section}` y después los avisos que el guardado dejó en el historial (`conversation.entry_added`, `notice`), los mismos de F2.
+**Guardar proveedor, instrucciones, ajustes del modelo o búsqueda no se permite con una respuesta en curso** (`-32002` con `kWaitOrCancel`), igual que F2, que no abre en ese caso. Las preferencias de la GUI sí, porque no tocan el chat. Al guardar, el servidor **aplica sin reiniciar**, como la TUI. **Orden:** la respuesta, `settings.changed {section}` y después los avisos que el guardado dejó en el historial (`conversation.entry_added`, `notice`), los mismos de F2.
 
 Si `config.json` o `credentials.json` no se pueden leer (JSON inválido, permisos abiertos), los `get`, `check`, `save` y `models.list` responden `-32007` con el mensaje.
 
@@ -436,6 +437,53 @@ Si `config.json` o `credentials.json` no se pueden leer (JSON inválido, permiso
 - `text` es siempre una cadena (**sin `null`**). `""` = sin mensaje de sistema. **Restaurar** = mandar `default_text`: `system_prompt_to_store` convierte el predeterminado en "borrar la llave", igual que F2.
 - `Session::save_system_prompt_text`. Se aplica a la conversación abierta con `set_system_prompt`, desde su siguiente mensaje, con los avisos de F2 en el historial.
 - Errores: `-32002` (respuesta en curso), `-32005` con el texto de `validate_system_prompt`, `-32007` si falla la escritura.
+
+#### Ajustes del modelo
+
+Los de F2 → Configuración del modelo → Parámetros y Avanzado: los del **modelo efectivo** (`provider` y `model` de la sesión; con `CHAT_MODEL`, los de ese modelo), guardados en `config.json` bajo `"models"` → proveedor → modelo (guía 7). Lo que está en Predeterminado no se manda ni se guarda. Las instrucciones del sistema siguen globales (`settings.system_prompt.*`, sin cambios).
+
+**`params`** usa los nombres de `config.json`, con `null` (o la llave ausente) = Predeterminado:
+
+```jsonc
+{"reasoning":"off" | "low" | "medium" | "high" | null,
+ "temperature":0.6, "top_p":0.95, "top_k":40, "max_tokens":2048,
+ "frequency_penalty":0, "presence_penalty":0, "seed":7}
+```
+
+`extra` (el JSON avanzado) va **aparte y como texto**, tal como lo escribe el usuario, para que los errores de sintaxis den su línea y columna: `""` o ausente = ninguno.
+
+**`settings.model_params.get`** `→ {}` `←`
+
+```jsonc
+{"provider":"nvidia", "model":"z-ai/glm5",
+ "params":{"reasoning":"high", "temperature":0.6, "top_p":null, ...},   // las ocho llaves, siempre
+ "extra":"{\n  \"chat_template_kwargs\": {…}\n}",   // con sangría de 2 ("" si no hay)
+ "reasoning_style":"toggle",   // effort | toggle (NIM: los tres niveles solo encienden) | budget (Anthropic)
+ "limits":{"temperature":{"min":0.0,"max":2.0,"min_exclusive":false,"integer":false},
+           "top_p":{"min":0.0,"max":1.0,"min_exclusive":true,"integer":false},
+           "top_k":{"min":1,"max":1000,"min_exclusive":false,"integer":true}, ...},
+ "preview":"{\n  \"model\": …"}   // el cuerpo con lo guardado
+```
+
+- `limits`: los siete campos numéricos con los rangos del proveedor (en `anthropic`, `temperature` hasta 1), para que la GUI no los copie.
+- `preview`: `request_preview`, el cuerpo exacto que se mandaría (sangría de 2, en el orden de la petición) con `messages` cambiado por `"[…N mensajes…]"` (el historial de la conversación abierta con el mensaje de sistema, más el siguiente). La key va en la cabecera: nunca aparece.
+- Sin proveedor o sin modelo: `-32004` con `Elige un modelo en Proveedor de IA (o con /model) para ajustarlo.`
+
+**`settings.model_params.check`** `→ {params, extra?}` `← {field_errors, extra_error, preview}`
+
+```jsonc
+{"field_errors":{"top_k":"Debe ser un número entero entre 1 y 1000."},   // {} si no hay
+ "extra_error":"El JSON avanzado no es válido (línea 3, columna 7).",   // o null
+ "preview":null}   // null si hay algún error
+```
+
+- Los textos son los de F2: rangos (`Debe ser un número entre 0 y 2.`, `Debe ser mayor que 0 y como máximo 1.`, …), en Anthropic `Con el razonamiento <nivel>, el máximo de salida debe pasar de <presupuesto> tokens.` (en `max_tokens`), y en `extra`: no es un objeto, más de 8 KiB, UTF-8 inválido, línea y columna del error de sintaxis, o `«<llave>» la pone Moss; no se puede cambiar desde el JSON avanzado.` (`model`, `messages`, `stream`, `stream_options`, `tools`, `tool_choice`).
+
+**`settings.model_params.save`** `→ {params, extra?}` `← {}`
+- `Session::save_model_params`: escribe `"models"` en `config.json` (sin ajustes, quita el modelo, y el proveedor si se queda sin modelos) y aplica desde el siguiente mensaje sin reiniciar. Después, `settings.changed {section: "model_params"}` y el `entry_added` del aviso `Ajustes de <modelo> guardados: valen desde el siguiente mensaje.` **Restaurar todo** = mandar todo en `null` y `extra` vacío.
+- Errores, en este orden: `-32602` (un campo de `params` de otro tipo o desconocido, con `fields: ["params.<campo>"]`; `extra` dentro de `params` también); `-32004` (sin modelo); `-32002` (respuesta en curso); `-32005` con el primer error de `check` en `data.message`; `-32007` si falla la escritura (por ejemplo, un `"models"` que no es objeto: no se toca).
+
+Si la petición llevó algún ajuste y el servidor responde 400 o 422, el error de `chat.finished` (y de su entrada) agrega `Puede ser un ajuste de <modelo>: revísalo en Configuración del modelo.`
 
 #### Búsqueda web
 
@@ -557,7 +605,7 @@ Todas las `service.*` salvo `service.status`, y `invited.remove`, emiten `servic
 | `conversation.closed` | `{conversation, reason}` | `replaced` (`new`, `open`), `deleted`, o `shutdown`: siempre en `shutdown` si hay sesión, con o sin respuesta en curso |
 | `chat.finished` | ver abajo | Una vez por cada `chat.send` aceptado, salvo si antes llegó `shutdown` (sección 3) |
 | `conversations.changed` | `{}` | Se guardó, borró o creó un archivo: la GUI vuelve a pedir la lista |
-| `settings.changed` | `{section}` | Se guardó: `provider` / `system_prompt` / `search` / `gui` / `telegram`. Sale después de la respuesta y antes de los avisos en el historial |
+| `settings.changed` | `{section}` | Se guardó: `provider` / `system_prompt` / `model_params` / `search` / `gui` / `telegram`. Sale después de la respuesta y antes de los avisos en el historial |
 | `service.changed` | `{addon}` | Terminó `service.apply`, `restart`, `disable`, `reload` o `addons.telegram.invited.remove`, aunque se haya cancelado o haya fallado; después de su respuesta (sección 6.8). `service.status` no lo emite |
 
 ```jsonc
