@@ -461,6 +461,18 @@ ordered request_json(std::string_view model, bool stream, ordered messages,
     return body;
 }
 
+std::vector<std::string> request_param_keys(std::string_view provider,
+                                            const ModelParams& params) {
+    std::vector<std::string> keys;
+    const ordered body = request_json("", false, ordered::array(), provider, params);
+    for (const auto& item : body.items()) {
+        if (item.key() != "model" && item.key() != "stream" && item.key() != "messages") {
+            keys.push_back(item.key());
+        }
+    }
+    return keys;
+}
+
 std::string request_preview(std::string_view model, std::string_view provider,
                             const ModelParams& params, std::size_t message_count) {
     const std::string messages = "[…" + std::to_string(message_count) +

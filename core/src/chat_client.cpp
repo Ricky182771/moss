@@ -528,6 +528,10 @@ ChatClient::~ChatClient() = default;
 
 Sleeper& ChatClient::sleeper() { return *sleeper_; }
 
+std::vector<std::string> ChatClient::param_keys() const {
+    return request_param_keys(config_.provider, config_.model_params);
+}
+
 Result<std::string> ChatClient::complete(const std::vector<Message>& messages,
                                          const CancelToken* cancel) {
     // Revalida la configuración: el cliente puede construirse con un Config
