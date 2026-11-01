@@ -357,6 +357,7 @@ Teclas:
 | Ctrl+N | Empieza una conversación nueva |
 | Ctrl+B | Muestra u oculta la barra de conversaciones |
 | Ctrl+O | Pasa a la barra de conversaciones (y la muestra si estaba oculta) |
+| Ctrl+T | Abre el pensamiento de todas las respuestas (si ya están todos abiertos, los cierra); ver [Pensamiento](#pensamiento-del-modelo) |
 | Ctrl+C | Sale |
 
 #### Barra de conversaciones
@@ -441,6 +442,22 @@ Para ver cómo se muestra un archivo markdown sin usar la API:
 ```
 
 `--width` es el ancho en columnas (80 si no lo pones). `--theme` elige el tema (`catppuccin-mocha` si no lo pones, o `terminal`), `--background theme|terminal` el fondo y `--symbols unicode|simple` los símbolos (`unicode` si no lo pones). Si la salida es una terminal, se ve con colores y estilos; si la rediriges a un archivo, sale como texto plano.
+
+### Pensamiento del modelo
+
+Algunos modelos mandan su "pensamiento" aparte de la respuesta (en NIM, Nemotron con el razonamiento en Predeterminado o encendido; en OpenRouter, los que lo devuelven). Moss lo muestra arriba de la respuesta, atenuado, en una línea plegable:
+
+```text
+▸ Pensamiento · 1 240 palabras
+```
+
+- Mientras llega y todavía no hay texto, se ve abierto con sus **últimas 6 líneas** (la línea de estado sigue en "Pensando…"); con el primer texto de la respuesta se pliega solo.
+- **Clic** en la línea lo abre (`▾`, con el texto completo, sangrado) o lo cierra. **Ctrl+T** abre el de todas las respuestas, o los cierra si ya estaban todos abiertos.
+- Se abre y se cierra solo en la sesión: al reabrir una conversación todo empieza plegado.
+- Se guarda con la conversación (hasta 256 KiB por respuesta; si pasa, se recorta y lo dice al final), pero **nunca se le vuelve a mandar al modelo**. Tampoco cuenta para `/copiar`, `/guardar`, `/exportar` ni los números de los bloques: un bloque de código dentro del pensamiento no tiene botones.
+- Una respuesta cancelada (Esc) o cortada por un error conserva el pensamiento que alcanzó a llegar.
+- Si el modelo se queda sin salida mientras piensa (termina por `length` sin texto), el error dice `El modelo se quedó sin tokens pensando; sube el máximo de salida en Configuración del modelo.` en vez de `El modelo no devolvió texto.`
+- Con modelos que no lo mandan (por ejemplo Gemini por la capa compatible con OpenAI, u OpenAI en Chat Completions) no aparece ninguna línea. En modo de símbolos Sencillos, `▸`/`▾` se ven como `>`/`v`.
 
 ### Copiar, guardar y exportar
 

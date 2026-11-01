@@ -193,7 +193,7 @@ TEST_CASE("InvalidRequest en streaming no se reintenta", "[mapeo][invalid]") {
     harness.transport->responses.push_back(HttpResponse{400, "{}", std::nullopt, false, ""});
 
     const chatbot::Result<chatbot::CompletionInfo> response = harness.client->complete_stream(
-        sample_messages(), [](std::string_view) { return true; });
+        sample_messages(), [](const chatbot::StreamDelta&) { return true; });
     REQUIRE(response.is_error());
     CHECK(response.error().kind == ErrorKind::InvalidRequest);
     CHECK(harness.transport->requests.size() == 1);

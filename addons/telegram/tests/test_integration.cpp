@@ -384,6 +384,58 @@ TEST_CASE("telegram: Detener durante \"Pensando…\" manda solo el aviso",
     CHECK(history[1].content == "otra");
 }
 
+TEST_CASE("telegram: el pensamiento no sale: \"Pensando…\" hasta el primer texto",
+          "[telegram][integracion][pensamiento]") {
+    World w;
+    // Pensamiento largo (más de dos draft_interval) y después el texto.
+    w.start(config_for({5}), [] {
+        return std::make_unique<chatbot::ChatClient>(
+            chatbot_test::test_config(),
+            std::make_unique<chatbot_bot_test::SlowTransport>(4, 40ms, 20),
+            std::make_unique<chatbot_test::FakeSleeper>());
+    });
+    w.say(1, 5, "hola");
+    REQUIRE(w.idle());
+    const auto drafts = w.server->calls("sendRichMessageDraft");
+    REQUIRE_FALSE(drafts.empty());
+    CHECK(drafts.front().body["rich_message"]["markdown"] == "<tg-thinking>Pensando…</tg-thinking>");
+    for (const Call& draft : drafts) {
+        const std::string text = draft.body["rich_message"]["markdown"];
+        INFO(text);
+        CHECK(text.find("PIENSO") == std::string::npos);
+        // Cada vista previa es "Pensando…" o ya el texto.
+        CHECK((text.find("Pensando") != std::string::npos || text.rfind("eco", 0) == 0));
+    }
+    const auto final_messages = w.messages(5);
+    REQUIRE(final_messages.size() == 1);
+    CHECK(World::text_of(final_messages[0]) == "eco: hola...");
+}
+
+TEST_CASE("telegram: Detener mientras llega el pensamiento",
+          "[telegram][integracion][detener][pensamiento]") {
+    World w;
+    w.start(config_for({5}), [] {
+        return std::make_unique<chatbot::ChatClient>(
+            chatbot_test::test_config(),
+            std::make_unique<chatbot_bot_test::SlowTransport>(4, 30ms, 100000),
+            std::make_unique<chatbot_test::FakeSleeper>());
+    });
+    w.say(1, 5, "hola");
+    const std::int64_t draft_id = wait_for_draft(w, 5, "Pensando");
+    REQUIRE(draft_id != 0);
+    std::this_thread::sleep_for(200ms); // Ya llegaron varios deltas de pensamiento.
+
+    const auto started = std::chrono::steady_clock::now();
+    w.server->push_updates(json::array({chatbot_telegram_test::real_stop_update(2, 5, draft_id)}));
+    REQUIRE(w.server->wait_for("sendMessage", 1));
+    chatbot_test::report_latency("Detener durante el pensamiento",
+                                 std::chrono::steady_clock::now() - started);
+    REQUIRE(w.idle());
+    const auto sent = w.messages(5);
+    REQUIRE(sent.size() == 1);
+    CHECK(World::text_of(sent[0]) == chatbot::bot::kStoppedEmpty);
+}
+
 TEST_CASE("telegram: Detener con el draft_id del tope y con el 1 que le sigue",
           "[telegram][integracion][detener]") {
     World w;

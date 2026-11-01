@@ -54,4 +54,17 @@ bool is_valid(std::string_view text) {
     return true;
 }
 
+std::string_view prefix(std::string_view text, std::size_t max_bytes) {
+    if (text.size() <= max_bytes) {
+        return text;
+    }
+    // Retroceder hasta el inicio de un carácter: los bytes de continuación
+    // tienen la forma 10xxxxxx.
+    std::size_t pos = max_bytes;
+    while (pos > 0 && (static_cast<unsigned char>(text[pos]) & 0xC0) == 0x80) {
+        --pos;
+    }
+    return text.substr(0, pos);
+}
+
 } // namespace chatbot::utf8

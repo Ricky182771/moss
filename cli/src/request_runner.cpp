@@ -96,9 +96,11 @@ void RequestRunner::complete(ChatClient& client, std::size_t limit, const Post& 
                              const std::shared_ptr<State>& state, const CancelToken& token,
                              const std::vector<Message>& history, const OnDelta& on_delta,
                              const OnDone& on_done) {
-    const auto deliver = [&](std::string_view delta) {
+    const auto deliver = [&](const StreamDelta& delta) {
         // Copia: el string_view deja de ser válido al regresar.
-        post([on_delta, text = std::string{delta}] { on_delta(text); });
+        post([on_delta, kind = delta.kind, text = std::string{delta.text}] {
+            on_delta(kind, text);
+        });
         return true;
     };
     TrimmedCompletion done = complete_trimmed(client, history, limit, deliver, &token);

@@ -979,7 +979,11 @@ int main(int argc, char** argv) {
         // también con una respuesta en curso. El resultado va a la línea de
         // estado; no tocan el historial, el scroll ni la caja.
         if (const std::optional<chatbot::cli::ButtonHit> hit = history.hit_test(mouse.x, mouse.y);
-            click && hit.has_value()) {
+            click && hit.has_value() && hit->reasoning.has_value()) {
+            // La línea "▸ Pensamiento": abre o cierra el de esa respuesta.
+            session.toggle_reasoning(*hit->reasoning);
+            return true;
+        } else if (click && hit.has_value()) {
             const chatbot::cli::ActionResult result = chatbot::cli::run_block_action(
                 session.code_blocks().blocks(), hit->block, hit->action, chatbot::cli::real_clipboard(),
                 chatbot::cli::default_download_dir(chatbot::cli::environment_value), home,
@@ -1198,6 +1202,11 @@ int main(int argc, char** argv) {
         }
         if (event == ftxui::Event::CtrlN) {
             apply_sidebar_action({chatbot::cli::ListAction::Type::New, {}});
+            return true;
+        }
+        if (event == ftxui::Event::CtrlT) {
+            // Abre o cierra el pensamiento de todas las respuestas.
+            session.toggle_all_reasoning();
             return true;
         }
         if (sidebar_visible && sidebar_panel->Focused()) {

@@ -35,7 +35,13 @@ struct StoredMessage {
     std::string model;         ///< Solo en respuestas del asistente.
     std::string finish_reason; ///< Solo en respuestas del asistente.
     std::optional<StoredSearch> search; ///< Solo en mensajes del usuario hechos con /buscar.
+    /// Solo en respuestas del asistente: el pensamiento (llave opcional
+    /// "reasoning"), recortado a kMaxStoredReasoningBytes al leer y al escribir.
+    std::string reasoning;
 };
+
+/// Tope del pensamiento guardado por mensaje.
+inline constexpr std::size_t kMaxStoredReasoningBytes = 256 * 1024;
 
 /// Una conversación en su forma guardable (esquema versión 1; "search" es
 /// una llave opcional que las versiones anteriores ignoran).

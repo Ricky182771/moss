@@ -16,9 +16,19 @@
 
 namespace chatbot {
 
-/// Callback de streaming: recibe cada incremento de texto del asistente.
-/// Devolver false cancela la petición (se devuelve ErrorKind::Cancelled).
-using StreamDeltaCallback = std::function<bool(std::string_view delta)>;
+/// Un incremento del flujo: texto de la respuesta (delta.content) o
+/// pensamiento del modelo (delta.reasoning_content o delta.reasoning). El
+/// pensamiento es solo para mostrarse: nunca vuelve al modelo.
+struct StreamDelta {
+    enum class Kind { Content, Reasoning };
+    Kind kind = Kind::Content;
+    std::string_view text; ///< Nunca vacío; vale solo durante la llamada.
+};
+
+/// Callback de streaming: recibe cada incremento, de texto o de pensamiento,
+/// en el orden en que llegan. Devolver false cancela la petición (se
+/// devuelve ErrorKind::Cancelled).
+using StreamDeltaCallback = std::function<bool(const StreamDelta& delta)>;
 
 /// Cliente del hito 1: petición simple sin streaming, con reintentos.
 /// Las excepciones internas nunca cruzan la API pública (sección 6).
@@ -45,10 +55,11 @@ public:
                                                const CancelToken* cancel = nullptr);
 
     /// Igual que complete() pero pidiendo stream:true al servidor: entrega
-    /// los incrementos de texto por on_delta conforme llegan y devuelve el
+    /// los incrementos de texto y de pensamiento por on_delta conforme llegan
+    /// (en un mismo chunk, primero el pensamiento) y devuelve el
     /// resultado: en éxito, el finish_reason (CompletionInfo); el texto
     /// completo ya pasó por el callback. Reintenta igual que complete() mientras no se haya entregado
-    /// ningún delta. Cancela si on_delta devuelve false o con cancel, igual
+    /// ningún delta, de ningún tipo. Cancela si on_delta devuelve false o con cancel, igual
     /// que complete(). Nunca lanza excepciones.
     [[nodiscard]] Result<CompletionInfo> complete_stream(const std::vector<Message>& messages,
                                                          const StreamDeltaCallback& on_delta,

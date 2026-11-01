@@ -512,7 +512,7 @@ TEST_CASE("Botones de los bloques: notice sobre el fondo y la selección con el 
     const Palette palette(catppuccin(), BackgroundMode::FromTheme);
     HistoryView view;
     const std::vector<Entry> entries{
-        Entry{EntryKind::Assistant, "```cpp\nint a;\n```", false, false, false, {}, {}}};
+        Entry{EntryKind::Assistant, "```cpp\nint a;\n```", false, false, false, {}, {}, {}, {}}};
     ftxui::Screen screen = draw(view.render(entries, 50, palette, {1}) | palette.base(), 50);
     const Position copy = find(screen, "[Copiar]");
     const Position save = find(screen, "[Guardar]");
@@ -538,7 +538,7 @@ TEST_CASE("NO_COLOR: el botón con el puntero encima va invertido", "[tema][boto
     const Palette palette(chatbot::cli::resolve_appearance("catppuccin-mocha", "theme"));
     HistoryView view;
     const std::vector<Entry> entries{
-        Entry{EntryKind::Assistant, "```cpp\nint a;\n```", false, false, false, {}, {}}};
+        Entry{EntryKind::Assistant, "```cpp\nint a;\n```", false, false, false, {}, {}, {}, {}}};
     ftxui::Screen screen = draw(view.render(entries, 50, palette, {1}), 50);
     const Position copy = find(screen, "[Copiar]");
     REQUIRE(copy.x >= 0);

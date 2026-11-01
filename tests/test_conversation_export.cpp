@@ -143,3 +143,15 @@ TEST_CASE("exportar: un mensaje del usuario de varias líneas conserva sus salto
     CHECK(markdown.find("## Tú\n\nRevisa esto:\n\nint x = 1;\nint y = 2;\n\n## Asistente") !=
           std::string::npos);
 }
+
+TEST_CASE("exportar: el pensamiento no sale en el archivo", "[exportar][pensamiento]") {
+    Conversation conversation{"sistema"};
+    REQUIRE(conversation.submit("Hola").has_value());
+    conversation.append_reasoning("PENSAMIENTO-SECRETO");
+    answer(conversation, "Qué tal", "m");
+    const chatbot::cli::StoredConversation stored = conversation.to_stored("2026-10-31T10:00:00-06:00");
+    REQUIRE(stored.messages[1].reasoning == "PENSAMIENTO-SECRETO");
+    const std::string markdown = chatbot::cli::export_markdown(stored, "2026-10-31 10:00");
+    CHECK(markdown.find("PENSAMIENTO-SECRETO") == std::string::npos);
+    CHECK(markdown.find("Qué tal") != std::string::npos);
+}

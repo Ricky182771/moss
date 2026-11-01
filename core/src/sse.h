@@ -57,8 +57,13 @@ struct Event {
 /// BadResponse si el JSON está roto o la estructura es inesperada.
 /// Si finish_reason no es nulo y el chunk trae choices[0].finish_reason como
 /// cadena, se escribe ahí; si es null o falta, no se toca.
+/// Si reasoning no es nulo, recibe el pensamiento del chunk:
+/// delta.reasoning_content o, si no es cadena, delta.reasoning (OpenRouter).
+/// Un campo de pensamiento que no es cadena se ignora, sin error; sin
+/// pensamiento queda vacío.
 [[nodiscard]] Result<std::optional<std::string>> decode_openai_chunk(
-    const std::string& data, std::string* finish_reason = nullptr);
+    const std::string& data, std::string* finish_reason = nullptr,
+    std::string* reasoning = nullptr);
 
 } // namespace sse
 } // namespace chatbot

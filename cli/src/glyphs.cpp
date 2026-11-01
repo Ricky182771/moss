@@ -10,7 +10,7 @@ namespace {
 // Los que faltan en Consolas o en Lucida Console (ver el README, "Símbolos").
 // Un respaldo de otro ancho lo dice; donde se usa, el layout mide el texto.
 // Comprobado con el cmap de consola.ttf y lucon.ttf (tools/check_glyphs.ps1).
-constexpr std::array<GlyphInfo, 18> kGlyphs{{
+constexpr std::array<GlyphInfo, 19> kGlyphs{{
     {Glyph::Gear, "⚙", "*"},
     {Glyph::Check, "✓", "√"},
     {Glyph::Warning, "⚠", "!"},
@@ -24,6 +24,7 @@ constexpr std::array<GlyphInfo, 18> kGlyphs{{
     {Glyph::ChosenMark, "●", "•"},
     {Glyph::BulletLevel2, "◦", "o"},
     {Glyph::BulletLevel3, "▪", "-"},
+    {Glyph::ReasoningClosed, "▸", ">"},
     {Glyph::RoundedTopLeft, "╭", "┌"},
     {Glyph::RoundedTopRight, "╮", "┐"},
     {Glyph::RoundedBottomLeft, "╰", "└"},

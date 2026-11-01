@@ -112,6 +112,20 @@ TEST_CASE("diff_entries", "[rpc]") {
         CHECK_FALSE(diff.added(seen));
         CHECK(conversation.entries()[seen.count - 1].text.substr(seen.last_text_size) == "la");
     }
+    SECTION("pensamiento agregado a la respuesta en curso, sin tocar el texto") {
+        conversation.append_reasoning("pienso");
+        const auto diff = chatbot::rpc::diff_entries(seen, conversation.entries());
+        CHECK(diff.reasoning_grown);
+        CHECK_FALSE(diff.grown);
+        CHECK_FALSE(diff.updated);
+        CHECK(conversation.entries()[seen.count - 1].reasoning.substr(seen.last_reasoning_size) ==
+              "pienso");
+        seen = chatbot::rpc::remember(conversation.entries());
+        conversation.append_delta("la");
+        const auto after = chatbot::rpc::diff_entries(seen, conversation.entries());
+        CHECK(after.grown);
+        CHECK_FALSE(after.reasoning_grown);
+    }
     SECTION("marcas cambiadas al terminar (y la nota)") {
         REQUIRE_FALSE(conversation.finish_success("length", "m").has_value());
         const auto diff = chatbot::rpc::diff_entries(seen, conversation.entries());
@@ -139,7 +153,9 @@ TEST_CASE("Codificación de Entry", "[rpc]") {
     entry.note = "nota";
     CHECK(chatbot::rpc::encode_entry(entry).dump() ==
           R"({"kind":"assistant","text":"¡Hola!","in_progress":true,"incomplete":false,)"
-          R"("cancelled":false,"note":"nota"})");
+          R"("cancelled":false,"note":"nota","reasoning":""})");
+    entry.reasoning = "pensé";
+    CHECK(chatbot::rpc::encode_entry(entry)["reasoning"] == "pensé");
 
     Entry sources;
     sources.kind = EntryKind::Sources;

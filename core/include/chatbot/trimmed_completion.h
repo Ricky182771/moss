@@ -21,7 +21,8 @@ struct TrimmedCompletion {
 
 /// complete_stream con el historial recortado a limit_bytes (trim_history; 0
 /// = sin límite). Si el servidor rechaza la petición con InvalidRequest
-/// (p. ej. "maximum context length exceeded") antes de entregar texto y sin
+/// (p. ej. "maximum context length exceeded") antes de entregar ningún delta
+/// (ni texto ni pensamiento) y sin
 /// cancelación, reintenta una sola vez recortando a la mitad de
 /// min(limit_bytes, tamaño de lo enviado), si eso quita algún mensaje más.
 /// No reintenta si el mensaje del error nombra (sin distinguir mayúsculas y

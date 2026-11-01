@@ -73,8 +73,10 @@ int main(int argc, char* argv[]) {
 
     // Streaming: imprime cada fragmento en cuanto llega, sin salto de línea.
     const chatbot::Result<chatbot::CompletionInfo> response = client.complete_stream(
-        messages, [](std::string_view delta) {
-            std::cout << delta << std::flush;
+        messages, [](const chatbot::StreamDelta& delta) {
+            if (delta.kind == chatbot::StreamDelta::Kind::Content) {
+                std::cout << delta.text << std::flush;
+            }
             return true;
         });
     if (response.is_error()) {

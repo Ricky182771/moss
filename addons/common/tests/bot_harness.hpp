@@ -499,8 +499,9 @@ inline chatbot::bot::ClientFactory gated_clients(std::shared_ptr<Gate> gate,
 /// pausa entre ellos, y se detiene si se cancela, como curl.
 class SlowTransport final : public chatbot::Transport {
 public:
-    SlowTransport(std::size_t pieces, std::chrono::milliseconds pause)
-        : pieces_(pieces), pause_(pause) {}
+    /// thoughts: deltas de pensamiento ("PIENSO ") antes del texto.
+    SlowTransport(std::size_t pieces, std::chrono::milliseconds pause, std::size_t thoughts = 0)
+        : pieces_(pieces), pause_(pause), thoughts_(thoughts) {}
 
     [[nodiscard]] chatbot::HttpResponse send(const chatbot::HttpRequest& request) override {
         return send_stream(request, [](std::string_view, int) { return true; });
@@ -529,6 +530,13 @@ public:
                 {"choices", nlohmann::json::array({{{"delta", {{"content", piece}}}}})}};
             return "data: " + event.dump() + "\n\n";
         };
+        for (std::size_t i = 0; i < thoughts_; ++i) {
+            const nlohmann::json event = {{"choices", nlohmann::json::array({{{
+                                              "delta", {{"reasoning_content", "PIENSO "}}}}})}};
+            if (!emit("data: " + event.dump() + "\n\n")) {
+                return cancelled;
+            }
+        }
         if (!emit(delta("eco: "))) {
             return cancelled;
         }
@@ -550,6 +558,7 @@ public:
 private:
     std::size_t pieces_;
     std::chrono::milliseconds pause_;
+    std::size_t thoughts_;
 };
 
 /// Manda pieces como deltas, un evento SSE por trozo, y llama a

@@ -63,7 +63,8 @@ TrimmedCompletion complete_trimmed(ChatClient& client, const std::vector<Message
                                    std::size_t limit_bytes, const StreamDeltaCallback& on_delta,
                                    const CancelToken* cancel) {
     bool delivered = false;
-    const StreamDeltaCallback deliver = [&](std::string_view delta) {
+    // Cualquier delta cuenta, también el pensamiento: ya se mostró algo.
+    const StreamDeltaCallback deliver = [&](const StreamDelta& delta) {
         delivered = true;
         return on_delta(delta);
     };

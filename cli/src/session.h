@@ -173,7 +173,8 @@ public:
         /// resultados, respuesta sin texto), o nullopt si el par terminó bien.
         std::optional<std::string> restored;
         /// nullopt si terminó bien; una respuesta sin texto es BadResponse
-        /// con kEmptyAnswer, como la entrada de error.
+        /// con kEmptyAnswer (o kOutOfTokensThinking: Conversation::empty_answer_error),
+        /// como la entrada de error.
         std::optional<ChatError> error;
         std::string finish_reason; ///< Solo si terminó bien ("" si no llegó).
         std::size_t dropped = 0;   ///< Mensajes omitidos por el recorte.
@@ -209,6 +210,10 @@ public:
     [[nodiscard]] bool system_prompt_stored() const { return system_prompt_stored_; }
     [[nodiscard]] std::size_t last_dropped() const { return last_dropped_; }
     [[nodiscard]] const Conversation& conversation() const { return conversation_; }
+    /// Clic en la línea del pensamiento de la entrada index, y Ctrl+T (todas).
+    /// Solo cambia cómo se ve: también con una respuesta en curso.
+    void toggle_reasoning(std::size_t index) { conversation_.toggle_reasoning(index); }
+    void toggle_all_reasoning() { conversation_.toggle_all_reasoning(); }
     [[nodiscard]] const ConversationStore& store() const { return store_; }
     /// Avisos de arranque (instrucciones del sistema y búsqueda), separados
     /// por un espacio; vacío si no hay.

@@ -466,8 +466,13 @@ void Bot::run(const Job& job, const CancelToken& cancel, const Runtime& runtime)
             } else {
                 std::vector<Message> request = job.history;
                 request.push_back(Message{Role::User, content});
-                const auto on_delta = [&](std::string_view delta) {
-                    reply.append(delta);
+                const auto on_delta = [&](const StreamDelta& delta) {
+                    // El bot no muestra el pensamiento: "Pensando…" se queda
+                    // hasta el primer texto.
+                    if (delta.kind != StreamDelta::Kind::Content) {
+                        return true;
+                    }
+                    reply.append(delta.text);
                     if (!draft) {
                         return true;
                     }

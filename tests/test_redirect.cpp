@@ -156,7 +156,7 @@ TEST_CASE("Redirección: list_models, complete y complete_stream lo explican sin
                 redirect(status, "https://h/v1/chat/completions"));
             bool delta = false;
             const auto reply = harness.client->complete_stream(
-                chatbot_test::sample_messages(), [&delta](std::string_view) {
+                chatbot_test::sample_messages(), [&delta](const chatbot::StreamDelta&) {
                     delta = true;
                     return true;
                 });

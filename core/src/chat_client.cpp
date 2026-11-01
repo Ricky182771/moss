@@ -391,16 +391,18 @@ StreamAttemptOutcome run_stream_attempt(const Config& config, int attempt,
 
     sse::Parser parser;
     std::string finish_reason; ///< Último choices[0].finish_reason no nulo.
+    std::string reasoning;     ///< Pensamiento del chunk en curso.
     bool done = false;    ///< Se recibió data: [DONE].
     bool aborted = false; ///< Cuerpo inválido a mitad del flujo.
     std::optional<ChatError> abort_error;
 
     // Entrega el delta al callback de quien llama. Si lanza, la excepción
     // no debe llegar a libcurl (frames de C). Devuelve false para abortar.
-    const auto deliver = [&](const std::string& text) {
+    const auto deliver = [&](StreamDelta::Kind kind, const std::string& text) {
         outcome.delivered_any = true;
         try {
-            return on_delta(text); // false: cancelación, curl aborta con status == 0.
+            // false: cancelación, curl aborta con status == 0.
+            return on_delta(StreamDelta{kind, text});
         } catch (const std::exception& e) {
             abort_error = ChatError{ErrorKind::Cancelled, 0,
                                     "El callback de streaming lanzó una excepción: " +
@@ -442,14 +444,17 @@ StreamAttemptOutcome run_stream_attempt(const Config& config, int attempt,
                 continue;
             }
             const Result<std::optional<std::string>> delta =
-                sse::decode_openai_chunk(event.value().data, &finish_reason);
+                sse::decode_openai_chunk(event.value().data, &finish_reason, &reasoning);
             if (delta.is_error()) {
                 abort_error = delta.error();
                 aborted = true;
                 return false;
             }
+            if (!reasoning.empty() && !deliver(StreamDelta::Kind::Reasoning, reasoning)) {
+                return false;
+            }
             if (delta.value().has_value() && !delta.value()->empty() &&
-                !deliver(*delta.value())) {
+                !deliver(StreamDelta::Kind::Content, *delta.value())) {
                 return false;
             }
         }

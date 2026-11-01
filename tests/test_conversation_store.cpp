@@ -1,6 +1,7 @@
 #include "conversation_store.h"
 
 #include "chatbot/config.h"
+#include "chatbot/utf8.h"
 
 #include "temp_dir.hpp"
 
@@ -42,12 +43,12 @@ StoredConversation sample(const std::string& id, const std::string& updated_at) 
     conversation.updated_at = updated_at;
     conversation.messages = {
         StoredMessage{Role::User, "¿Cuánto es la raíz cuadrada de 64? 🤔 ñandú 日本語", "", "",
-                      std::nullopt},
+                      std::nullopt, {}},
         StoredMessage{Role::Assistant, "La raíz cuadrada de 64 es **8**. ✅",
-                      "nvidia/nemotron-3-super-120b-a12b", "stop", std::nullopt},
-        StoredMessage{Role::User, "¿Y de 81?", "", "", std::nullopt},
+                      "nvidia/nemotron-3-super-120b-a12b", "stop", std::nullopt, {}},
+        StoredMessage{Role::User, "¿Y de 81?", "", "", std::nullopt, {}},
         StoredMessage{Role::Assistant, "Es 9, pero me cor", "otro/modelo", "length",
-                      std::nullopt},
+                      std::nullopt, {}},
     };
     return conversation;
 }
@@ -632,4 +633,73 @@ TEST_CASE("ConversationStore: mensajes que no alternan usuario → asistente hac
     const LoadResult good = store.load(id);
     REQUIRE(good.conversation.has_value());
     CHECK(good.conversation->messages.size() == 4);
+}
+
+// Pensamiento (M3): llave opcional "reasoning" en las respuestas del asistente.
+
+TEST_CASE("ConversationStore: el pensamiento se guarda y vuelve; sin él no hay llave",
+          "[almacen][pensamiento]") {
+    const ScopedTempDir temp;
+    const ConversationStore store{(temp.path() / "c").string()};
+    StoredConversation original = sample("20261031-100000-a1b2c3", "2026-10-31T10:00:00-06:00");
+    original.messages[1].reasoning = "Pienso: 8 × 8 = 64 🤔";
+
+    REQUIRE_FALSE(store.save(original).has_value());
+    const std::string json = read_file(temp.path() / "c" / (original.id + ".json"));
+    // Una sola llave: la del mensaje con pensamiento.
+    const std::size_t first = json.find("\"reasoning\"");
+    REQUIRE(first != std::string::npos);
+    CHECK(json.find("\"reasoning\"", first + 1) == std::string::npos);
+    CHECK_THAT(json, Catch::Matchers::ContainsSubstring("\"version\": 1"));
+
+    const LoadResult loaded = store.load(original.id);
+    REQUIRE(loaded.conversation.has_value());
+    CHECK(loaded.conversation->messages[1].reasoning == "Pienso: 8 × 8 = 64 🤔");
+    CHECK(loaded.conversation->messages[3].reasoning.empty());
+}
+
+TEST_CASE("ConversationStore: archivo sin la llave, con null o en un mensaje del usuario",
+          "[almacen][pensamiento]") {
+    const ScopedTempDir temp;
+    const ConversationStore store{temp.path().string()};
+    write_file(temp.path() / "20261031-100000-a1b2c3.json",
+               R"({"version":1,"id":"20261031-100000-a1b2c3","title":"t",
+                   "created_at":"2026-10-31T10:00:00-06:00","updated_at":"2026-10-31T10:00:00-06:00",
+                   "messages":[{"role":"user","content":"a","reasoning":"no cuenta"},
+                               {"role":"assistant","content":"b","reasoning":null},
+                               {"role":"user","content":"c"},
+                               {"role":"assistant","content":"d"}]})");
+    const LoadResult loaded = store.load("20261031-100000-a1b2c3");
+    REQUIRE(loaded.conversation.has_value());
+    for (const chatbot::cli::StoredMessage& message : loaded.conversation->messages) {
+        CHECK(message.reasoning.empty());
+    }
+}
+
+TEST_CASE("ConversationStore: un pensamiento de más de 256 KiB se recorta sin partir UTF-8",
+          "[almacen][pensamiento]") {
+    const ScopedTempDir temp;
+    const ConversationStore store{temp.path().string()};
+    StoredConversation original = sample("20261031-100000-a1b2c3", "2026-10-31T10:00:00-06:00");
+    // "ñ" ocupa 2 bytes: con el aviso, el corte cae a mitad de una.
+    std::string big;
+    while (big.size() < chatbot::cli::kMaxStoredReasoningBytes + 100) {
+        big += "ñ";
+    }
+    original.messages[1].reasoning = big;
+    const std::string exact(chatbot::cli::kMaxStoredReasoningBytes, 'x');
+    original.messages[3].reasoning = exact;
+
+    REQUIRE_FALSE(store.save(original).has_value());
+    const LoadResult loaded = store.load(original.id);
+    REQUIRE(loaded.conversation.has_value());
+    const std::string& cut = loaded.conversation->messages[1].reasoning;
+    const std::string mark = "\n\n[…pensamiento recortado]";
+    CHECK(cut.size() <= chatbot::cli::kMaxStoredReasoningBytes);
+    REQUIRE(cut.size() > mark.size());
+    CHECK(cut.substr(cut.size() - mark.size()) == mark);
+    CHECK(chatbot::utf8::is_valid(cut));
+    CHECK(cut.substr(0, 4) == "ññ");
+    // Justo en el tope: sin recorte.
+    CHECK(loaded.conversation->messages[3].reasoning == exact);
 }

@@ -2,6 +2,7 @@
 
 #include "chatbot/config.h"
 #include "chatbot/platform.h"
+#include "chatbot/utf8.h"
 #include "chatbot/web_search.h"
 
 #include <nlohmann/json.hpp>
@@ -15,6 +16,7 @@
 #include <fstream>
 #include <iterator>
 #include <random>
+#include <string_view>
 #include <system_error>
 #include <utility>
 
@@ -64,6 +66,18 @@ bool optional_string(const json& object, const char* key, std::string& out, std:
     }
     out = it->get<std::string>();
     return true;
+}
+
+/// El pensamiento con el tope de kMaxStoredReasoningBytes: si pasa, se corta
+/// sin partir un carácter y se avisa al final (el aviso cabe en el tope).
+std::string capped_reasoning(std::string reasoning) {
+    if (reasoning.size() <= kMaxStoredReasoningBytes) {
+        return reasoning;
+    }
+    constexpr std::string_view kMark = "\n\n[…pensamiento recortado]";
+    std::string out{utf8::prefix(reasoning, kMaxStoredReasoningBytes - kMark.size())};
+    out.append(kMark);
+    return out;
 }
 
 /// Lee la llave opcional "search" de un mensaje. Devuelve el error en
@@ -163,12 +177,20 @@ std::optional<std::string> parse_conversation(const std::string& content,
         if (const std::optional<std::string> search_error = parse_search(item, message.search)) {
             return search_error;
         }
+        if (!optional_string(item, "reasoning", message.reasoning, error)) {
+            return error;
+        }
         if (role == "user") {
             message.role = Role::User;
         } else if (role == "assistant") {
             message.role = Role::Assistant;
         } else {
             return "un mensaje tiene un rol desconocido";
+        }
+        if (message.role == Role::Assistant) {
+            message.reasoning = capped_reasoning(std::move(message.reasoning));
+        } else {
+            message.reasoning.clear(); // Solo el asistente piensa.
         }
         // Solo pares usuario → asistente alternados, como los escribe
         // save_conversation: así nunca se envían dos User seguidos.
@@ -203,6 +225,9 @@ nlohmann::ordered_json to_json(const StoredConversation& conversation) {
         if (message.role == Role::Assistant) {
             item["model"] = message.model;
             item["finish_reason"] = message.finish_reason;
+            if (!message.reasoning.empty()) {
+                item["reasoning"] = capped_reasoning(message.reasoning);
+            }
         } else if (message.search.has_value()) {
             ordered_json results = ordered_json::array();
             for (const SearchResult& result : message.search->response.results) {

@@ -4,6 +4,7 @@
 #include "performance.hpp"
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 
 #include <ftxui/dom/elements.hpp>
 #include <ftxui/dom/node.hpp>
@@ -832,4 +833,303 @@ TEST_CASE("historial: un mensaje del usuario de varias líneas conserva sus salt
     CHECK(*(at + 2) == "");
     CHECK(*(at + 3) == "    if (x) {");
     CHECK(*(at + 4) == "    }");
+}
+
+// Pensamiento (M3): la línea plegable arriba de la respuesta.
+
+namespace {
+
+Entry thinking(std::string reasoning, std::string text, bool in_progress = false) {
+    Entry entry = make(EntryKind::Assistant, std::move(text));
+    entry.reasoning = std::move(reasoning);
+    entry.in_progress = in_progress;
+    return entry;
+}
+
+/// Las filas de la pantalla sin los espacios del final.
+std::vector<std::string> rows_of(const std::string& text) {
+    std::vector<std::string> rows;
+    std::size_t start = 0;
+    while (start < text.size()) {
+        const std::size_t end = text.find('\n', start);
+        std::string row = text.substr(start, end - start);
+        row.erase(row.find_last_not_of(' ') + 1);
+        rows.push_back(row);
+        start = end + 1;
+    }
+    return rows;
+}
+
+std::string numbered_lines(int from, int to) {
+    std::string text;
+    for (int i = from; i <= to; ++i) {
+        text += "línea " + std::to_string(i) + "\n";
+    }
+    return text;
+}
+
+} // namespace
+
+TEST_CASE("historial: pensamiento plegado, una línea con el conteo de palabras",
+          "[historial][pensamiento]") {
+    HistoryView view;
+    std::string reasoning;
+    for (int i = 0; i < 1240; ++i) {
+        reasoning += i % 10 == 9 ? "palabra\n" : "palabra ";
+    }
+    const std::vector<std::string> rows =
+        rows_of(draw(view, {thinking(reasoning, "La respuesta.")}, 60));
+    REQUIRE(rows.size() >= 3);
+    CHECK(rows[0] == "Asistente:");
+    CHECK(rows[1] == "▸ Pensamiento · 1 240 palabras");
+    CHECK(rows[2] == "La respuesta.");
+    CHECK(rows.size() == 3);
+}
+
+TEST_CASE("historial: sin pensamiento se ve igual que antes", "[historial][pensamiento]") {
+    HistoryView view;
+    const std::string text = draw(view, {make(EntryKind::Assistant, "Hola")}, 40);
+    CHECK(text.find("Pensamiento") == std::string::npos);
+    CHECK(rows_of(text) == std::vector<std::string>{"Asistente:", "Hola"});
+}
+
+TEST_CASE("historial: pensamiento abierto, en markdown atenuado con sangría de 2",
+          "[historial][pensamiento]") {
+    HistoryView view;
+    Entry entry = thinking("Primero **esto**.\n\n```py\nprint(1)\n```", "Listo.");
+    entry.reasoning_fold = chatbot::cli::ReasoningFold::Open;
+    const std::vector<std::string> rows = rows_of(draw(view, {entry}, 40));
+    REQUIRE(rows.size() > 4);
+    CHECK(rows[1] == "▾ Pensamiento · 5 palabras");
+    CHECK(rows[2] == "  Primero esto.");
+    CHECK(rows.back() == "Listo.");
+    // El bloque de código del pensamiento no tiene número ni botones.
+    const std::string all = draw(view, {entry}, 40);
+    CHECK(all.find("print(1)") != std::string::npos);
+    CHECK(all.find("#1") == std::string::npos);
+    CHECK(all.find("[Copiar]") == std::string::npos);
+}
+
+TEST_CASE("historial: llegando sin texto, abierto con las últimas 6 líneas",
+          "[historial][pensamiento]") {
+    HistoryView view;
+    // Párrafos aparte: una fila por línea y una en blanco entre ellas.
+    std::string paragraphs;
+    for (int i = 1; i <= 20; ++i) {
+        paragraphs += "línea " + std::to_string(i) + "\n\n";
+    }
+    const std::vector<std::string> rows = rows_of(draw(view, {thinking(paragraphs, "", true)}, 40));
+    CHECK(rows == std::vector<std::string>{"Asistente:", "▾ Pensamiento · 40 palabras", "",
+                                           "  línea 18", "", "  línea 19", "", "  línea 20"});
+    SECTION("un párrafo largo de líneas sueltas: las últimas 6 filas") {
+        const std::vector<std::string> joined =
+            rows_of(draw(view, {thinking(numbered_lines(1, 100), "", true)}, 40));
+        REQUIRE(joined.size() == 8);
+        CHECK(joined.back().find("línea 100") != std::string::npos);
+        for (const std::string& row : joined) {
+            CHECK(row.find("línea 50 ") == std::string::npos);
+        }
+    }
+    SECTION("un bloque de código del pensamiento, sin número ni botones") {
+        const std::string text =
+            draw(view, {thinking("Pruebo:\n\n```py\nprint(1)\n```\n", "", true)}, 40);
+        CHECK(text.find("print(1)") != std::string::npos);
+        CHECK(text.find("#1") == std::string::npos);
+        CHECK(text.find("[Copiar]") == std::string::npos);
+    }
+    SECTION("con pocas líneas, solo esas") {
+        const std::vector<std::string> few = rows_of(draw(view, {thinking("hmm", "", true)}, 40));
+        CHECK(few == std::vector<std::string>{"Asistente:", "▾ Pensamiento · 1 palabra",
+                                              "  hmm"});
+    }
+    SECTION("con el primer texto se pliega sola") {
+        const std::vector<std::string> folded =
+            rows_of(draw(view, {thinking(numbered_lines(1, 20), "Ya", true)}, 40));
+        CHECK(folded == std::vector<std::string>{"Asistente:", "▸ Pensamiento · 40 palabras",
+                                                 "Ya"});
+    }
+    SECTION("una sola línea larga: las últimas 6 filas ajustadas") {
+        std::string words;
+        for (int i = 0; i < 400; ++i) {
+            words += "w" + std::to_string(i) + " ";
+        }
+        const std::vector<std::string> wrapped = rows_of(draw(view, {thinking(words, "", true)}, 30));
+        REQUIRE(wrapped.size() == 8);
+        CHECK(wrapped.back().find("w399") != std::string::npos);
+    }
+}
+
+TEST_CASE("historial: clic en la línea del pensamiento", "[historial][pensamiento]") {
+    chatbot::cli::Conversation conversation{""};
+    REQUIRE(conversation.submit("hola").has_value());
+    conversation.append_reasoning("pienso mucho");
+    conversation.append_delta("Hola");
+    REQUIRE_FALSE(conversation.finish_success("stop", "m").has_value());
+    HistoryView view;
+    const auto frame = [&] {
+        ftxui::Element element = view.render(conversation.entries(), 40,
+                                             chatbot::cli::terminal_palette());
+        ftxui::Screen screen = ftxui::Screen::Create(ftxui::Dimension::Fixed(40),
+                                                     ftxui::Dimension::Fit(element, true));
+        ftxui::Render(screen, element);
+        return rows_of(screen_text(screen));
+    };
+    std::vector<std::string> rows = frame();
+    // "Tú:", "hola", "", "Asistente:", la línea del pensamiento.
+    REQUIRE(rows.size() >= 5);
+    CHECK(rows[4] == "▸ Pensamiento · 2 palabras");
+    const std::optional<chatbot::cli::ButtonHit> hit = view.hit_test(3, 4);
+    REQUIRE(hit.has_value());
+    REQUIRE(hit->reasoning.has_value());
+    CHECK(*hit->reasoning == 1);
+    CHECK_FALSE(view.hit_test(3, 3).has_value()); // "Asistente:" no.
+    CHECK_FALSE(view.hit_test(3, 5).has_value()); // La respuesta no.
+
+    conversation.toggle_reasoning(*hit->reasoning);
+    rows = frame();
+    CHECK(rows[4] == "▾ Pensamiento · 2 palabras");
+    CHECK(rows[5] == "  pienso mucho");
+    conversation.toggle_reasoning(1);
+    CHECK(frame()[4] == "▸ Pensamiento · 2 palabras");
+    conversation.toggle_reasoning(0); // El usuario no tiene pensamiento: nada.
+    CHECK(frame()[4] == "▸ Pensamiento · 2 palabras");
+}
+
+TEST_CASE("Conversation: Ctrl+T abre todos y, si ya lo están, los cierra",
+          "[historial][pensamiento]") {
+    using chatbot::cli::ReasoningView;
+    chatbot::cli::Conversation conversation{""};
+    for (const char* reasoning : {"uno", "", "tres"}) {
+        REQUIRE(conversation.submit("pregunta").has_value());
+        conversation.append_reasoning(reasoning);
+        conversation.append_delta("respuesta");
+        REQUIRE_FALSE(conversation.finish_success("stop", "m").has_value());
+    }
+    const auto views = [&] {
+        std::vector<ReasoningView> out;
+        for (const Entry& entry : conversation.entries()) {
+            if (entry.kind == EntryKind::Assistant) {
+                out.push_back(chatbot::cli::reasoning_view(entry));
+            }
+        }
+        return out;
+    };
+    CHECK(views() == std::vector{ReasoningView::Folded, ReasoningView::None, ReasoningView::Folded});
+    conversation.toggle_reasoning(1); // Abre solo el primero.
+    conversation.toggle_all_reasoning(); // Uno estaba plegado: abre todos.
+    CHECK(views() == std::vector{ReasoningView::Open, ReasoningView::None, ReasoningView::Open});
+    conversation.toggle_all_reasoning();
+    CHECK(views() == std::vector{ReasoningView::Folded, ReasoningView::None, ReasoningView::Folded});
+    // Reabierta: todo plegado otra vez.
+    conversation.toggle_all_reasoning();
+    const auto reopened = chatbot::cli::Conversation::from_stored(
+        conversation.to_stored("2026-10-31T10:00:00-06:00"), "");
+    for (const Entry& entry : reopened.entries()) {
+        CHECK(entry.reasoning_fold == chatbot::cli::ReasoningFold::Auto);
+        CHECK(chatbot::cli::reasoning_view(entry) != ReasoningView::Open);
+    }
+}
+
+TEST_CASE("historial: pensamiento en pantalla angosta", "[historial][pensamiento]") {
+    const int width = GENERATE(1, 2, 3, 8, 12, 14);
+    HistoryView view;
+    Entry entry = thinking("uno dos tres cuatro cinco", "Sí");
+    const std::string folded = draw(view, {entry}, width);
+    CHECK_FALSE(folded.empty());
+    entry.reasoning_fold = chatbot::cli::ReasoningFold::Open;
+    const std::string open = draw(view, {entry}, width);
+    CHECK(open.size() > folded.size());
+    const std::string live = draw(view, {thinking(numbered_lines(1, 30), "", true)}, width);
+    CHECK_FALSE(live.empty());
+    if (width >= 14) { // "▸ Pensamiento" cabe en una fila.
+        CHECK(rows_of(folded)[1].rfind("▸ Pensamiento", 0) == 0);
+    }
+}
+
+TEST_CASE("reasoning_summary: palabras con separador de miles", "[pensamiento]") {
+    using chatbot::cli::reasoning_summary;
+    CHECK(reasoning_summary("una") == "Pensamiento · 1 palabra");
+    CHECK(reasoning_summary("  dos\n\tpalabras  ") == "Pensamiento · 2 palabras");
+    CHECK(reasoning_summary("") == "Pensamiento · 0 palabras");
+    std::string many;
+    for (int i = 0; i < 1234567; ++i) {
+        many += "a ";
+    }
+    CHECK(reasoning_summary(many) == "Pensamiento · 1 234 567 palabras");
+}
+
+TEST_CASE("glyphs: ▸ y ▾ del pensamiento tienen respaldo", "[pensamiento]") {
+    using chatbot::cli::Glyph;
+    using chatbot::cli::Symbols;
+    CHECK(chatbot::cli::glyph(Glyph::ReasoningClosed, Symbols::Unicode) == "▸");
+    CHECK(chatbot::cli::glyph(Glyph::ReasoningClosed, Symbols::Simple) == ">");
+    CHECK(chatbot::cli::glyph(Glyph::DropdownClosed, Symbols::Unicode) == "▾");
+    CHECK(chatbot::cli::glyph(Glyph::DropdownClosed, Symbols::Simple) == "v");
+}
+
+TEST_CASE("historial: pensamiento de 100 KB", "[historial][desempeno][pensamiento]") {
+    std::string reasoning;
+    while (reasoning.size() < 100 * 1024) {
+        reasoning += "Veamos: si **x** es par, entonces x + 1 es impar; probemos con `x = 2`.\n";
+    }
+    std::vector<Entry> entries;
+    for (int i = 0; i < 20; ++i) {
+        entries.push_back(make(EntryKind::User, "pregunta"));
+        entries.push_back(make(EntryKind::Assistant, "respuesta " + std::to_string(i)));
+    }
+    entries.push_back(make(EntryKind::User, "un problema de lógica"));
+    entries.push_back(thinking(reasoning, "", true));
+
+    const auto frame = [&](HistoryView& view) {
+        const auto start = std::chrono::steady_clock::now();
+        ftxui::Element element = view.render(entries, 100, chatbot::cli::terminal_palette()) |
+                                 ftxui::focusPositionRelative(0.f, 1.f) | ftxui::yframe;
+        ftxui::Screen screen = ftxui::Screen::Create(ftxui::Dimension::Fixed(100),
+                                                     ftxui::Dimension::Fixed(40));
+        ftxui::Render(screen, element);
+        return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start)
+            .count();
+    };
+    HistoryView view;
+    (void)frame(view);
+    // Llegando: cada delta de pensamiento redibuja solo el final.
+    double live = 0;
+    constexpr int kFrames = 5;
+    for (int i = 0; i < kFrames; ++i) {
+        entries.back().reasoning += "más pensamiento ";
+        live += frame(view);
+    }
+    live /= kFrames;
+    // Ya con texto (plegado): cada delta de texto.
+    double folded = 0;
+    for (int i = 0; i < kFrames; ++i) {
+        entries.back().text += "palabra ";
+        folded += frame(view);
+    }
+    folded /= kFrames;
+    // Abierto completo: el primer cuadro lo parsea; el scroll (sin cambios) no.
+    entries.back().reasoning_fold = chatbot::cli::ReasoningFold::Open;
+    const double opening = frame(view);
+    double scroll = 0;
+    for (int i = 0; i < kFrames; ++i) {
+        scroll += frame(view);
+    }
+    scroll /= kFrames;
+    // Abierto mientras llega texto: el pensamiento ya está parseado.
+    double open_streaming = 0;
+    for (int i = 0; i < kFrames; ++i) {
+        entries.back().text += "palabra ";
+        open_streaming += frame(view);
+    }
+    open_streaming /= kFrames;
+    WARN("pensamiento de " << reasoning.size() / 1024 << " KB: llegando " << live
+                           << " ms; plegado con texto llegando " << folded << " ms; al abrirlo "
+                           << opening << " ms; scroll abierto " << scroll
+                           << " ms; abierto con texto llegando " << open_streaming << " ms");
+    if (chatbot_test::strict_performance()) {
+        CHECK(live < 50.0);
+        CHECK(folded < 50.0);
+        CHECK(scroll < 50.0);
+        CHECK(open_streaming < 50.0);
+    }
 }

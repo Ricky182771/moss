@@ -229,17 +229,24 @@ SendResult Session::send(std::string_view text, std::optional<std::string> searc
     if (!messages.has_value()) {
         return SendResult::Empty;
     }
-    const auto on_delta = [this](std::string delta) { conversation_.append_delta(delta); };
+    const auto on_delta = [this](StreamDelta::Kind kind, std::string delta) {
+        if (kind == StreamDelta::Kind::Reasoning) {
+            conversation_.append_reasoning(delta);
+        } else {
+            conversation_.append_delta(delta);
+        }
+    };
     const auto on_done = [this](Result<CompletionInfo> result, std::size_t dropped) {
         searching_ = false;
         last_dropped_ = dropped;
         Finished finished;
         finished.dropped = dropped;
         if (result.is_ok()) {
+            // Antes de cerrar: el mismo error que pondrá finish_success si no hubo texto.
+            ChatError empty = conversation_.empty_answer_error(result.value().finish_reason);
             finished.restored = conversation_.finish_success(result.value().finish_reason, model_);
             if (finished.restored.has_value()) {
-                finished.error =
-                    ChatError{ErrorKind::BadResponse, 0, std::string{kEmptyAnswer}, std::nullopt};
+                finished.error = std::move(empty);
             } else {
                 finished.finish_reason = result.value().finish_reason;
             }

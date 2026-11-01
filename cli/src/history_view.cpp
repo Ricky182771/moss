@@ -37,7 +37,25 @@ bool same_sources(const std::vector<SearchResult>& a, const std::vector<SearchRe
 bool same_entry(const Entry& a, const Entry& b) {
     return a.kind == b.kind && a.in_progress == b.in_progress && a.incomplete == b.incomplete &&
            a.cancelled == b.cancelled && a.text == b.text && a.note == b.note &&
+           a.reasoning_fold == b.reasoning_fold && a.reasoning == b.reasoning &&
            same_sources(a.sources, b.sources);
+}
+
+/// Los últimos max_bytes de text como mucho, sin partir un carácter: lo
+/// que basta para sus últimas filas, así el pensamiento que llega no se
+/// vuelve a dibujar completo.
+/// shortcut: el corte puede caer a mitad de un bloque (una valla de código o
+/// una lista) y esas filas se ven distintas hasta que se pliega; si molesta,
+/// cortar en el inicio de un bloque de primer nivel (md::Document).
+std::string_view live_tail(std::string_view text, std::size_t max_bytes) {
+    if (text.size() <= max_bytes) {
+        return text;
+    }
+    std::size_t start = text.size() - max_bytes;
+    while (start < text.size() && (static_cast<unsigned char>(text[start]) & 0xC0) == 0x80) {
+        ++start;
+    }
+    return text.substr(start);
 }
 
 /// Texto filtrado (md::sanitize) en una sola línea.
@@ -151,9 +169,13 @@ std::optional<ButtonLabels> fitting_labels(int frame_width, int title_width, boo
 class HistoryView::Picture : public ftxui::Node {
 public:
     /// hits: donde se anotan los botones dibujados (HistoryView::hits_).
+    /// reasoning_rows: filas de la línea del pensamiento, desde la fila 1 (0
+    /// si no hay); un clic ahí es de la entrada index.
     Picture(std::shared_ptr<const ftxui::Screen> image, std::vector<CodeFrame> frames,
-            const HistoryView& view, std::vector<ButtonHit>* hits)
-        : image_(std::move(image)), frames_(std::move(frames)), view_(view), hits_(hits) {}
+            const HistoryView& view, std::vector<ButtonHit>* hits, std::size_t index,
+            int reasoning_rows)
+        : image_(std::move(image)), frames_(std::move(frames)), view_(view), hits_(hits),
+          index_(index), reasoning_rows_(reasoning_rows) {}
 
     void ComputeRequirement() override {
         requirement_ = ftxui::Requirement{};
@@ -182,6 +204,16 @@ public:
         if (view_.buttons_visible_) {
             for (const CodeFrame& frame : frames_) {
                 draw_buttons(screen, frame);
+            }
+        }
+        // La línea del pensamiento no es un botón: siempre se puede pulsar.
+        if (reasoning_rows_ > 0 && hits_ != nullptr) {
+            // Va debajo de "Asistente:" (fila 0).
+            const ftxui::Box line{box_.x_min, box_.x_min + image_->dimx() - 1, box_.y_min + 1,
+                                  box_.y_min + reasoning_rows_};
+            const ftxui::Box box = ftxui::Box::Intersection(line, screen.stencil);
+            if (!box.IsEmpty()) {
+                hits_->push_back(ButtonHit{box, 0, BlockAction::Copy, index_});
             }
         }
     }
@@ -225,7 +257,7 @@ private:
         const ftxui::Box box =
             ftxui::Box::Intersection(ftxui::Box{begin, end, y, y}, screen.stencil);
         if (hits_ != nullptr && !box.IsEmpty()) {
-            hits_->push_back(ButtonHit{box, block, action});
+            hits_->push_back(ButtonHit{box, block, action, std::nullopt});
         }
     }
 
@@ -259,6 +291,8 @@ private:
     std::vector<CodeFrame> frames_;
     const HistoryView& view_;
     std::vector<ButtonHit>* hits_;
+    std::size_t index_;
+    int reasoning_rows_;
 };
 
 
@@ -282,9 +316,16 @@ ftxui::Element HistoryView::entry_element(Cached& cached, const Entry& entry, in
              md::render_plain(entry.text, width)});
     case EntryKind::Assistant: {
         ftxui::Elements lines{
-            label(ftxui::text("Asistente:") | ftxui::bold | palette.ink(&Theme::assistant_label)),
-            md::render(document_for(cached, entry.text), width, palette, first_code,
-                       first_code > 0 ? &cached.code_boxes : nullptr)};
+            label(ftxui::text("Asistente:") | ftxui::bold | palette.ink(&Theme::assistant_label))};
+        cached.reasoning_rows = 0;
+        if (reasoning_view(entry) != ReasoningView::None) {
+            lines.push_back(reasoning_element(cached, entry, width, palette));
+        }
+        if (!entry.text.empty() || cached.reasoning_rows == 0) {
+            // Con solo pensamiento (llegando o cancelada), sin la fila vacía.
+            lines.push_back(md::render(document_for(cached, entry.text), width, palette,
+                                       first_code, first_code > 0 ? &cached.code_boxes : nullptr));
+        }
         if (entry.cancelled) {
             lines.push_back(label(ftxui::text("(cancelada)") | notice));
         } else if (entry.incomplete) {
@@ -303,6 +344,63 @@ ftxui::Element HistoryView::entry_element(Cached& cached, const Entry& entry, in
                             md::render(sources_document(entry.sources), width, palette)});
     }
     return ftxui::text("");
+}
+
+ftxui::Element HistoryView::reasoning_element(Cached& cached, const Entry& entry, int width,
+                                              const Palette& palette) {
+    const ftxui::Decorator notice = palette.ink(&Theme::notice);
+    const ReasoningView view = reasoning_view(entry);
+    // Abierto, el mismo "▾" de las listas desplegables.
+    const Glyph mark =
+        view == ReasoningView::Folded ? Glyph::ReasoningClosed : Glyph::DropdownClosed;
+    ftxui::Element line = md::render_plain(
+        std::string{palette.glyph(mark)} + " " + reasoning_summary(entry.reasoning),
+        width, notice);
+    line->ComputeRequirement();
+    cached.reasoning_rows = std::max(line->requirement().min_y, 1);
+    if (view == ReasoningView::Folded) {
+        return line;
+    }
+    // Markdown atenuado con sangría de 2; sus bloques de código, sin número
+    // ni botones (no entran a collect_code_blocks).
+    const int inner = std::max(width - 2, 1);
+    ftxui::Element body;
+    if (view == ReasoningView::Live) {
+        // Solo las últimas filas, para no empujar la pantalla. Se dibuja solo
+        // el final del texto: con hasta 4 bytes por columna, (filas + 2)
+        // filas llenas caben en esos bytes, aunque el texto sea un párrafo.
+        const std::size_t max_bytes =
+            static_cast<std::size_t>(inner) * 4 * static_cast<std::size_t>(kLiveReasoningRows + 2);
+        body = md::render(md::parse(live_tail(entry.reasoning, max_bytes)), inner, palette) |
+               ftxui::focusPositionRelative(0.F, 1.F) | ftxui::yframe |
+               ftxui::size(ftxui::HEIGHT, ftxui::LESS_THAN, kLiveReasoningRows);
+        body = std::move(body) | notice;
+    } else {
+        // Abierto: en su propia imagen, para que el texto que llega debajo no
+        // lo vuelva a dibujar (un pensamiento largo tarda).
+        const std::string palette_key = palette.key();
+        if (!cached.reasoning_parsed || cached.reasoning_source != entry.reasoning) {
+            cached.reasoning_document = md::parse(entry.reasoning);
+            cached.reasoning_source = entry.reasoning;
+            cached.reasoning_parsed = true;
+            cached.reasoning_image.reset();
+        }
+        if (!cached.reasoning_image || cached.reasoning_width != inner ||
+            cached.reasoning_palette != palette_key) {
+            ftxui::Element element =
+                md::render(cached.reasoning_document, inner, palette) | notice | palette.base();
+            element->ComputeRequirement();
+            auto image =
+                std::make_shared<ftxui::Screen>(inner, std::max(element->requirement().min_y, 1));
+            ftxui::Render(*image, element);
+            cached.reasoning_image = std::move(image);
+            cached.reasoning_width = inner;
+            cached.reasoning_palette = palette_key;
+        }
+        body = std::make_shared<Picture>(cached.reasoning_image, std::vector<CodeFrame>{}, *this,
+                                         nullptr, 0, 0);
+    }
+    return ftxui::vbox({std::move(line), ftxui::hbox({ftxui::text("  "), std::move(body)})});
 }
 
 const std::vector<CodeFrame>& HistoryView::code_frames(std::size_t entry) const {
@@ -393,7 +491,8 @@ ftxui::Element HistoryView::render(const std::vector<Entry>& entries, int width,
         if (!rows.empty()) {
             rows.push_back(ftxui::text(""));
         }
-        rows.push_back(std::make_shared<Picture>(cached.image, cached.code_frames, *this, &hits_));
+        rows.push_back(std::make_shared<Picture>(cached.image, cached.code_frames, *this, &hits_, i,
+                                                 cached.reasoning_rows));
     }
     return ftxui::vbox(std::move(rows));
 }

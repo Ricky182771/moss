@@ -1538,8 +1538,9 @@ Phase Dispatcher::current_phase() const {
         return Phase::Searching;
     }
     const std::vector<cli::Entry>& entries = session_->conversation().entries();
+    // Mientras solo llega pensamiento sigue en thinking.
     if (!entries.empty() && entries.back().kind == cli::EntryKind::Assistant &&
-        entries.back().in_progress) {
+        entries.back().in_progress && !entries.back().text.empty()) {
         return Phase::Streaming;
     }
     return Phase::Thinking;
@@ -1581,26 +1582,51 @@ void Dispatcher::sync(bool flush) {
     const Phase phase = current_phase();
     const bool other =
         diff.updated || diff.added(seen_) || phase != phase_ || finished_.has_value();
-    if (!diff.grown && !other) {
+    const bool grown = diff.grown || diff.reasoning_grown;
+    if (!grown && !other) {
         return;
     }
+    if (!grown) {
+        text_first_ = false;
+    } else if (!pending_since_.has_value()) {
+        // Lo que empezó a llegar primero en la ventana sale primero (cada
+        // delta es una tarea aparte; con los dos a la vez, el pensamiento).
+        text_first_ = !diff.reasoning_grown;
+    }
     if (!other && !flush) {
-        // Solo texto agregado a la respuesta en curso: espera a juntarse.
+        // Solo texto o pensamiento agregado a la respuesta en curso: espera
+        // a juntarse.
         if (!pending_since_.has_value()) {
             pending_since_ = now_();
         }
         return;
     }
-    // El texto pendiente sale antes que cualquier otro evento, también
-    // antes de entry_updated (que de todos modos trae la entrada completa).
-    if (diff.grown) {
-        const std::size_t last = seen_.count - 1;
-        emit_conversation(
-            "conversation.entry_delta",
-            {{"index", last}, {"text", entries[last].text.substr(seen_.last_text_size)}});
+    // Lo pendiente sale antes que cualquier otro evento, también antes de
+    // entry_updated (que de todos modos trae la entrada completa).
+    const std::size_t last = seen_.count - 1;
+    const auto emit_text = [&] {
+        if (diff.grown) {
+            emit_conversation(
+                "conversation.entry_delta",
+                {{"index", last}, {"text", entries[last].text.substr(seen_.last_text_size)}});
+        }
+    };
+    const auto emit_reasoning = [&] {
+        if (diff.reasoning_grown) {
+            const std::string& reasoning = entries[last].reasoning;
+            emit_conversation(
+                "conversation.reasoning_delta",
+                {{"index", last}, {"text", reasoning.substr(seen_.last_reasoning_size)}});
+        }
+    };
+    if (text_first_) {
+        emit_text();
+        emit_reasoning();
+    } else {
+        emit_reasoning();
+        emit_text();
     }
     if (diff.updated) {
-        const std::size_t last = seen_.count - 1;
         emit_conversation("conversation.entry_updated",
                           {{"index", last}, {"entry", encode_entry(entries[last])}});
     }

@@ -34,7 +34,13 @@ struct ButtonHit {
     ftxui::Box box;  ///< En coordenadas de la pantalla (una fila).
     int block = 0;   ///< Número del bloque (el de collect_code_blocks).
     BlockAction action = BlockAction::Copy;
+    /// Si es la línea "▸ Pensamiento" y no un botón: el índice de su entrada
+    /// (Session::toggle_reasoning); block y action no cuentan.
+    std::optional<std::size_t> reasoning;
 };
+
+/// Filas del pensamiento que se ven mientras llega sin texto todavía.
+inline constexpr int kLiveReasoningRows = 6;
 
 /// Dibuja las entradas de la conversación. Las respuestas del asistente se
 /// muestran como markdown (también mientras llegan); las del usuario, los
@@ -125,9 +131,20 @@ private:
         std::vector<ftxui::Box> code_boxes;
         /// Lo mismo con número y título, ya en coordenadas de la entrada.
         std::vector<CodeFrame> code_frames;
+        // Pensamiento abierto completo: su árbol de markdown, aparte.
+        bool reasoning_parsed = false;
+        std::string reasoning_source;
+        md::Document reasoning_document;
+        std::shared_ptr<const ftxui::Screen> reasoning_image; ///< Ya dibujado, sin la sangría.
+        int reasoning_width = 0;
+        std::string reasoning_palette; ///< Palette::key() con que se dibujó.
+        /// Filas de la línea "▸ Pensamiento" en la entrada (0 si no hay).
+        int reasoning_rows = 0;
     };
 
     const md::Document& document_for(Cached& cached, const std::string& text);
+    ftxui::Element reasoning_element(Cached& cached, const Entry& entry, int width,
+                                     const Palette& palette);
     ftxui::Element entry_element(Cached& cached, const Entry& entry, int width,
                                  const Palette& palette, int first_code);
 
