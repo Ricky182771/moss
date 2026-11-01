@@ -5,6 +5,7 @@
 #include "blocking_transport.hpp"
 #include "fake_transport.hpp"
 #include "no_color_guard.hpp"
+#include "session_fakes.hpp"
 #include "symbols_check.hpp"
 
 #include <catch2/catch_test_macros.hpp>
@@ -61,9 +62,16 @@ struct Harness {
     int closes = 0;
     bool wait_models = true; ///< open() espera la lista de modelos.
     std::string base_url = "http://localhost:8080/v1"; ///< La de open(), en el endpoint "lab".
+    chatbot::Config base; ///< El Config de la sesión que recibe open().
+    /// La URL de cada lista de modelos pedida (del hilo del loader; se lee
+    /// después de vaciar la cola).
+    std::vector<std::string> model_urls;
     chatbot::cli::ModelsLoader loader{
-        [] {
+        [this] {
             auto transport = std::make_unique<chatbot_test::FakeTransport>();
+            transport->on_send = [this, raw = transport.get()] {
+                model_urls.push_back(raw->requests.back().url);
+            };
             chatbot::HttpResponse response;
             response.status = 200;
             response.body = "{\"data\":[";
@@ -113,7 +121,7 @@ struct Harness {
               std::string system_prompt = std::string{chatbot::kDefaultSystemPrompt},
               std::size_t history_limit = 32000,
               chatbot::cli::SearchSettings search = {}) {
-        chatbot::Config config;
+        chatbot::Config config = base;
         config.base_url = base_url;
         config.model = model;
         config.history_limit_bytes = history_limit;
@@ -1114,6 +1122,39 @@ TEST_CASE("configuración: Agregar endpoint… deja los campos vacíos con el fo
     h.save();
     CHECK(h.saved_provider == "custom:mi-gw");
     CHECK(h.saved_model == "qwen3");
+}
+
+TEST_CASE("configuración: Agregar endpoint… pide modelos con un proveedor desconocido en "
+          "config.json",
+          "[ajustes][endpoints]") {
+    const chatbot_test::NoColorGuard environment(nullptr);
+    const std::string provider = GENERATE("custom", "custom:no-existe");
+    CAPTURE(provider);
+    const chatbot_test::SessionFakes fakes;
+    Harness h;
+    h.base = fakes.load_with_provider(provider); // Como main: session.config().
+    h.open("modelo-1");
+    h.model_urls.clear();
+    choose_provider(h, 0); // "Agregar endpoint…".
+    for (const char* c : {"M", "i", " ", "G", "W"}) {
+        REQUIRE(h.key(ftxui::Event::Character(c)));
+    }
+    REQUIRE(h.key(ftxui::Event::Tab)); // A la URL.
+    for (const char c : std::string{"https://gw.example/v1"}) {
+        REQUIRE(h.key(ftxui::Event::Character(c)));
+    }
+    REQUIRE(h.key(ftxui::Event::Tab)); // A la key.
+    for (const char c : std::string{"sk-clave-del-gateway-0000"}) {
+        REQUIRE(h.key(ftxui::Event::Character(c)));
+    }
+    REQUIRE(h.key(ftxui::Event::Tab)); // Filtro.
+    REQUIRE(h.key(ftxui::Event::Tab)); // Actualizar.
+    REQUIRE(h.key(ftxui::Event::Return));
+    REQUIRE(h.queue.run_until([&h] { return !h.loader.busy(); }));
+    CHECK(h.model_urls == std::vector<std::string>{"https://gw.example/v1/models"});
+    const ftxui::Screen screen = h.draw(100, 40);
+    CHECK(find(screen, "modelo-0").x >= 0);
+    CHECK(find(screen, h.base.provider_error.substr(0, 20)).x < 0); // Ni el error de config.json.
 }
 
 TEST_CASE("configuración: [Borrar endpoint] pregunta con s/n", "[ajustes][endpoints]") {

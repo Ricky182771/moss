@@ -319,6 +319,8 @@ Config ProviderSettings::request_config(Config base) const {
     base.base_url = effective_base_url();
     base.api_key = effective_key();
     base.model = effective_model();
+    // El error es del proveedor de config.json; el del formulario ya es válido.
+    base.provider_error.clear();
     return base;
 }
 

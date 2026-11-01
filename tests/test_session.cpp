@@ -25,6 +25,7 @@
 #include "chatbot/tavily_search.h"
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 #include <nlohmann/json.hpp>
 
 #include <chrono>
@@ -829,6 +830,25 @@ TEST_CASE("Session::switch_model cambia de modelo y de proveedor como F2", "[ses
         CHECK(h.session->model() == "m1");
         h.session->cancel();
         REQUIRE(h.finish());
+    }
+}
+
+TEST_CASE("Session::models_config de un proveedor elegible con uno desconocido en config.json",
+          "[session][model]") {
+    const std::string provider = GENERATE("custom", "custom:no-existe");
+    CAPTURE(provider);
+    Harness h;
+    chatbot::Credentials credentials;
+    credentials.keys["nvidia"] = "sk-clave-secreta-de-prueba-1234";
+    REQUIRE_FALSE(chatbot::save_credentials(h.credentials_path(), credentials).has_value());
+    h.start(h.load_with_provider(provider));
+    for (const char* id : {"nvidia", "ollama"}) {
+        CAPTURE(id);
+        REQUIRE(h.session->provider_problem(id) == std::nullopt);
+        const chatbot::Result<chatbot::Config> config = h.session->models_config(id);
+        REQUIRE(config.is_ok());
+        CHECK(config.value().provider == id);
+        CHECK(config.value().provider_error.empty());
     }
 }
 

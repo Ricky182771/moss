@@ -2195,6 +2195,46 @@ TEST_CASE("RPC: models.list con {provider} sin api_key usa la key guardada de es
     CHECK(requests->front().api_key == kOpenAiKey);
 }
 
+TEST_CASE("RPC: models.list con un proveedor desconocido en config.json",
+          "[rpc][settings][endpoints]") {
+    const std::string provider = GENERATE("custom", "custom:no-existe");
+    CAPTURE(provider);
+    Rpc rpc;
+    chatbot::Credentials credentials;
+    credentials.keys["nvidia"] = kModelKey;
+    REQUIRE_FALSE(chatbot::save_credentials(rpc.credentials_path(), credentials).has_value());
+    rpc.config = rpc.load_with_provider(provider);
+    const auto urls = std::make_shared<std::vector<std::string>>();
+    rpc.models_transport = [urls] {
+        auto transport = std::make_unique<chatbot_test::FakeTransport>();
+        transport->responses = {models_response(200, R"({"data":[{"id":"m1"}]})")};
+        transport->on_send = [urls, raw = transport.get()] {
+            urls->push_back(raw->requests.back().url);
+        };
+        return transport;
+    };
+    rpc.initialize();
+    SECTION("borrador de un endpoint nuevo") {
+        rpc.call(2, "models.list",
+                 {{"draft", {{"provider", "custom:"},
+                             {"name", "Mi GW"},
+                             {"base_url", "https://gw.example/v1"},
+                             {"model", ""},
+                             {"api_key", "sk-clave-del-gateway-0000"}}}});
+        REQUIRE(run_until_reply(rpc, 2));
+        CHECK(only(rpc)["result"].dump() == R"({"models":["m1"]})");
+        CHECK(*urls == std::vector<std::string>{"https://gw.example/v1/models"});
+    }
+    SECTION("{provider} de la tabla sin api_key: la key guardada") {
+        rpc.call(2, "models.list",
+                 {{"draft", {{"provider", "nvidia"}, {"base_url", ""}, {"model", ""}}}});
+        REQUIRE(run_until_reply(rpc, 2));
+        CHECK(only(rpc)["result"].dump() == R"({"models":["m1"]})");
+        CHECK(*urls ==
+              std::vector<std::string>{"https://integrate.api.nvidia.com/v1/models"});
+    }
+}
+
 TEST_CASE("RPC: endpoints en get, save, switch y settings.endpoint.delete",
           "[rpc][settings][endpoints]") {
     constexpr const char* kEndpointKey = "sk-clave-ficticia-del-endpoint-4321";
