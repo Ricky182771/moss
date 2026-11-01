@@ -44,6 +44,9 @@ struct TextAreaOption {
     /// Supr, Insert) no hacen nada y siguen de largo; el cursor, PgUp/PgDn,
     /// la barra y la rueda funcionan igual. El texto cambia solo con set_text.
     bool read_only = false;
+    /// El color de las filas de una línea (sin "\n"), o nullptr para el del
+    /// texto. Con palette. Vacío: todo con el del texto.
+    std::function<ThemeColor Theme::*(std::string_view line)> line_ink{};
 };
 
 /// Campo de texto de varias líneas con ajuste por palabras (text_edit.h):

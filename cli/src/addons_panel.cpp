@@ -24,10 +24,12 @@ namespace settings = addon_settings;
 /// Ancho de la columna de etiquetas (las etiquetas miden ≤ 20).
 constexpr int kLabelWidth = 21;
 /// Filas máximas del bloque fijo de arriba (estado, servicio, botones,
-/// linger, registro).
+/// [Ver registro], linger, registro).
 constexpr int kBlockRows = 6;
 /// Filas mínimas de los campos; con menos, se desplaza todo el panel.
 constexpr int kMinFieldRows = 5;
+/// Las líneas que trae [Ver registro].
+constexpr int kLogViewLines = 200;
 
 std::string clean(std::string_view text) {
     std::string out = md::sanitize(text);
@@ -236,6 +238,24 @@ AddonsPanel::AddonsPanel(const Palette& palette, Notice notice, std::function<vo
         std::move(restart_option));
     refresh_button_ =
         ftxui::Button("Actualizar estado", [this] { refresh_status(); }, button_option(palette_));
+    log_button_ = ftxui::Button(
+        "Ver registro",
+        [this] {
+            log_open_ = true;
+            log_view_->set_text("");
+            load_log();
+            log_view_->TakeFocus();
+        },
+        button_option(palette_));
+    log_refresh_ = ftxui::Button("Actualizar", [this] { load_log(); }, button_option(palette_));
+    TextAreaOption log_option;
+    log_option.palette = &palette_;
+    log_option.min_rows = 3;
+    log_option.read_only = true;
+    log_option.line_ink = [this](std::string_view line) -> ThemeColor Theme::* {
+        return log_line_is_error(line, addon_.executable) ? &Theme::error : nullptr;
+    };
+    log_view_ = make_text_area(std::move(log_option));
     ftxui::MenuOption invited = ftxui::MenuOption::Vertical();
     invited.entries = &invited_names_;
     invited.selected = &invited_selected_;
@@ -259,11 +279,17 @@ AddonsPanel::AddonsPanel(const Palette& palette, Notice notice, std::function<vo
         }
     }
     fields.push_back(details_box_);
-    root_ = ftxui::Container::Vertical({
+    const ftxui::Component page = ftxui::Container::Vertical({
         ftxui::Maybe(ftxui::Container::Horizontal({restart_button_, refresh_button_}),
                      [this] { return available(); }),
+        ftxui::Maybe(log_button_, [this] { return available() && telegram_->has_service(); }),
         ftxui::Maybe(ftxui::Container::Vertical(std::move(fields)), editable),
         ftxui::Maybe(invited_menu_, [this] { return available() && !invited_names_.empty(); }),
+    });
+    root_ = ftxui::Container::Vertical({
+        ftxui::Maybe(page, [this] { return !log_open_; }),
+        ftxui::Maybe(ftxui::Container::Vertical({log_refresh_, log_view_}),
+                     [this] { return log_open_; }),
     });
 }
 
@@ -279,6 +305,7 @@ bool AddonsPanel::read_only() const { return telegram_->read_only(); }
 
 void AddonsPanel::open(const std::string& app_model) {
     question_.reset();
+    log_open_ = false;
     discard_confirmed_ = false;
     status_requested_ = false;
     if (!available()) {
@@ -442,13 +469,46 @@ void AddonsPanel::ask_remove_invited() {
         "Cancelado: no se quitó a nadie."};
 }
 
+void AddonsPanel::load_log() {
+    if (log_loading_ || !telegram_->has_service()) {
+        return; // El que está en curso trae lo más nuevo.
+    }
+    log_loading_ = true;
+    log_failed_ = false;
+    log_status_ = "Leyendo el registro…";
+    telegram_->log(kLogViewLines, [this](const ServiceLog& read) {
+        log_loading_ = false;
+        log_failed_ = read.kind != ServiceAction::Kind::Done;
+        log_status_ = read.message;
+        if (log_failed_) {
+            return; // Se queda lo que ya se veía.
+        }
+        std::string text;
+        for (const std::string& line : read.lines) {
+            text += (text.empty() ? "" : "\n") + line;
+        }
+        log_view_->set_text(std::move(text)); // Abajo: lo más nuevo.
+    });
+}
+
+void AddonsPanel::close_log() {
+    log_open_ = false;
+    log_button_->TakeFocus();
+}
+
 std::vector<ftxui::Component> AddonsPanel::focus_order() const {
     std::vector<ftxui::Component> order;
     if (!available()) {
         return order;
     }
+    if (log_open_) {
+        return {log_refresh_, log_view_};
+    }
     order.push_back(restart_button_);
     order.push_back(refresh_button_);
+    if (telegram_->has_service()) {
+        order.push_back(log_button_);
+    }
     if (!read_only()) {
         order.push_back(enabled_box_);
         for (std::size_t i = 0; i < kAddonFieldCount; ++i) {
@@ -471,6 +531,25 @@ std::vector<ftxui::Component> AddonsPanel::focus_order() const {
 }
 
 bool AddonsPanel::handle_event(const ftxui::Event& event) {
+    if (available() && log_open_) {
+        if (event == ftxui::Event::Escape) {
+            close_log();
+            return true;
+        }
+        const bool home_end = event == ftxui::Event::Home || event == ftxui::Event::End;
+        if (!home_end && event != ftxui::Event::PageUp && event != ftxui::Event::PageDown) {
+            return false;
+        }
+        log_view_->TakeFocus(); // También con el foco en [Actualizar].
+        if (!home_end) {
+            return log_view_->OnEvent(event);
+        }
+        // Al principio o al final del registro, no de la fila.
+        std::string text = log_view_->text();
+        const std::size_t cursor = event == ftxui::Event::Home ? 0 : text.size();
+        log_view_->set_text(std::move(text), cursor);
+        return true;
+    }
     if (available() && event == ftxui::Event::Delete && invited_menu_->Focused()) {
         ask_remove_invited();
         return true;
@@ -518,6 +597,10 @@ ftxui::Element AddonsPanel::render_block() const {
     }
     rows.push_back(ftxui::hbox(
         {restart_button_->Render(), ftxui::text(" "), refresh_button_->Render()}));
+    if (telegram_->has_service()) {
+        // En su fila: junto al comando no cabe en 80 columnas.
+        rows.push_back(log_button_->Render());
+    }
     if (service.has_value() && service->linger == false) {
         rows.push_back(ftxui::text(std::string{palette_.glyph(Glyph::Warning)} +
                                    " Sin linger: " + std::string{kLingerCommand}) |
@@ -625,7 +708,23 @@ ftxui::Element AddonsPanel::render_fields() const {
     return ftxui::vbox(std::move(rows));
 }
 
+ftxui::Element AddonsPanel::render_log() const {
+    ftxui::Elements page{ftxui::text(std::string{addon_.title} + ": registro del bot") |
+                         ftxui::bold};
+    page.push_back(log_refresh_->Render());
+    if (!log_status_.empty()) {
+        page.push_back(ftxui::paragraph(clean(log_status_)) |
+                       palette_.ink(log_failed_ ? &Theme::error : &Theme::notice));
+    }
+    page.push_back(ftxui::separator() | palette_.ink(&Theme::border));
+    page.push_back(log_view_->Render() | ftxui::flex);
+    return ftxui::vbox(std::move(page));
+}
+
 ftxui::Element AddonsPanel::render() const {
+    if (available() && log_open_) {
+        return render_log();
+    }
     ftxui::Elements page{ftxui::text(std::string{addon_.title}) | ftxui::bold};
     if (!available()) {
         page.push_back(ftxui::text(""));
