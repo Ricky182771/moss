@@ -10,7 +10,10 @@ enum EntryKind {
   sources;
 
   factory EntryKind.fromString(String value) {
-    return EntryKind.values.firstWhere((e) => e.name == value);
+    return EntryKind.values.firstWhere(
+      (e) => e.name == value,
+      orElse: () => EntryKind.assistant, // Degrada a assistant si no reconoce
+    );
   }
 }
 
@@ -108,7 +111,10 @@ enum Phase {
   streaming;
 
   factory Phase.fromString(String value) {
-    return Phase.values.firstWhere((e) => e.name == value);
+    return Phase.values.firstWhere(
+      (e) => e.name == value,
+      orElse: () => Phase.idle, // Degrada a idle si no reconoce
+    );
   }
 }
 

@@ -40,7 +40,7 @@ class _MossLogoPainter extends CustomPainter {
       ..arcToPoint(
         Offset(26 * scale, 30 * scale),
         radius: Radius.circular(9 * scale),
-        clockwise: true,
+        clockwise: false,
       )
       ..lineTo(26 * scale, 48 * scale);
 
@@ -50,7 +50,7 @@ class _MossLogoPainter extends CustomPainter {
       ..arcToPoint(
         Offset(44 * scale, 30 * scale),
         radius: Radius.circular(9 * scale),
-        clockwise: true,
+        clockwise: false,
       )
       ..lineTo(44 * scale, 48 * scale);
 

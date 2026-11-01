@@ -30,7 +30,7 @@ class Motion {
   /// Devuelve las duraciones respetando la configuración de accesibilidad
   /// (cuando el usuario tiene "Reducir animaciones" activado, todo es 0ms)
   static Duration duration(BuildContext context, Duration base) {
-    if (MediaQuery.disableAnimationsOf(context)) {
+    if (MediaQuery.of(context).disableAnimations) {
       return Duration.zero;
     }
     return base;

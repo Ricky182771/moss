@@ -18,7 +18,10 @@ class RpcError {
   /// Usa data.message si está presente, sino message
   String get displayMessage {
     if (data != null && data!.containsKey('message')) {
-      return data!['message'] as String;
+      final msg = data!['message'];
+      if (msg is String) {
+        return msg;
+      }
     }
     return message;
   }

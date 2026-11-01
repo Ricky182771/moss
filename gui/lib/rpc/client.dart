@@ -53,9 +53,15 @@ class RpcClient {
         .transform(const LineSplitter());
 
     final stdinSink = StreamController<String>();
-    stdinSink.stream.listen((line) {
-      _process!.stdin.add(utf8.encode('$line\n'));
-    });
+    stdinSink.stream.listen(
+      (line) {
+        _process!.stdin.add(utf8.encode('$line\n'));
+      },
+      onError: (error) {
+        // Error al escribir en stdin: cerrar el sink
+        stdinSink.close();
+      },
+    );
 
     final channel = StreamChannel(stdoutStream, stdinSink.sink);
 
