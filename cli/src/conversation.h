@@ -8,6 +8,8 @@
 #include "chatbot/types.h"
 #include "chatbot/web_search.h"
 
+#include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <optional>
 #include <string>
@@ -28,6 +30,22 @@ enum class EntryKind {
     Sources, ///< Fuentes de una búsqueda web, después de la respuesta (en sources).
 };
 
+/// Cómo quiere ver el usuario el pensamiento de una respuesta (solo en la
+/// sesión: no se guarda, y al reabrir una conversación vuelve a Auto).
+enum class ReasoningFold : std::uint8_t {
+    Auto,   ///< Abierto (las últimas líneas) mientras solo llega pensamiento; si no, plegado.
+    Open,   ///< Abierto, completo.
+    Closed, ///< Plegado.
+};
+
+/// Cómo se dibuja el pensamiento de una entrada (reasoning_view).
+enum class ReasoningView : std::uint8_t {
+    None,   ///< No tiene pensamiento (o no es del asistente).
+    Folded, ///< Una línea "▸ Pensamiento · N palabras".
+    Live,   ///< Llegando sin texto todavía: la línea y las últimas líneas.
+    Open,   ///< La línea y el pensamiento completo.
+};
+
 /// Una entrada de la pantalla. Es independiente del historial para la API:
 /// los errores y las respuestas incompletas se muestran, pero no se envían.
 struct Entry {
@@ -44,7 +62,15 @@ struct Entry {
     /// Solo Assistant: el pensamiento del modelo, para mostrarse plegado.
     /// Nunca va en el historial que se envía.
     std::string reasoning;
+    ReasoningFold reasoning_fold = ReasoningFold::Auto;
 };
+
+/// Cómo se dibuja el pensamiento de entry, según su ReasoningFold.
+[[nodiscard]] ReasoningView reasoning_view(const Entry& entry);
+
+/// "Pensamiento · 1 240 palabras": palabras separadas por espacios, con
+/// espacio como separador de miles ("1 palabra" en singular).
+[[nodiscard]] std::string reasoning_summary(std::string_view reasoning);
 
 /// Estado de la conversación. Se usa solo desde el hilo de la interfaz y no
 /// sabe nada de FTXUI ni de hilos.
@@ -81,6 +107,13 @@ public:
     /// Igual que append_delta, pero al pensamiento (Entry::reasoning), que
     /// se guarda con el par y nunca entra al historial que se envía.
     void append_reasoning(std::string_view text);
+
+    /// Abre o cierra el pensamiento de la entrada index (clic en su línea).
+    /// Sin pensamiento, no hace nada.
+    void toggle_reasoning(std::size_t index);
+    /// Ctrl+T: si alguno no está abierto completo, abre todos; si no, los
+    /// cierra todos.
+    void toggle_all_reasoning();
 
     /// Cierra la respuesta y la agrega al historial. Si no llegó texto, se
     /// trata como error ("El modelo no devolvió texto.") y devuelve el texto

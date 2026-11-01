@@ -18,7 +18,8 @@ namespace chatbot::rpc {
 ///  2. de las ya existentes solo cambia la última (la respuesta en curso):
 ///     su texto y su pensamiento crecen por el final y sus marcas
 ///     (in_progress, incomplete, cancelled, note) cambian al terminar; kind
-///     y sources nunca cambian;
+///     y sources nunca cambian (reasoning_fold puede cambiar en cualquiera,
+///     pero es solo de la TUI: no se manda y diff_entries no lo ve);
 ///  3. abrir o crear otra conversación reemplaza el objeto: quien llama
 ///     empieza otra vez desde EntriesSeen{} (o remember de la nueva).
 /// Si una dejara de cumplirse, diff_entries tendría que cambiar.

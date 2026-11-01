@@ -1147,7 +1147,7 @@ TEST_CASE("Conversation: from_stored devuelve el pensamiento a su respuesta",
 TEST_CASE("collect_code_blocks: un bloque dentro del pensamiento no se numera",
           "[conversacion][pensamiento][bloques]") {
     Entry answer{EntryKind::Assistant, "Sin código", false, false, false, {}, {},
-                 "```cpp\nint x;\n```"};
+                 "```cpp\nint x;\n```", {}};
     CHECK(chatbot::cli::collect_code_blocks({answer}).empty());
     answer.text = "```py\nprint(1)\n```";
     const auto blocks = chatbot::cli::collect_code_blocks({answer});
