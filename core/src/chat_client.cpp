@@ -5,6 +5,7 @@
 #include "chatbot/platform.h"
 #include "config_internal.h"
 #include "error_body.h"
+#include "model_params_internal.h"
 #include "redirect.h"
 #include "sse.h"
 
@@ -24,7 +25,6 @@
 #include <string_view>
 #include <system_error>
 #include <utility>
-#include <vector>
 #include <vector>
 
 namespace chatbot {
@@ -57,9 +57,9 @@ Result<std::string_view> role_to_string(Role role) {
                      "Rol de mensaje inválido en el historial.", std::nullopt};
 }
 
-/// Construye el cuerpo JSON de la petición (sección 8). stream indica si se
-/// pide respuesta por fragmentos (hito 2) o completa (hito 1).
-Result<std::string> build_request_body(std::string_view model,
+/// Construye el cuerpo JSON de la petición (sección 8), con los ajustes del
+/// modelo (request_json). stream indica si se pide respuesta por fragmentos.
+Result<std::string> build_request_body(const Config& config,
                                        const std::vector<Message>& messages,
                                        bool stream) {
     if (messages.empty()) {
@@ -67,10 +67,7 @@ Result<std::string> build_request_body(std::string_view model,
                          "La conversación no puede estar vacía.", std::nullopt};
     }
 
-    json body;
-    body["model"] = model;
-    body["stream"] = stream;
-    json json_messages = json::array();
+    nlohmann::ordered_json json_messages = nlohmann::ordered_json::array();
     for (const Message& message : messages) {
         const Result<std::string_view> role = role_to_string(message.role);
         if (role.is_error()) {
@@ -80,13 +77,14 @@ Result<std::string> build_request_body(std::string_view model,
             return ChatError{ErrorKind::Config, 0,
                              "Hay un mensaje sin contenido en el historial.", std::nullopt};
         }
-        json_messages.push_back(json{{"role", role.value()},
-                                     {"content", message.content}});
+        json_messages.push_back(nlohmann::ordered_json{{"role", role.value()},
+                                                       {"content", message.content}});
     }
-    body["messages"] = std::move(json_messages);
+    const nlohmann::ordered_json body = request_json(
+        config.model, stream, std::move(json_messages), config.provider, config.model_params);
     // replace: los bytes UTF-8 inválidos se sustituyen por U+FFFD en lugar de
     // lanzar type_error 316 (las excepciones no cruzan la API pública).
-    return body.dump(-1, ' ', false, json::error_handler_t::replace);
+    return body.dump(-1, ' ', false, nlohmann::ordered_json::error_handler_t::replace);
 }
 
 /// URL final del endpoint: base sin "/" final + path ("/chat/completions"
@@ -538,7 +536,7 @@ Result<std::string> ChatClient::complete(const std::vector<Message>& messages,
         return *config_error;
     }
 
-    const Result<std::string> body = build_request_body(config_.model, messages, false);
+    const Result<std::string> body = build_request_body(config_, messages, false);
     if (body.is_error()) {
         return Result<std::string>{body.error()};
     }
@@ -630,7 +628,7 @@ Result<CompletionInfo> ChatClient::complete_stream(const std::vector<Message>& m
         return *config_error;
     }
 
-    const Result<std::string> body = build_request_body(config_.model, messages, true);
+    const Result<std::string> body = build_request_body(config_, messages, true);
     if (body.is_error()) {
         return Result<CompletionInfo>{body.error()};
     }

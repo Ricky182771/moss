@@ -25,6 +25,7 @@ add_executable(chatbot_tests
     test_input_edit.cpp
     test_key_log.cpp
     test_models_loader.cpp
+    test_model_params.cpp
     test_paste.cpp
     test_provider_settings.cpp
     test_addon_launcher.cpp
