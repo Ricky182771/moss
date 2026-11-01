@@ -1006,7 +1006,7 @@ void Dispatcher::cancel_models() {
 
 void Dispatcher::addons(const std::string& method, const Json* params, const Json& id,
                         bool has_id) {
-    static constexpr std::array<std::string_view, 13> kMethods{
+    static constexpr std::array<std::string_view, 14> kMethods{
         "addons.list",
         "addons.check_install",
         "addons.telegram.get",
@@ -1019,7 +1019,8 @@ void Dispatcher::addons(const std::string& method, const Json* params, const Jso
         "service.apply",
         "service.restart",
         "service.disable",
-        "service.reload"};
+        "service.reload",
+        "service.log"};
     if (std::find(kMethods.begin(), kMethods.end(), method) == kMethods.end()) {
         fail(id, has_id, RpcError::MethodNotFound);
         return;
@@ -1193,11 +1194,13 @@ void Dispatcher::service(const std::string& method, const Json* params, const Js
                          bool has_id) {
     cli::TelegramAddon& addon = *telegram_;
     const bool apply = method == "service.apply";
-    if (const auto bad = apply ? check_params(params, {{"addon"},
-                                                       {"restart", Param::Type::Boolean, false},
-                                                       {"replace_foreign", Param::Type::Boolean,
-                                                        false}})
-                               : check_params(params, {{"addon"}})) {
+    const bool log = method == "service.log";
+    if (const auto bad =
+            apply ? check_params(params, {{"addon"},
+                                          {"restart", Param::Type::Boolean, false},
+                                          {"replace_foreign", Param::Type::Boolean, false}})
+            : log ? check_params(params, {{"addon"}, {"lines", Param::Type::Integer, false}})
+                  : check_params(params, {{"addon"}})) {
         fail(id, has_id, RpcError::InvalidParams, *bad);
         return;
     }
@@ -1205,10 +1208,17 @@ void Dispatcher::service(const std::string& method, const Json* params, const Js
         fail(id, has_id, RpcError::InvalidParams, {{"fields", {"addon"}}});
         return;
     }
+    // Un sin signo enorme pasa a negativo: también queda fuera.
+    const std::int64_t lines = params->value("lines", std::int64_t{200});
+    if (log && (lines < 1 || lines > cli::kMaxLogLines)) {
+        fail(id, has_id, RpcError::InvalidParams, {{"fields", {"lines"}}});
+        return;
+    }
     const std::string& chatbot = addon.environment().chatbot_path;
     std::error_code error;
-    if (!std::filesystem::path{chatbot}.is_absolute() ||
-        !std::filesystem::is_regular_file(chatbot, error)) {
+    // Leer el registro no necesita la unidad (su ExecStart).
+    if (!log && (!std::filesystem::path{chatbot}.is_absolute() ||
+                 !std::filesystem::is_regular_file(chatbot, error))) {
         fail(id, has_id, RpcError::StorageError,
              message_data("El servicio arranca moss, y no está junto a moss-rpc: " +
                           chatbot + "."));
@@ -1235,7 +1245,23 @@ void Dispatcher::service(const std::string& method, const Json* params, const Js
             reply(request, true, {{"message", action.message}, {"ok", action.kind == Kind::Done}});
         }
     };
-    if (method == "service.status") {
+    if (log) {
+        addon.log(static_cast<int>(lines), [this, key](const cli::ServiceLog& read) {
+            finish_long(key, false, [&](const Json& request) {
+                using Kind = cli::ServiceAction::Kind;
+                if (read.kind == Kind::NoSystemd) {
+                    fail(request, true, RpcError::Unsupported, message_data(read.message));
+                } else if (read.kind == Kind::Failed) {
+                    fail(request, true, RpcError::StorageError, message_data(read.message));
+                } else {
+                    reply(request, true,
+                          {{"lines", read.lines},
+                           {"truncated", read.truncated},
+                           {"notice", read.message}});
+                }
+            });
+        });
+    } else if (method == "service.status") {
         addon.refresh([this, key] {
             finish_long(key, false, [this](const Json& request) {
                 reply(request, true, status_json(*telegram_));

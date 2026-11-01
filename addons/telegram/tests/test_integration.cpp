@@ -591,3 +591,27 @@ TEST_CASE("telegram: el registro no tiene textos, token ni keys", "[telegram][in
     CHECK(w.log.contains("error chat=5 usuario=5 origen=modelo"));
     CHECK(w.log.contains("no_autorizado chat=77 usuario=77"));
 }
+
+TEST_CASE("telegram: con el detalle de errores, el registro tampoco tiene la key",
+          "[telegram][integracion][registro]") {
+    World w;
+    auto recorder = std::make_shared<chatbot_bot_test::Recorder>();
+    chatbot::bot::BotConfig config = config_for({5});
+    config.log_error_details = true;
+    w.start(std::move(config), chatbot_bot_test::scripted_clients(recorder, [](const auto&) {
+                // Un servidor que repite la key en su error.
+                chatbot::HttpResponse error;
+                error.status = 401;
+                error.body = std::string{R"({"error":{"message":"key inválida: )"} + kModelKey +
+                             R"("}})";
+                return error;
+            }));
+    w.say(1, 5, "hola");
+    REQUIRE(w.idle());
+    w.stop();
+    CHECK(w.log.contains("detalle=\"key inválida: [key oculta]\""));
+    for (const std::string& line : w.log.lines()) {
+        INFO(line);
+        CHECK(line.find(kModelKey) == std::string::npos);
+    }
+}

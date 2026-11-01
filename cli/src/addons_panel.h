@@ -3,6 +3,7 @@
 
 #include "addon_form.h"
 #include "telegram_addon.h"
+#include "text_area.h"
 #include "theme.h"
 
 #include "chatbot/addon_settings/registry.h"
@@ -59,8 +60,11 @@ public:
     void open(const std::string& app_model);
     /// Se eligió la categoría: pide el estado (una vez por apertura).
     void show();
-    /// Olvida la pregunta pendiente.
-    void close() { question_.reset(); }
+    /// Olvida la pregunta pendiente y cierra el registro.
+    void close() {
+        question_.reset();
+        log_open_ = false;
+    }
 
     [[nodiscard]] bool dirty() const;
     /// Guardar haría algo: hay cambios o el servicio no está como dice
@@ -77,6 +81,8 @@ public:
     [[nodiscard]] std::optional<std::string> commit();
 
     [[nodiscard]] const std::optional<Question>& question() const { return question_; }
+    /// [Ver registro] está abierto.
+    [[nodiscard]] bool log_open() const { return log_open_; }
     void answer(bool yes);
     /// Esc: olvida la pregunta sin hacer nada y lo dice.
     void cancel_question();
@@ -84,7 +90,8 @@ public:
     [[nodiscard]] ftxui::Component component() const { return root_; }
     /// Lo que recorre Tab, en orden.
     [[nodiscard]] std::vector<ftxui::Component> focus_order() const;
-    /// Supr sobre un invitado. true si lo usó.
+    /// Supr sobre un invitado; con el registro abierto, Esc lo cierra e
+    /// Inicio/Fin van al principio y al final. true si lo usó.
     bool handle_event(const ftxui::Event& event);
     /// Un campo de texto tiene el foco.
     [[nodiscard]] bool text_field_focused() const;
@@ -100,6 +107,10 @@ private:
     void apply_service(bool restart, bool replace_foreign);
     void ask_remove_invited();
     void set_invited(std::vector<std::int64_t> users);
+    /// [Ver registro] y [Actualizar]: pide las últimas kLogViewLines líneas.
+    void load_log();
+    void close_log();
+    [[nodiscard]] ftxui::Element render_log() const;
     [[nodiscard]] ftxui::Element render_block() const;
     [[nodiscard]] ftxui::Element render_fields() const;
     [[nodiscard]] ftxui::Element render_field(AddonField field) const;
@@ -133,6 +144,14 @@ private:
     ftxui::Component restart_button_;
     ftxui::Component refresh_button_;
     ftxui::Component invited_menu_;
+    /// El registro ([Ver registro]): en lugar de la página mientras está abierto.
+    bool log_open_ = false;
+    bool log_loading_ = false;
+    bool log_failed_ = false;
+    std::string log_status_; ///< "Leyendo el registro…", kEmptyLog o el error.
+    ftxui::Component log_button_;
+    ftxui::Component log_refresh_;
+    std::shared_ptr<TextArea> log_view_;
     ftxui::Component root_;
 };
 

@@ -804,15 +804,16 @@ bool SettingsScreen::handle_event(const ftxui::Event& event) {
         dropdown_open_ = false;
         reasoning_open_ = false;
     }
+    // Antes que Esc: con el registro abierto, Esc solo lo cierra.
+    if (category_ == kAddons && addons_.handle_event(event)) {
+        return true;
+    }
     if (event == ftxui::Event::Escape) {
         (void)request_close();
         return true;
     }
     if (event == ftxui::Event::Tab || event == ftxui::Event::TabReverse) {
         move_focus(event == ftxui::Event::Tab ? 1 : -1);
-        return true;
-    }
-    if (category_ == kAddons && addons_.handle_event(event)) {
         return true;
     }
     if (category_ == kProvider && event.is_mouse() &&
@@ -1232,6 +1233,9 @@ ftxui::Element SettingsScreen::render() const {
                  palette_.ink(&Theme::notice);
     } else if (category_ == kModel) {
         status = ftxui::text("Tab: campo · Enter: nueva línea · Esc: cerrar") |
+                 palette_.ink(&Theme::notice);
+    } else if (category_ == kAddons && addons_.log_open()) {
+        status = ftxui::text("PgUp/PgDn, Inicio/Fin: desplazar · Esc: volver") |
                  palette_.ink(&Theme::notice);
     } else if (category_ == kSearch || category_ == kAddons) {
         status = ftxui::text("Tab: campo · Esc: cerrar") | palette_.ink(&Theme::notice);

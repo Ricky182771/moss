@@ -326,6 +326,7 @@ TEST_CASE("addons: cabe en 80×24 sin encimarse", "[ajustes][addons]") {
     const Position installed = find(screen, "Instalado: ~/CB/build/moss-telegram");
     const Position service = find(screen, "Servicio: activo · habilitado");
     const Position buttons = find(screen, "[ Reiniciar ] [ Actualizar estado ]");
+    const Position log = find(screen, "[ Ver registro ]");
     const Position linger = find(screen, "Sin linger: loginctl enable-linger \"$USER\"");
     const Position journal = find(screen, "Registro: journalctl --user -u moss-telegram");
     const Position activated = find(screen, "[x] Activado");
@@ -340,7 +341,8 @@ TEST_CASE("addons: cabe en 80×24 sin encimarse", "[ajustes][addons]") {
     // Una fila cada uno, en orden, con los campos debajo del bloque fijo.
     CHECK(service.y == installed.y + 1);
     CHECK(buttons.y == service.y + 1);
-    CHECK(linger.y == buttons.y + 1);
+    CHECK(log.y == buttons.y + 1);
+    CHECK(linger.y == log.y + 1);
     CHECK(journal.y == linger.y + 1);
     CHECK(journal.y - installed.y + 1 <= 6);
     CHECK(activated.y > journal.y);
@@ -776,3 +778,123 @@ TEST_CASE("addons: no instalado y variables de entorno", "[ajustes][addons]") {
 }
 
 #endif
+
+namespace {
+
+constexpr const char* kJournal =
+    "journalctl --user -u moss-telegram.service -n 200 -r -o short-iso --no-pager";
+
+/// 100 líneas del bot (la más nueva, de error y larga) como las da
+/// journalctl -r: la más nueva primero.
+std::string journal_lines() {
+    std::string out = "2026-11-01T10:00:09-0600 pc moss-telegram[7]: 2026-11-01 10:00:09 error "
+                      "chat=5 origen=modelo tipo=\"auth\" http=401 ms=12 fin-de-linea\n";
+    for (int i = 98; i >= 0; --i) {
+        const std::string n = (i < 10 ? "00" : "0") + std::to_string(i);
+        out += "2026-11-01T10:00:00-0600 pc moss-telegram[7]: 2026-11-01 10:00:00 info linea-" +
+               n + "\n";
+    }
+    return out;
+}
+
+} // namespace
+
+TEST_CASE("addons: [Ver registro] abre el registro abajo y Esc lo cierra",
+          "[ajustes][addons][registro]") {
+    const chatbot_test::NoColorGuard environment(nullptr);
+    Harness h;
+    h.write_config(enabled_section());
+    h.system.answer(kJournal, exited(0, journal_lines()));
+    h.system.hold(kJournal);
+    h.open();
+    h.go_to_addons();
+    // Debajo de [Reiniciar]; la línea del comando se queda.
+    const ftxui::Screen page = h.draw();
+    REQUIRE(find(page, "[ Ver registro ]").x >= 0);
+    CHECK(find(page, "Registro: journalctl").x >= 0);
+
+    REQUIRE(h.click("[ Ver registro ]"));
+    REQUIRE(h.system.wait_held());
+    CHECK(h.shows("Leyendo el registro…"));
+    h.system.release();
+    REQUIRE(h.wait_for_text("fin-de-linea"));
+    CHECK_FALSE(h.shows("Leyendo el registro…"));
+
+    // Empieza abajo: lo último se ve y lo primero no.
+    const ftxui::Screen bottom = h.draw();
+    CHECK(find(bottom, "linea-098").x >= 0);
+    CHECK(find(bottom, "linea-000").x < 0);
+    CHECK(find(bottom, "[ Actualizar ]").x >= 0);
+    CHECK(find(bottom, "Esc: volver").x >= 0);
+    // La de error, en el color de error; las demás, normales.
+    const Position error = find(bottom, "origen=modelo");
+    const Position normal = find(bottom, "linea-098");
+    REQUIRE(error.x >= 0);
+    CHECK(bottom.CellAt(error.x, error.y).foreground_color !=
+          bottom.CellAt(normal.x, normal.y).foreground_color);
+
+    // Inicio, PgDn y Fin.
+    REQUIRE(h.key(ftxui::Event::Home));
+    CHECK(find(h.draw(), "linea-000").x >= 0);
+    CHECK(find(h.draw(), "fin-de-linea").x < 0);
+    REQUIRE(h.key(ftxui::Event::PageDown));
+    CHECK(find(h.draw(), "linea-000").x < 0);
+    REQUIRE(h.key(ftxui::Event::End));
+    CHECK(find(h.draw(), "fin-de-linea").x >= 0);
+    REQUIRE(h.key(ftxui::Event::PageUp));
+    CHECK(find(h.draw(), "fin-de-linea").x < 0);
+
+    // [Actualizar] vuelve a leer; con el foco ahí, las teclas siguen moviendo el registro.
+    h.system.clear();
+    REQUIRE(h.click("[ Actualizar ]"));
+    REQUIRE(h.queue.run_until([&] { return h.system.called(kJournal); }));
+    REQUIRE(h.wait_for_text("fin-de-linea"));
+    REQUIRE(h.key(ftxui::Event::Home));
+    CHECK(find(h.draw(), "linea-000").x >= 0);
+    REQUIRE(h.key(ftxui::Event::End));
+
+    // Si journalctl falla: el error, y se queda lo que se veía.
+    h.system.answer(kJournal, exited(1, "", "Failed to open journal\n"));
+    REQUIRE(h.click("[ Actualizar ]"));
+    REQUIRE(h.wait_for_text("No se pudo leer el registro: Failed to open journal"));
+    CHECK(h.shows("fin-de-linea"));
+
+    // Esc cierra el registro, no F2.
+    REQUIRE(h.key(ftxui::Event::Escape));
+    const ftxui::Screen back = h.draw();
+    CHECK(find(back, "Registro: journalctl").x >= 0);
+    CHECK(find(back, "fin-de-linea").x < 0);
+    CHECK(find(back, "[ Guardar ]").x >= 0);
+}
+
+TEST_CASE("addons: el registro con la rueda, angosto y vacío", "[ajustes][addons][registro]") {
+    const chatbot_test::NoColorGuard environment(nullptr);
+    Harness h;
+    h.write_config(enabled_section());
+    h.system.answer(kJournal, exited(0, journal_lines()));
+    h.open();
+    h.go_to_addons();
+    REQUIRE(h.click("[ Ver registro ]"));
+    REQUIRE(h.wait_for_text("fin-de-linea"));
+
+    // La rueda sobre el registro lo sube.
+    const Position at = find(h.draw(), "linea-098");
+    REQUIRE(at.x >= 0);
+    ftxui::Mouse wheel;
+    wheel.x = at.x;
+    wheel.y = at.y;
+    wheel.button = ftxui::Mouse::WheelUp;
+    for (int i = 0; i < 5; ++i) {
+        (void)h.key(ftxui::Event::Mouse("", wheel));
+    }
+    CHECK(find(h.draw(), "fin-de-linea").x < 0);
+
+    // Angosto: la línea larga se ajusta (se ve hasta el final), no se corta.
+    REQUIRE(h.key(ftxui::Event::End));
+    CHECK(find(h.draw(50, 24), "fin-de-linea").x >= 0);
+
+    // Sin entradas: el aviso.
+    h.system.answer(kJournal, exited(0, "-- No entries --\n"));
+    REQUIRE(h.click("[ Actualizar ]"));
+    REQUIRE(h.wait_for_text(std::string{chatbot::cli::kEmptyLog}));
+}

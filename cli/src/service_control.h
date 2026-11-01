@@ -35,6 +35,13 @@ inline constexpr std::string_view kReplaceForeignUnit = "¿Reemplazar el servici
 /// Tope de cada programa.
 inline constexpr std::chrono::milliseconds kServiceCommandTimeout{5000};
 
+/// Las últimas líneas del registro ([Ver registro], service.log): cuántas
+/// se piden (1 a kMaxLogLines), el tope de cada una y el del total.
+inline constexpr int kMaxLogLines = 1000;
+inline constexpr std::size_t kMaxLogLineBytes = 4 * 1024;
+inline constexpr std::size_t kMaxLogBytes = 1024 * 1024;
+inline constexpr std::string_view kEmptyLog = "El bot todavía no ha escrito nada en el registro.";
+
 /// Corre un programa: run_process en la app; en las pruebas, uno falso.
 using ProcessRunner =
     std::function<ProcessResult(const std::vector<std::string>&, const ProcessOptions&)>;
@@ -73,12 +80,24 @@ struct ServiceAction {
 [[nodiscard]] std::optional<std::string> show_property(std::string_view show,
                                                        std::string_view property);
 
+/// Lo que trae ServiceControl::log.
+struct ServiceLog {
+    ServiceAction::Kind kind = ServiceAction::Kind::Done; ///< Done, Failed o NoSystemd.
+    std::string message; ///< Done: kEmptyLog sin entradas, o "". Si no, el error.
+    std::vector<std::string> lines; ///< De la más vieja a la más nueva.
+    bool truncated = false; ///< Se recortó una línea o se quitaron las más viejas.
+};
+
 /// La última línea de error del registro (journalctl -o cat): las del bot
 /// con nivel "error" y las fatales ("moss-telegram: …"). Sin la fecha y
 /// sin lo que va desde " detalle=", que puede traer texto de los alumnos.
 /// "" si no hay.
 [[nodiscard]] std::string last_error_line(std::string_view journal,
                                           std::string_view executable);
+
+/// Una línea de ServiceControl::log (short-iso) es de error del bot: con
+/// nivel "error" o fatal, como las que lee last_error_line.
+[[nodiscard]] bool log_line_is_error(std::string_view line, std::string_view executable);
 
 /// El servicio corre según is-active: todo menos "inactive", "failed" y
 /// nada (también "activating", el reinicio tras una falla).
@@ -115,6 +134,12 @@ public:
     [[nodiscard]] ServiceAction restart(const CancelToken* cancel = nullptr) const;
     /// reload, solo si está activo (al guardar).
     [[nodiscard]] ServiceAction reload_if_active(const CancelToken* cancel = nullptr) const;
+    /// Las últimas lines del registro (journalctl -r -o short-iso), sin
+    /// controles, cada una con kMaxLogLineBytes y en total kMaxLogBytes como
+    /// mucho. Sin details, sin lo que va desde " detalle=" (texto de los
+    /// alumnos).
+    [[nodiscard]] ServiceLog log(int lines, bool details,
+                                 const CancelToken* cancel = nullptr) const;
 
 private:
     [[nodiscard]] ProcessResult run(std::vector<std::string> argv,

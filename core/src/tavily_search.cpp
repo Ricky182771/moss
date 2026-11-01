@@ -1,5 +1,6 @@
 #include "chatbot/tavily_search.h"
 #include "chatbot/error.h"
+#include "hide_secret.h"
 #include "published_date.h"
 
 #include <nlohmann/json.hpp>
@@ -126,7 +127,8 @@ public:
         // Manejar errores HTTP.
         if (response.status < 200 || response.status >= 300) {
             const ErrorKind kind = classify_http_error(response.status);
-            const std::string message = extract_error_message(response.body, response.status);
+            const std::string message =
+                extract_error_message(hide_secret(response.body, api_key_), response.status);
             return ChatError{kind, response.status, message, std::nullopt};
         }
 

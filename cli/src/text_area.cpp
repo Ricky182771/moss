@@ -142,6 +142,13 @@ public:
                 break;
             }
             const TextRow& row = (*rows)[index];
+            ThemeColor Theme::*ink = nullptr;
+            if (s.option.line_ink && s.option.palette != nullptr) {
+                // npos + 1 = 0: la primera línea.
+                const std::size_t begin = row.start == 0 ? 0 : text.rfind('\n', row.start - 1) + 1;
+                const std::size_t end = text.find('\n', row.start);
+                ink = s.option.line_ink(std::string_view{text}.substr(begin, end - begin));
+            }
             int x = box_.x_min;
             for (std::size_t at = row.start; at < row.end;) {
                 const TextGlyph glyph = glyph_at(text, at);
@@ -158,6 +165,9 @@ public:
                     // Un "\t" son espacios; un glifo ancho deja vacía su
                     // segunda celda, como ftxui::text.
                     screen.CellAt(cx, cy).character = glyph_cell(text, glyph, cell);
+                    if (ink != nullptr) {
+                        s.option.palette->ink_cell(screen.CellAt(cx, cy), ink);
+                    }
                 }
                 x += glyph.width;
             }

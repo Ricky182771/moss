@@ -1618,7 +1618,8 @@ TEST_CASE("RPC: capabilities de addons según la plataforma", "[rpc][addons]") {
     const Json capabilities = only(rpc)["result"]["capabilities"];
     if (windows) {
         CHECK(capabilities.dump() == R"({"search":true,"addons":[],"service":null})");
-        for (const char* method : {"addons.list", "addons.telegram.get", "service.status"}) {
+        for (const char* method :
+             {"addons.list", "addons.telegram.get", "service.status", "service.log"}) {
             rpc.call(2, method, {{"addon", "telegram"}});
             check_error(only(rpc), -32006,
                         std::string{chatbot::addon_settings::kAddonsUnavailableOnWindows});
@@ -1899,6 +1900,89 @@ TEST_CASE("RPC: service.restart, disable y reload", "[rpc][addons]") {
     write_section(rpc, {{"version", 1}, {"enabled", false}});
     rpc.call(5, "service.restart", {{"addon", "telegram"}});
     check_error(only(rpc), -32005, std::string{chatbot::cli::kRestartNeedsEnabled});
+}
+
+TEST_CASE("RPC: service.log", "[rpc][addons][registro]") {
+    const std::string journal =
+        "journalctl --user -u moss-telegram.service -n 200 -r -o short-iso --no-pager";
+    const std::string lines = // -r: la más nueva primero.
+        "2026-11-01T10:00:05-0600 pc moss-telegram[7]: 2026-11-01 10:00:05 error chat=5 "
+        "detalle=\"texto del alumno\"\n"
+        "2026-11-01T10:00:00-0600 pc moss-telegram[7]: 2026-11-01 10:00:00 info inicio\n";
+    Rpc rpc;
+    nlohmann::json section = enabled_bot();
+    const bool details = GENERATE(false, true);
+    section["log_error_details"] = details;
+    write_section(rpc, section);
+    write_bot_token(rpc);
+    rpc.system.answer(journal, chatbot_test::exited(0, lines));
+    rpc.initialize();
+
+    SECTION("en orden, con el detalle según el ajuste y sin service.changed") {
+        const std::vector<Json> got = long_call(rpc, 2, "service.log", {{"addon", "telegram"}});
+        REQUIRE(summaries(got) == std::vector<std::string>{"#2 result"});
+        const Json& result = got[0]["result"];
+        REQUIRE(result["lines"].size() == 2);
+        CHECK(result["lines"][0].get<std::string>().ends_with("info inicio"));
+        CHECK(result["lines"][1].get<std::string>().ends_with(
+            details ? "error chat=5 detalle=\"texto del alumno\"" : "error chat=5"));
+        CHECK(result["truncated"] == false);
+        CHECK(result["notice"] == "");
+        CHECK(rpc.system.calls() == std::vector<std::string>{journal});
+    }
+    SECTION("lines: el número pedido y fuera de rango") {
+        const std::string five =
+            "journalctl --user -u moss-telegram.service -n 5 -r -o short-iso --no-pager";
+        (void)long_call(rpc, 2, "service.log", {{"addon", "telegram"}, {"lines", 5}});
+        CHECK(rpc.system.called(five));
+        rpc.system.clear();
+        for (const Json& bad : {Json(0), Json(1001), Json(-3), Json(18446744073709551615ULL),
+                                Json("200"), Json(2.5)}) {
+            INFO(bad.dump());
+            rpc.call(3, "service.log", {{"addon", "telegram"}, {"lines", bad}});
+            const Json reply = only(rpc);
+            CHECK(reply["error"]["code"] == -32602);
+            CHECK(reply["error"]["data"]["fields"] == Json::array({"lines"}));
+        }
+        CHECK(rpc.system.calls().empty());
+    }
+    SECTION("sin entradas: el aviso") {
+        rpc.system.answer(journal, chatbot_test::exited(0, "-- No entries --\n"));
+        const std::vector<Json> got = long_call(rpc, 2, "service.log", {{"addon", "telegram"}});
+        CHECK(got[0]["result"].dump() ==
+              Json({{"lines", Json::array()},
+                    {"truncated", false},
+                    {"notice", std::string{chatbot::cli::kEmptyLog}}})
+                  .dump());
+    }
+    SECTION("sin systemd: -32006; journalctl falla: -32007") {
+        chatbot::cli::ProcessResult missing;
+        missing.status = chatbot::cli::ProcessResult::Status::NotFound;
+        rpc.system.answer(journal, missing);
+        check_error(long_call(rpc, 2, "service.log", {{"addon", "telegram"}})[0], -32006,
+                    std::string{chatbot::cli::kNoUserSystemd});
+        rpc.system.answer(journal, chatbot_test::exited(1, "", "Failed to open journal\n"));
+        check_error(long_call(rpc, 3, "service.log", {{"addon", "telegram"}})[0], -32007,
+                    "No se pudo leer el registro: Failed to open journal");
+    }
+    SECTION("$/cancel: -32800 al momento, sin cortar journalctl ni service.changed") {
+        rpc.system.hold(journal);
+        rpc.call(2, "service.log", {{"addon", "telegram"}});
+        REQUIRE(rpc.system.wait_held());
+        rpc.call(3, "$/cancel", {{"id", 2}});
+        CHECK(summaries(rpc.take()) == std::vector<std::string>{"#2 error -32800", "#3 result"});
+        rpc.system.release();
+        // En orden: la siguiente responde después de que terminó la cancelada.
+        const std::vector<Json> after =
+            long_call(rpc, 4, "service.log", {{"addon", "telegram"}});
+        CHECK(summaries(after) == std::vector<std::string>{"#4 result"});
+        CHECK(rpc.system.calls() == std::vector<std::string>{journal, journal});
+    }
+    SECTION("sin moss junto a moss-rpc también lee") {
+        std::filesystem::remove(rpc.chatbot_path());
+        const std::vector<Json> got = long_call(rpc, 2, "service.log", {{"addon", "telegram"}});
+        CHECK(summaries(got) == std::vector<std::string>{"#2 result"});
+    }
 }
 
 TEST_CASE("RPC: peticiones largas pendientes", "[rpc][addons]") {

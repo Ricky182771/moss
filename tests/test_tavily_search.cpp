@@ -410,3 +410,17 @@ TEST_CASE("TavilySearch maneja errores de red", "[tavily_search]") {
         REQUIRE(result.error().kind == ErrorKind::Timeout);
     }
 }
+
+TEST_CASE("TavilySearch: un error que repite la key no la muestra", "[tavily_search][secretos]") {
+    auto transport = std::make_unique<FakeTransport>();
+    FakeTransport* raw = transport.get();
+    TavilySearch search{"tvly-clave-de-prueba", std::move(transport)};
+    HttpResponse resp;
+    resp.status = 400;
+    resp.body = R"({"detail": {"error": "Bad request for tvly-clave-de-prueba"}})";
+    raw->responses.push_back(resp);
+
+    const auto result = search.search("test", nullptr);
+    REQUIRE(result.is_error());
+    CHECK(result.error().message == "Bad request for [key oculta]");
+}
