@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Moss — chat, modo oscuro</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#8DBF5F}a:hover{color:#B5D395}
+.opc .tip{position:absolute;left:50%;bottom:calc(100% + 8px);transform:translateX(-50%);padding:4px 8px;border-radius:6px;font-size:12px;font-weight:500;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .12s}
+.opc:hover .tip,.opc:focus-visible .tip{opacity:1}
+.opc:hover{background:#22301F}
+.nav:hover{background:#22301F}
+.pens summary::-webkit-details-marker{display:none}
+.pens summary:hover{background:#1E2721}
+.pens[open] .chev{transform:rotate(90deg)}
+.fila .mas{opacity:0;transition:opacity .1s}
+.fila:hover .mas,.fila:focus-within .mas,.fila.activa .mas,.fila.abierta .mas{opacity:1}
+.fila:hover > .chat{background:#1E2721}
+.fila.activa:hover > .chat{background:#22301F}
+.mas:hover,.fila.abierta .mas{background:#2A352D}
+.menu button:hover{background:#22301F}
+</style>
+</helmet>
+<div style="height: 100vh; overflow-y: auto; display: flex; flex-wrap: wrap; background: #0F1411; color: #E6EDE7; font-family: 'Geist', system-ui, sans-serif">
+
+  <aside style="flex: 1 1 272px; max-width: 100%; box-sizing: border-box; display: flex; flex-direction: column; gap: 16px; padding: 20px 14px; background: #161D18; box-shadow: inset -1px 0 0 #2A352D">
+    <div style="display: flex; align-items: center; gap: 10px; padding: 4px 8px">
+      <svg width="28" height="28" viewBox="0 0 64 64" aria-hidden="true"><path d="M8 48V30a9 9 0 0 1 18 0v18M26 30a9 9 0 0 1 18 0v18" fill="none" stroke="#8DBF5F" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"></path><rect x="49" y="39" width="10" height="10" rx="1.5" fill="#8DBF5F"></rect></svg>
+      <span style="font-family: 'Geist Mono', monospace; font-size: 20px; font-weight: 500; letter-spacing: -0.02em">moss<span style="color: #8DBF5F">_</span></span>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 2px">
+      <button type="button" class="nav" style="display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 10px; border: 0; border-radius: 10px; background: transparent; color: #E6EDE7; font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+        <span style="flex: 1; text-align: left">Nuevo chat</span>
+        <kbd style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #9AA89E">Ctrl+N</kbd>
+      </button>
+      <button type="button" class="nav" aria-haspopup="dialog" style="display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 10px; border: 0; border-radius: 10px; background: transparent; color: #E6EDE7; font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+        <span style="flex: 1; text-align: left">Buscar chats</span>
+        <kbd style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #9AA89E">Ctrl+K</kbd>
+      </button>
+    </div>
+
+    <nav aria-label="Chats" style="flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 14px; overflow-y: auto">
+      <div style="display: flex; flex-direction: column; gap: 2px">
+        <span style="padding: 0 10px 4px; font-size: 12px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: #9AA89E">Últimos 7 días</span>
+        <div class="fila activa" style="position: relative">
+          <button type="button" class="chat" aria-current="true" style="width: 100%; box-sizing: border-box; display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 44px 0 10px; border: 0; border-radius: 10px; background: #22301F; color: #E6EDE7; font-family: inherit; font-size: 14px; font-weight: 500; text-align: left; cursor: pointer"><span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap">Selection sort en C++</span></button>
+          <button type="button" class="mas" aria-label="Más opciones de «Selection sort en C++»" aria-haspopup="menu" aria-expanded="false" style="position: absolute; right: 4px; top: 4px; width: 32px; height: 32px; border: 0; border-radius: 8px; background: transparent; color: #9AA89E; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"></circle><circle cx="12" cy="12" r="1.7"></circle><circle cx="19" cy="12" r="1.7"></circle></svg></button>
+        </div>
+        <div class="fila abierta" style="position: relative">
+          <button type="button" class="chat" style="width: 100%; box-sizing: border-box; display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 44px 0 10px; border: 0; border-radius: 10px; background: #1E2721; color: #E6EDE7; font-family: inherit; font-size: 14px; text-align: left; cursor: pointer"><span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap">Fotosíntesis en dos líneas</span></button>
+          <button type="button" class="mas" aria-label="Más opciones de «Fotosíntesis en dos líneas»" aria-haspopup="menu" aria-expanded="true" aria-controls="menu-chat" style="position: absolute; right: 4px; top: 4px; width: 32px; height: 32px; border: 0; border-radius: 8px; background: transparent; color: #E6EDE7; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"></circle><circle cx="12" cy="12" r="1.7"></circle><circle cx="19" cy="12" r="1.7"></circle></svg></button>
+          <div id="menu-chat" role="menu" aria-label="Opciones del chat" class="menu" style="position: absolute; right: 4px; top: calc(100% + 4px); z-index: 5; width: 188px; box-sizing: border-box; padding: 6px; border-radius: 12px; background: #1E2721; box-shadow: 0 0 0 1px #2A352D, 0 12px 32px rgba(0,0,0,.45); display: flex; flex-direction: column; gap: 2px">
+            <button type="button" role="menuitem" style="display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: #E6EDE7; font-family: inherit; font-size: 14px; text-align: left; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"></path><path d="M13.5 6.5l4 4"></path></svg>Renombrar</button>
+            <button type="button" role="menuitem" style="display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: #E6EDE7; font-family: inherit; font-size: 14px; text-align: left; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"></path></svg>Exportar</button>
+            <div role="separator" style="height: 1px; margin: 4px 6px; background: #2A352D"></div>
+            <button type="button" role="menuitem" style="display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: #E8836B; font-family: inherit; font-size: 14px; text-align: left; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"></path></svg>Borrar…</button>
+          </div>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 2px">
+        <span style="padding: 0 10px 4px; font-size: 12px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: #9AA89E">18 oct</span>
+        <button type="button" style="display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 10px; border: 0; border-radius: 10px; background: transparent; color: #E6EDE7; font-family: inherit; font-size: 14px; text-align: left; cursor: pointer"><span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap">Resuelve x² − 5x + 6 = 0</span></button>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 2px">
+        <span style="padding: 0 10px 4px; font-size: 12px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: #9AA89E">10 oct</span>
+        <button type="button" style="display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 10px; border: 0; border-radius: 10px; background: transparent; color: #E6EDE7; font-family: inherit; font-size: 14px; text-align: left; cursor: pointer">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9AA89E" stroke-width="2" stroke-linecap="round" role="img" aria-label="Con búsqueda web" style="flex: none"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"></path></svg>
+          <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap">Noticias recientes de Linux</span>
+        </button>
+        <button type="button" style="display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 10px; border: 0; border-radius: 10px; background: transparent; color: #E6EDE7; font-family: inherit; font-size: 14px; text-align: left; cursor: pointer"><span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap">¿Por qué Python es tan popular?</span></button>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 2px">
+        <span style="padding: 0 10px 4px; font-size: 12px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: #9AA89E">8 oct</span>
+        <button type="button" style="display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 10px; border: 0; border-radius: 10px; background: transparent; color: #E6EDE7; font-family: inherit; font-size: 14px; text-align: left; cursor: pointer"><span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap">Calculadora en C++</span></button>
+        <button type="button" style="display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 10px; border: 0; border-radius: 10px; background: transparent; color: #E6EDE7; font-family: inherit; font-size: 14px; text-align: left; cursor: pointer">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9AA89E" stroke-width="2" stroke-linecap="round" role="img" aria-label="Con búsqueda web" style="flex: none"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"></path></svg>
+          <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap">¿Quién ganó el último partido?</span>
+        </button>
+      </div>
+    </nav>
+
+    <div style="display: flex; flex-direction: column; gap: 6px; padding-top: 12px; box-shadow: inset 0 1px 0 #2A352D">
+      <button type="button" style="display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 10px; border: 0; border-radius: 10px; background: transparent; color: #E6EDE7; font-family: inherit; font-size: 14px; text-align: left; cursor: pointer">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"></path><circle cx="16" cy="7" r="2"></circle><circle cx="10" cy="17" r="2"></circle></svg>
+        <span style="flex: 1">Configuración</span>
+        <kbd style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #9AA89E">F2</kbd>
+      </button>
+    </div>
+  </aside>
+
+  <main style="flex: 999 1 560px; min-width: 0; height: 100vh; display: flex; flex-direction: column">
+    <header style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 24px; box-shadow: inset 0 -1px 0 #2A352D">
+      <div style="display: flex; align-items: center; gap: 12px; min-width: 0">
+        <button type="button" aria-label="Ocultar barra lateral (Ctrl+B)" style="width: 44px; height: 44px; flex: none; border: 0; border-radius: 10px; background: transparent; color: #9AA89E; display: flex; align-items: center; justify-content: center; cursor: pointer">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"></rect><path d="M9 4v16"></path></svg>
+        </button>
+        <h1 style="margin: 0; font-size: 17px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">Selection sort en C++</h1>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px">
+        <button type="button" style="display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 12px; border: 0; border-radius: 10px; background: transparent; color: #E6EDE7; font-family: inherit; font-size: 14px; cursor: pointer">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"></path></svg>
+          Exportar
+        </button>
+      </div>
+    </header>
+
+    <div style="flex: 1; min-height: 0; overflow-y: auto; padding: 32px 24px">
+      <div style="max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px">
+
+        <div style="align-self: flex-end; max-width: 80%; padding: 12px 16px; border-radius: 18px 18px 4px 18px; background: #22301F; font-size: 15px; line-height: 1.55">Dame un selection sort en C++ y explícamelo corto.</div>
+
+        <div style="display: flex; gap: 14px; align-items: flex-start">
+          <svg width="28" height="28" viewBox="0 0 64 64" aria-hidden="true" style="flex: none; margin-top: 2px"><path d="M8 48V30a9 9 0 0 1 18 0v18M26 30a9 9 0 0 1 18 0v18" fill="none" stroke="#8DBF5F" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"></path><rect x="49" y="39" width="10" height="10" rx="1.5" fill="#8DBF5F"></rect></svg>
+          <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px; font-size: 15px; line-height: 1.65">
+            <details class="pens" style="color: #9AA89E">
+              <summary style="display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 8px 0 4px; margin-left: -4px; border-radius: 8px; list-style: none; cursor: pointer; font-size: 13px"><svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="transition: transform .18s"><path d="M9 6l6 6-6 6"></path></svg>Pensamiento · 52 palabras</summary>
+              <div style="margin-top: 6px; padding-left: 22px; font-size: 14px; line-height: 1.6"><p style="margin: 0">Piden un selection sort en C++ y una explicación corta. Lo más claro es una función que reciba un std::vector&lt;int&gt; por referencia. Dos ciclos: el de afuera marca dónde empieza la parte sin ordenar y el de adentro busca el mínimo; luego std::swap. La explicación en tres viñetas, una por pieza.</p></div>
+            </details>
+            <p style="margin: 0">Busca el elemento más chico de lo que falta por ordenar y lo pone al frente. Repite hasta terminar.</p>
+            <div style="border-radius: 12px; background: #1E2721; box-shadow: inset 0 0 0 1px #2A352D; overflow: hidden">
+              <div style="display: flex; align-items: center; justify-content: space-between; padding: 4px 6px 4px 14px; box-shadow: inset 0 -1px 0 #2A352D">
+                <span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #9AA89E">cpp</span>
+                <button type="button" style="display: flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: #9AA89E; font-family: inherit; font-size: 13px; cursor: pointer">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"></rect><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path></svg>
+                  Copiar
+                </button>
+              </div>
+              <pre style="margin: 0; padding: 14px 16px; overflow-x: auto; font-family: 'Geist Mono', monospace; font-size: 13.5px; line-height: 1.6; color: #E6EDE7"><code><span style="color: #B5D395">void</span> selection_sort(std::vector&lt;<span style="color: #B5D395">int</span>&gt;&amp; v) {
+    <span style="color: #B5D395">for</span> (size_t i = 0; i + 1 &lt; v.size(); ++i) {
+        size_t min = i;
+        <span style="color: #B5D395">for</span> (size_t j = i + 1; j &lt; v.size(); ++j)
+            <span style="color: #B5D395">if</span> (v[j] &lt; v[min]) min = j;
+        std::swap(v[i], v[min]);
+    }
+}</code></pre>
+            </div>
+            <ul style="margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px">
+              <li>El ciclo de afuera marca dónde empieza la parte sin ordenar.</li>
+              <li>El de adentro busca el mínimo de esa parte.</li>
+              <li><code style="font-family: 'Geist Mono', monospace; font-size: 13px; padding: 2px 6px; border-radius: 6px; background: #1E2721; color: #B5D395">std::swap</code> lo pone en su lugar.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div style="align-self: flex-end; max-width: 80%; padding: 12px 16px; border-radius: 18px 18px 4px 18px; background: #22301F; font-size: 15px; line-height: 1.55">¿Y cuál es su complejidad?</div>
+
+        <div style="display: flex; gap: 14px; align-items: flex-start">
+          <svg width="28" height="28" viewBox="0 0 64 64" aria-hidden="true" style="flex: none; margin-top: 2px"><path d="M8 48V30a9 9 0 0 1 18 0v18M26 30a9 9 0 0 1 18 0v18" fill="none" stroke="#8DBF5F" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"></path><rect x="49" y="39" width="10" height="10" rx="1.5" fill="#8DBF5F"></rect></svg>
+          <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px">
+            <details class="pens" style="color: #9AA89E">
+              <summary style="display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 8px 0 4px; margin-left: -4px; border-radius: 8px; list-style: none; cursor: pointer; font-size: 13px"><svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="transition: transform .18s"><path d="M9 6l6 6-6 6"></path></svg>Pensamiento · 41 palabras</summary>
+              <div style="margin-top: 6px; padding-left: 22px; font-size: 14px; line-height: 1.6"><p style="margin: 0">Preguntan la complejidad. Selection sort siempre recorre lo que falta para hallar el mínimo, sin importar el orden inicial: n−1 + n−2 + … + 1 comparaciones, o sea n(n−1)/2. Es O(n²) en el mejor, el promedio y el peor caso.</p></div>
+            </details>
+            <p style="margin: 0; font-size: 15px; line-height: 1.65">Es <strong>O(n²)</strong> en todos los casos: siempre recorre lo que falta para encontrar el mínimo, aunque el arreglo ya venga ordenado<span aria-hidden="true" style="display: inline-block; width: 0.55em; height: 1.1em; margin-left: 2px; vertical-align: -0.2em; border-radius: 2px; background: #8DBF5F"></span></p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div style="padding: 0 24px 20px">
+      <div style="max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; align-items: flex-end; gap: 6px; padding: 6px; border-radius: 14px; background: #1E2721; box-shadow: inset 0 0 0 1px #2A352D">
+          <label for="msg-d" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Mensaje</label>
+                      <button type="button" class="opc" aria-label="Opciones" aria-haspopup="dialog" aria-expanded="false" style="position: relative; width: 44px; height: 44px; flex: none; border: 0; border-radius: 10px; background: transparent; color: #9AA89E; display: flex; align-items: center; justify-content: center; cursor: pointer">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+              <span class="tip" aria-hidden="true" style="background: #E6EDE7; color: #0F1411">Opciones</span>
+            </button>
+            <textarea id="msg-d" rows="1" placeholder="Escribe tu mensaje" style="flex: 1; min-width: 0; align-self: center; resize: none; border: 0; padding: 10px 4px; background: transparent; color: #E6EDE7; font-family: inherit; font-size: 15px; line-height: 1.5; outline: none"></textarea>
+            <button type="button" class="opc" aria-label="Detener" style="position: relative; width: 44px; height: 44px; flex: none; border: 0; border-radius: 10px; background: transparent; color: #E6EDE7; display: flex; align-items: center; justify-content: center; cursor: pointer">
+              <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="3" fill="currentColor"></rect></svg>
+              <span class="tip" aria-hidden="true" style="background: #E6EDE7; color: #0F1411">Detener</span>
+            </button>
+        </div>
+        <p style="margin: 0; text-align: center; font-size: 12px; color: #9AA89E">Enter envía · Shift+Enter nueva línea · / comandos</p>
+      </div>
+    </div>
+  </main>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

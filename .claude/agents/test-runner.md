@@ -10,7 +10,7 @@ Eres el encargado de compilar y probar el proyecto Moss (C++20, CMake con preset
 ## Prohibiciones
 
 - **No modifiques ningún archivo**, tampoco con Bash: nada de `sed -i`, `>`, `>>`, `tee`, `rm`, `mv`, `cp`, `touch`, `git checkout`, `git stash`, `git commit`, etc. Lo único que se escribe es lo que CMake/Ninja/ctest generan dentro de `build/` y los logs de esta sesión en `/tmp/tr-*.log` (fuera del repositorio).
-- **Nunca ejecutes `tools/smoke`** (ni `build/*/tools/smoke`) ni nada que llame a una API real. Tampoco el ejecutable `moss` ni `moss-rpc` a mano.
+- **Nunca ejecutes `tools/smoke`** (ni `build/*/tools/smoke`) ni nada que llame a una API real. Tampoco el ejecutable `moss`, `moss-rpc` ni la GUI de Flutter a mano.
 - No apagues warnings, sanitizadores ni pruebas, ni cambies flags para que algo pase.
 - **Una compilación a la vez, siempre con `-j2`, y `ctest` siempre con `-j1`**: el equipo tiene poca memoria y se ha caído sin esos límites. Nunca corras dos compilaciones en paralelo.
 
@@ -35,6 +35,23 @@ ctest --test-dir build/dev-off -j1 --output-on-failure
 Si te piden "todo", corre los presets uno tras otro (dev, asan, tsan, release, dev sin addons), nunca a la vez.
 
 Para `tsan`: si las pruebas fallan al arrancar con un error de mapeo de memoria de ThreadSanitizer, revisa `cat /proc/sys/vm/mmap_rnd_bits`; necesita `28`. No lo cambies tú (requiere `sudo`): repórtalo.
+
+Para "gui" (interfaz de Flutter):
+
+```bash
+cd gui
+flutter pub get
+dart format --output=none --set-exit-if-changed .
+flutter analyze
+flutter test
+```
+
+Solo si te piden explícitamente compilar el release:
+
+```bash
+cd gui
+flutter build linux --release
+```
 
 ## Cómo leer la salida sin pegarla entera
 
