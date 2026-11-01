@@ -26,15 +26,23 @@ class Strings {
   // Caja de mensaje
   static const String message = 'Mensaje';
   static const String typeMessage = 'Escribe tu mensaje';
+  static const String placeholderMessage = '¿En qué te ayudo?';
   static const String send = 'Enviar';
+  static const String buttonSend = 'Enviar';
   static const String stop = 'Detener';
+  static const String buttonStop = 'Detener';
   static const String options = 'Opciones';
   static const String help =
       'Enter envía · Shift+Enter nueva línea · / comandos';
 
   // Fases
   static const String searching = 'Buscando en la web…';
+  static const String phaseSearching = 'Buscando en la web…';
   static const String thinking = 'Pensando…';
+  static const String phaseThinking = 'Pensando…';
+
+  // Chat vacío
+  static const String emptyConversation = '¿En qué te ayudo?';
 
   // Pensamiento
   static const String thought = 'Pensamiento';
