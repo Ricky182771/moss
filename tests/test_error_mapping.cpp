@@ -1,6 +1,7 @@
 #include "chatbot/chat_client.h"
 #include "chatbot/error.h"
 #include "fake_transport.hpp"
+#include "hide_secret.h"
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
@@ -237,4 +238,12 @@ TEST_CASE("Un error del servidor que repite la key no la muestra", "[mapeo][secr
         REQUIRE(response.is_error());
         CHECK(response.error().message.find(prefix) == std::string::npos);
     }
+}
+
+TEST_CASE("hide_secret: todas las apariciones, y nada con una key corta", "[mapeo][secretos]") {
+    CHECK(chatbot::hide_secret("a clave-larga b clave-larga", "clave-larga") ==
+          "a [key oculta] b [key oculta]");
+    CHECK(chatbot::hide_secret("sin nada", "clave-larga") == "sin nada");
+    CHECK(chatbot::hide_secret("la key es abc", "abc") == "la key es abc");
+    CHECK(chatbot::hide_secret("vacía", "") == "vacía");
 }
