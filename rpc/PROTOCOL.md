@@ -24,6 +24,7 @@ Versión del protocolo: **1**.
 | Evento `service.changed`; `settings.changed` con `telegram` | 7 | Implementado |
 | `settings.model_params.*`; `settings.changed` con `model_params` | 6.7, 7 | Implementado |
 | Pensamiento: `reasoning` en `Entry`, evento `conversation.reasoning_delta` | 5, 7 | Implementado |
+| `service.log` (el registro del bot) | 6.8 | Implementado |
 | `CHAT_DEBUG_RPC` | 10 | Implementado |
 | Windows: stdio en modo binario | 2 | Implementado, probado en la CI con pipes (`tools/check-rpc-pipes.sh`) |
 
@@ -568,7 +569,7 @@ Lee los archivos en cada llamada. Los campos de secretos van vacíos (vacío = s
 
 Todas son *largas* y corren en el `ServiceWorker` de `TelegramAddon` (`systemctl --user`, `loginctl`, `journalctl` con argumentos fijos y su tope de 5 s cada uno), una a la vez y en orden, junto con `check_install` e `invited.remove`.
 
-La unidad que escribe `moss-rpc` es **byte por byte** la de la TUI: su `ExecStart` es **la ruta de `moss`** (la TUI, que hace `exec` del addon), no la de `moss-rpc`. `moss-rpc` usa el `moss` de su misma carpeta (`sibling_chatbot_path`), y busca el addon junto a él. En el árbol de compilación también están juntos (`build/<preset>/cli/`). Si ese archivo no existe (o no se supo la ruta de `moss-rpc`), todas las `service.*` responden `-32007` con `El servicio arranca moss, y no está junto a moss-rpc: <ruta>.` Sin `HOME` no hay dónde poner la unidad: `-32006` con `Sin HOME no hay dónde instalar el servicio.`
+La unidad que escribe `moss-rpc` es **byte por byte** la de la TUI: su `ExecStart` es **la ruta de `moss`** (la TUI, que hace `exec` del addon), no la de `moss-rpc`. `moss-rpc` usa el `moss` de su misma carpeta (`sibling_chatbot_path`), y busca el addon junto a él. En el árbol de compilación también están juntos (`build/<preset>/cli/`). Si ese archivo no existe (o no se supo la ruta de `moss-rpc`), todas las `service.*` salvo `service.log` responden `-32007` con `El servicio arranca moss, y no está junto a moss-rpc: <ruta>.` Sin `HOME` no hay dónde poner la unidad: `-32006` con `Sin HOME no hay dónde instalar el servicio.`
 
 **`service.status`** `→ {addon}` `←`
 
@@ -592,7 +593,15 @@ La unidad que escribe `moss-rpc` es **byte por byte** la de la TUI: su `ExecStar
 **`service.restart`** · **`service.disable`** · **`service.reload`** `→ {addon}` `← {message, ok}`
 - `restart` con Activado sin guardar → `-32005` con `Activa el addon y guarda para arrancarlo.` (`[Reiniciar]` de F2). `reload` solo recarga si está activo (`message: ""` si no). Sin systemd de usuario → `-32006`.
 
-Todas las `service.*` salvo `service.status`, y `invited.remove`, emiten `service.changed {addon}` al terminar, después de su respuesta, **también si se cancelaron o fallaron** (el estado pudo haber cambiado). `service.status` no lo emite, para que una GUI que vuelve a pedir el estado con cada `service.changed` no entre en un ciclo.
+**`service.log`** `→ {addon, lines?: 200}` `← {lines: ["…"], truncated, notice}`
+- Las últimas `lines` líneas del registro del bot (`ServiceControl::log`: `journalctl --user -u moss-telegram.service -n <lines> -r -o short-iso --no-pager`: de la más nueva a la más vieja, para que si la salida pasa de 1 MiB se pierdan las viejas), volteadas: de la más vieja a la más nueva, como `[Ver registro]` de F2. `lines` va de 1 a 1000; fuera de rango, o si no es entero, `-32602` con `fields: ["lines"]`.
+- Cada línea viene sin controles (`md::sanitize`), con 4 KiB como mucho (sin partir UTF-8), y todas juntas con 1 MiB como mucho (se quitan las más viejas). `truncated` es `true` si se recortó una línea o se quitaron líneas.
+- **Privacidad:** con "Detalle de errores en el registro" (`log_error_details`) apagado en lo guardado, cada línea llega sin lo que va desde ` detalle=` (puede traer texto de los alumnos, como en `last_error`); encendido, completa. El token nunca está en el registro (el bot lo redacta) y las keys tampoco (el núcleo las cambia por `[key oculta]` en los mensajes de error).
+- Sin entradas: `{lines: [], truncated: false, notice: "El bot todavía no ha escrito nada en el registro."}`; si no, `notice` es `""`.
+- Sin systemd de usuario (o sin `journalctl`) → `-32006`. Si `journalctl` falla → `-32007` con `No se pudo leer el registro: …`. No necesita `moss` junto a `moss-rpc`.
+- `$/cancel` descarta la respuesta sin cortar `journalctl`. **No** emite `service.changed`: no cambia nada.
+
+Todas las `service.*` salvo `service.status` y `service.log`, y `invited.remove`, emiten `service.changed {addon}` al terminar, después de su respuesta, **también si se cancelaron o fallaron** (el estado pudo haber cambiado). `service.status` no lo emite para que una GUI que vuelve a pedir el estado con cada `service.changed` no entre en un ciclo.
 
 ---
 
@@ -610,7 +619,7 @@ Todas las `service.*` salvo `service.status`, y `invited.remove`, emiten `servic
 | `chat.finished` | ver abajo | Una vez por cada `chat.send` aceptado, salvo si antes llegó `shutdown` (sección 3) |
 | `conversations.changed` | `{}` | Se guardó, borró o creó un archivo: la GUI vuelve a pedir la lista |
 | `settings.changed` | `{section}` | Se guardó: `provider` / `system_prompt` / `model_params` / `search` / `gui` / `telegram`. Sale después de la respuesta y antes de los avisos en el historial |
-| `service.changed` | `{addon}` | Terminó `service.apply`, `restart`, `disable`, `reload` o `addons.telegram.invited.remove`, aunque se haya cancelado o haya fallado; después de su respuesta (sección 6.8). `service.status` no lo emite |
+| `service.changed` | `{addon}` | Terminó `service.apply`, `restart`, `disable`, `reload` o `addons.telegram.invited.remove`, aunque se haya cancelado o haya fallado; después de su respuesta (sección 6.8). `service.status` y `service.log` no lo emiten |
 
 ```jsonc
 // chat.finished
@@ -685,6 +694,7 @@ La primera entrada del asistente llega con `entry_added` (la crea el primer delt
 | F2 → Colores y Accesibilidad | **No aplica:** la GUI tiene su tema (`settings.gui.*`) |
 | F2 → Addons (formulario, invitados, código) | `addons.*` |
 | Servicio: aplicar, reiniciar, desactivar, reemplazar unidad ajena | `service.*` + `-32008` |
+| F2 → Addons → [Ver registro] | `service.log` |
 | Modo portable | Transparente: el servidor resuelve las rutas (`initialize.paths`) |
 
 **Lo que se queda solo en la TUI:** pegado entre corchetes y su salida de emergencia, `TextArea`, ratón, QuickEdit, símbolos de respaldo, `CHAT_DEBUG_KEYS`, OSC 52 y los programas de portapapeles, y scroll y `HistoryView`. En Flutter todo eso lo resuelve el framework.
@@ -696,7 +706,7 @@ La primera entrada del asistente llega con `entry_added` (la crea el primer delt
 - Sin red local: solo stdio (sección 2).
 - Los secretos nunca salen del servidor (sección 4). Las pruebas lo vigilan: ninguna respuesta ni evento contiene la key que se mandó (ver 12).
 - **Registro de depuración:** `CHAT_DEBUG_RPC=/ruta` escribe cada línea que entra y sale, con los valores de `api_key`, `token`, `model_key`, `search_key` e `invite_code` (también dentro de `form.fields` de `addons.telegram.*`) reemplazados por `"•••"` **antes** de escribir, también el que devuelve `addons.telegram.invite_code`. Igual que `CHAT_DEBUG_SSE`, contiene la conversación: solo para diagnosticar. Nunca está activo por defecto.
-- El servidor no ejecuta nada que mande el cliente. `service.*` solo corre `systemctl` con argumentos fijos, como F2.
+- El servidor no ejecuta nada que mande el cliente. `service.*` solo corre `systemctl` y `journalctl` con argumentos fijos, como F2.
 
 ---
 
@@ -714,7 +724,7 @@ La primera entrada del asistente llega con `entry_added` (la crea el primer delt
 En el repositorio, `chatbot_rpc_tests` (sin red):
 
 1. **Puras:** `LineReader` (tope de 1 MiB, línea partida, `\r\n`, EOF), `diff_entries`, la codificación de `Entry`, `ChatError` y los errores, `check_params` y la redacción de `CHAT_DEBUG_RPC`.
-2. **`Dispatcher`** con la misma `Session` falsa que las pruebas de la TUI (`tests/session_fakes.hpp`) y un reloj falso: secuencias exactas de mensajes (el ejemplo de la sección 8, búsqueda, cancelar en cada fase, `Busy`, 429, `conversation.new`, guardado que falla, deltas agrupados, errores del protocolo), la configuración (`settings.*`, con y sin `CHAT_*` y con una respuesta en curso) y `models.list` con un transporte falso o bloqueante (lista, falla, cancelada, reemplazada, pendiente al `shutdown`); `addons.*` y `service.*` con procesos falsos (`tests/fake_system.hpp`, nunca `systemctl` de verdad): `get`, `check`, `save` (bien, con llaves descartadas, solo lectura, errores de campo), invitados con el servicio activo e inactivo, `status`, `apply` (unidad ajena, sin systemd, addon sin instalar, la unidad igual byte por byte a la de la TUI, sin `moss` junto a `moss-rpc`), `restart`/`disable`/`reload`, `$/cancel` de una de servicio, dos pendientes a la vez y `shutdown` con pendientes; ninguna respuesta ni evento trae la key ni los secretos del bot que se mandaron.
+2. **`Dispatcher`** con la misma `Session` falsa que las pruebas de la TUI (`tests/session_fakes.hpp`) y un reloj falso: secuencias exactas de mensajes (el ejemplo de la sección 8, búsqueda, cancelar en cada fase, `Busy`, 429, `conversation.new`, guardado que falla, deltas agrupados, errores del protocolo), la configuración (`settings.*`, con y sin `CHAT_*` y con una respuesta en curso) y `models.list` con un transporte falso o bloqueante (lista, falla, cancelada, reemplazada, pendiente al `shutdown`); `addons.*` y `service.*` con procesos falsos (`tests/fake_system.hpp`, nunca `systemctl` de verdad): `get`, `check`, `save` (bien, con llaves descartadas, solo lectura, errores de campo), invitados con el servicio activo e inactivo, `status`, `apply` (unidad ajena, sin systemd, addon sin instalar, la unidad igual byte por byte a la de la TUI, sin `moss` junto a `moss-rpc`), `restart`/`disable`/`reload`, `log` (argumentos, detalle según el ajuste, sin entradas, sin systemd, error de `journalctl`, `lines` fuera de rango), `$/cancel` de una de servicio, dos pendientes a la vez y `shutdown` con pendientes; ninguna respuesta ni evento trae la key ni los secretos del bot que se mandaron.
 3. **Proceso real** (solo POSIX): `moss-rpc` con pipes y un entorno limpio, sin configuración: `initialize`, `chat.send` → `-32004`, `shutdown`, `exit` → 0; EOF → 0 en menos de 3 s; `exit` sin `shutdown` → 1; toda línea de stdout es JSON-RPC 2.0; sin el aviso de stdin en terminal.
 4. **Windows, en la CI:** `tools/check-rpc-pipes.sh` sobre `moss-rpc.exe` con pipes de MSYS2, en una carpeta portable: el ciclo de vida, ningún `\r` en la salida, entrada con `\r\n`, UTF-8 de ida y vuelta con `settings.gui.*`, EOF y stdout solo del protocolo; y en el ZIP, sin MSYS2 en el `PATH`, con y sin `moss.portable`. También corre a mano en Linux.
 5. Las tres primeras corren también con `asan` y `tsan`.
