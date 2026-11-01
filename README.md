@@ -561,7 +561,7 @@ El addon es solo el programa `moss-telegram`. `moss telegram` lo busca **junto a
 
 Todo se configura en la app, sin editar archivos: **F2 → Addons → Telegram**. El bot usa el mismo `config.json` y el mismo `credentials.json` que la app (sección "addons" → "telegram" y llaves `telegram`, `telegram:api_key` y `telegram:search_key`), y también el mismo proveedor, URL base, instrucciones del sistema y límite del historial. Solo el modelo puede ser otro.
 
-Arriba se ve si el addon está instalado, cómo está el servicio (y su último error si no corre), los botones `[Reiniciar]` y `[Actualizar estado]`, el aviso de linger y el comando del registro. Debajo, los campos (cada uno dice su error debajo, en rojo):
+Arriba se ve si el addon está instalado, cómo está el servicio (y su último error si no corre), los botones `[Reiniciar]` y `[Actualizar estado]`, `[Ver registro]`, el aviso de linger y el comando del registro. Debajo, los campos (cada uno dice su error debajo, en rojo):
 
 | Campo | Qué es | Por defecto |
 |-------|--------|-------------|
@@ -613,6 +613,8 @@ El registro (una línea por evento con IDs, tiempos, tamaños y tipos de error; 
 ```bash
 journalctl --user -u moss-telegram -f
 ```
+
+O, sin salir de la app, **F2 → Addons → `[Ver registro]`**: las últimas 200 líneas, empezando por la más nueva abajo, con las de error en rojo (rueda, PgUp/PgDn, Inicio/Fin; `[Actualizar]` las vuelve a leer y Esc regresa). Con "Detalle de errores en el registro" apagado no se muestra lo que va desde ` detalle=`. Si un servidor repite la key en su mensaje de error, la app y el bot la cambian por `[key oculta]`.
 
 Por SSH sin sesión gráfica puede no haber systemd de usuario: F2 dice `No hay systemd de usuario en esta sesión.`
 
