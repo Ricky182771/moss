@@ -18,9 +18,12 @@ enum class ListKey { Up, Down, PageUp, PageDown, Home, End, Enter, Escape, Delet
 struct ListAction {
     /// New: conversación nueva; Settings: abrir la configuración (barra lateral);
     /// Cancelled: Esc canceló el borrado (la interfaz dice kDeleteCancelled).
-    enum class Type { None, Open, Close, Delete, New, Settings, Cancelled };
+    /// Export: exportar la guardada (`e`); Rename: Enter en el campo de
+    /// renombrar de la barra (Sidebar), con el título escrito en text.
+    enum class Type { None, Open, Close, Delete, New, Settings, Cancelled, Export, Rename };
     Type type = Type::None;
-    std::string id; ///< Para Open y Delete.
+    std::string id;   ///< Para Open, Delete, Export y Rename.
+    std::string text{}; ///< Para Rename: lo que se escribió en el campo.
 };
 
 /// Estado de la lista de conversaciones: selección, qué se puede abrir y la

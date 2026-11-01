@@ -57,6 +57,9 @@ std::vector<std::string> describe(const Sidebar& sidebar, const std::vector<Side
         case SidebarRow::Kind::Conversation:
             out.push_back(sidebar.list().items()[row.index].id);
             break;
+        case SidebarRow::Kind::MenuItem:
+            out.push_back(">" + std::string{chatbot::cli::menu_item_label(row.item)});
+            break;
         }
     }
     return out;
@@ -303,4 +306,129 @@ TEST_CASE("barra: la selección se conserva al refrescar", "[barra]") {
     // Sin conversaciones: "+ Nueva".
     sidebar.refresh({}, "");
     CHECK(sidebar.new_selected());
+}
+
+TEST_CASE("barra: 'e' exporta y 'r' abre el campo de renombrar", "[barra][menu]") {
+    Sidebar sidebar;
+    sidebar.open(sample(), "");
+    CHECK(sidebar.handle(ListKey::Other, "e", 5).type == ListAction::Type::None); // En "+ Nueva".
+    CHECK(sidebar.handle(ListKey::Other, "r", 5).type == ListAction::Type::None);
+    CHECK(sidebar.renaming().empty());
+
+    (void)sidebar.handle(ListKey::Down, {}, 5);
+    (void)sidebar.handle(ListKey::Down, {}, 5); // "hoy".
+    const ListAction exported = sidebar.handle(ListKey::Other, "e", 5);
+    CHECK(exported.type == ListAction::Type::Export);
+    CHECK(exported.id == "hoy");
+
+    CHECK(sidebar.handle(ListKey::Other, "r", 5).type == ListAction::Type::None);
+    CHECK(sidebar.renaming() == "hoy");
+    CHECK(sidebar.rename_text() == "Título hoy");
+    // Mientras el campo está abierto, las teclas no mueven la barra.
+    CHECK(sidebar.handle(ListKey::Down, {}, 5).type == ListAction::Type::None);
+    CHECK(sidebar.handle(ListKey::Other, "e", 5).type == ListAction::Type::None);
+    CHECK(selected(sidebar) == "hoy");
+    sidebar.rename_text() = "Nuevo";
+    const ListAction renamed = sidebar.handle(ListKey::Enter, {}, 5);
+    CHECK(renamed.type == ListAction::Type::Rename);
+    CHECK(renamed.id == "hoy");
+    CHECK(renamed.text == "Nuevo");
+    CHECK(sidebar.renaming() == "hoy"); // Sigue abierto hasta que la interfaz lo cierre.
+    sidebar.refresh(sample(), "");
+    CHECK(sidebar.renaming() == "hoy"); // Sigue en la lista.
+    CHECK(sidebar.handle(ListKey::Escape, {}, 5).type == ListAction::Type::None);
+    CHECK(sidebar.renaming().empty());
+    CHECK(sidebar.handle(ListKey::Escape, {}, 5).type == ListAction::Type::Close);
+
+    // Se borra la que se estaba renombrando: el campo se cierra.
+    (void)sidebar.handle(ListKey::Other, "R", 5);
+    REQUIRE(sidebar.renaming() == "hoy");
+    std::vector<chatbot::cli::ConversationSummary> fewer = sample();
+    fewer.erase(fewer.begin());
+    sidebar.refresh(fewer, "");
+    CHECK(sidebar.renaming().empty());
+
+    // Las ilegibles no.
+    (void)sidebar.handle(ListKey::End, {}, 5);
+    CHECK(sidebar.handle(ListKey::Other, "e", 5).type == ListAction::Type::None);
+    (void)sidebar.handle(ListKey::Other, "r", 5);
+    CHECK(sidebar.renaming().empty());
+}
+
+TEST_CASE("barra: menú del clic derecho con teclado y con clic", "[barra][menu]") {
+    Sidebar sidebar;
+    sidebar.open(sample(), "");
+    std::vector<SidebarRow> rows = sidebar.rows(kToday);
+    CHECK_FALSE(sidebar.open_menu(2, rows)); // "Hoy".
+    CHECK_FALSE(sidebar.open_menu(0, rows)); // "+ Nueva".
+    CHECK_FALSE(sidebar.open_menu(rows.size() - 1, rows)); // La ilegible.
+    CHECK_FALSE(sidebar.menu_open());
+
+    REQUIRE(sidebar.open_menu(5, rows)); // "ayer", debajo de "#Ayer".
+    CHECK(selected(sidebar) == "ayer");
+    rows = sidebar.rows(kToday);
+    const std::vector<std::string> expected{"+",      "⚙",  "#Hoy", "hoy", "#Ayer", "ayer",
+                                            ">Renombrar", ">Exportar", ">Borrar"};
+    const std::vector<std::string> described = describe(sidebar, rows);
+    REQUIRE(described.size() > expected.size());
+    CHECK(std::vector<std::string>(described.begin(), described.begin() + 9) == expected);
+    CHECK(sidebar.selected_row(rows) == 6); // El cursor, en "Renombrar".
+
+    // ↑/↓ no salen del menú; Enter en Borrar pide la confirmación de Supr.
+    (void)sidebar.handle(ListKey::Up, {}, 5);
+    CHECK(sidebar.selected_row(sidebar.rows(kToday)) == 6);
+    for (int i = 0; i < 4; ++i) {
+        (void)sidebar.handle(ListKey::Down, {}, 5);
+    }
+    CHECK(sidebar.selected_row(sidebar.rows(kToday)) == 8);
+    CHECK(sidebar.handle(ListKey::Enter, {}, 5).type == ListAction::Type::None);
+    CHECK_FALSE(sidebar.menu_open());
+    REQUIRE(sidebar.confirmation().has_value());
+    CHECK(*sidebar.confirmation() == "¿Borrar «Título ayer»? (s/n)");
+    CHECK(sidebar.handle(ListKey::Escape, {}, 5).type == ListAction::Type::Cancelled);
+
+    // Esc cierra el menú sin soltar la barra.
+    REQUIRE(sidebar.open_menu(5, sidebar.rows(kToday)));
+    CHECK(sidebar.handle(ListKey::Escape, {}, 5).type == ListAction::Type::None);
+    CHECK_FALSE(sidebar.menu_open());
+    CHECK(sidebar.rows(kToday).size() == rows.size() - 3);
+
+    // Enter en Renombrar abre el campo.
+    REQUIRE(sidebar.open_menu(5, sidebar.rows(kToday)));
+    CHECK(sidebar.handle(ListKey::Enter, {}, 5).type == ListAction::Type::None);
+    CHECK(sidebar.renaming() == "ayer");
+    CHECK_FALSE(sidebar.menu_open());
+    // Clic en el campo: sigue abierto; en otra fila, se cierra.
+    CHECK(sidebar.click(5, sidebar.rows(kToday)).type == ListAction::Type::None);
+    CHECK(sidebar.renaming() == "ayer");
+    CHECK(sidebar.click(3, sidebar.rows(kToday)).type == ListAction::Type::Open);
+    CHECK(sidebar.renaming().empty());
+
+    // Clic en Exportar.
+    REQUIRE(sidebar.open_menu(5, sidebar.rows(kToday)));
+    const ListAction exported = sidebar.click(7, sidebar.rows(kToday));
+    CHECK(exported.type == ListAction::Type::Export);
+    CHECK(exported.id == "ayer");
+    CHECK_FALSE(sidebar.menu_open());
+
+    // Otra tecla cierra el menú y hace lo suyo; cerrarlo por fuera también.
+    REQUIRE(sidebar.open_menu(5, sidebar.rows(kToday)));
+    (void)sidebar.handle(ListKey::Other, "r", 5);
+    CHECK_FALSE(sidebar.menu_open());
+    CHECK(sidebar.renaming() == "ayer");
+    sidebar.stop_rename();
+    REQUIRE(sidebar.open_menu(5, sidebar.rows(kToday)));
+    sidebar.close_menu();
+    CHECK(sidebar.rows(kToday).size() == rows.size() - 3);
+}
+
+TEST_CASE("barra: el campo de renombrar empieza sin controles de terminal", "[barra][menu]") {
+    Sidebar sidebar;
+    chatbot::cli::ConversationSummary raw = item("x", "2026-10-04T10:00:00-06:00");
+    raw.title = "rojo \x1b[31m aquí";
+    sidebar.open({raw}, "x");
+    (void)sidebar.handle(ListKey::Other, "r", 5);
+    REQUIRE(sidebar.renaming() == "x");
+    CHECK(sidebar.rename_text().find('\x1b') == std::string::npos);
+    CHECK(sidebar.rename_text().find("aquí") != std::string::npos);
 }

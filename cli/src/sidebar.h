@@ -39,6 +39,12 @@ struct CalendarDay {
 /// day_of(updated_at), o Sidebar::kUndated si es ilegible o no tiene fecha.
 [[nodiscard]] std::string group_for(const ConversationSummary& summary, CalendarDay today);
 
+/// Opciones del menú de una conversación (clic derecho), en orden.
+enum class ConversationMenuItem { Rename, Export, Delete };
+inline constexpr std::size_t kConversationMenuSize = 3;
+/// "Renombrar", "Exportar" o "Borrar".
+[[nodiscard]] std::string_view menu_item_label(ConversationMenuItem item);
+
 /// Una fila de la barra lateral.
 struct SidebarRow {
     enum class Kind {
@@ -46,10 +52,12 @@ struct SidebarRow {
         Settings,     ///< "⚙ Configuración  (F2)", siempre la segunda.
         Header,       ///< Nombre de un grupo por fecha; no se selecciona.
         Conversation, ///< Una conversación; index es su posición en la lista.
+        MenuItem,     ///< Opción del menú abierto, debajo de su conversación (index).
     };
     Kind kind = Kind::New;
     std::string text;      ///< Header: el nombre del grupo.
-    std::size_t index = 0; ///< Conversation: índice en list().items().
+    std::size_t index = 0; ///< Conversation y MenuItem: índice en list().items().
+    ConversationMenuItem item = ConversationMenuItem::Rename; ///< MenuItem.
 };
 
 /// Modelo de la barra lateral de conversaciones: filas agrupadas por fecha,
@@ -86,8 +94,30 @@ public:
     /// Enter abre (Open), pide una nueva (New) o la configuración
     /// (Settings); Supr pide confirmación, que se contesta como dice
     /// yes_no.h ('s' o 'S' borra: Delete; Esc: Cancelled); Esc sin ella
-    /// devuelve el foco (Close). page_size: filas visibles.
+    /// devuelve el foco (Close). En una conversación, 'e' exporta (Export)
+    /// y 'r' abre el campo de renombrar (renaming()).
+    /// Con el menú abierto: ↑/↓ mueven, Enter elige (Renombrar y Exportar
+    /// como 'r' y 'e', Borrar como Supr), Esc lo cierra; otra tecla lo
+    /// cierra y hace lo suyo. Con el campo de renombrar: Enter da Rename
+    /// (id y text; el campo sigue abierto hasta stop_rename) y Esc lo
+    /// cierra; lo demás no se procesa (lo edita la interfaz).
+    /// page_size: filas visibles.
     [[nodiscard]] ListAction handle(ListKey key, std::string_view character, std::size_t page_size);
+
+    /// Clic derecho en la línea line de la zona visible: si es una
+    /// conversación legible, la selecciona y abre su menú. true si lo abrió.
+    bool open_menu(std::size_t line, const std::vector<SidebarRow>& rows);
+    [[nodiscard]] bool menu_open() const { return !menu_id_.empty(); }
+    /// Al perder el foco.
+    void close_menu() { menu_id_.clear(); }
+
+    /// Conversación que se está renombrando, o vacío.
+    [[nodiscard]] const std::string& renaming() const { return renaming_id_; }
+    /// Texto del campo de renombrar: la interfaz lo edita (ftxui::Input).
+    [[nodiscard]] std::string& rename_text() { return rename_text_; }
+    [[nodiscard]] const std::string& rename_text() const { return rename_text_; }
+    /// Cierra el campo (se guardó, Esc o se perdió el foco).
+    void stop_rename();
 
     /// Primera fila visible.
     [[nodiscard]] std::size_t top() const { return top_; }
@@ -99,7 +129,8 @@ public:
     void scroll(int lines, const std::vector<SidebarRow>& rows, std::size_t view_height);
     /// Clic en la línea line de la zona visible (0 = la primera visible).
     /// Selecciona la fila y devuelve New, Settings u Open; None si es un encabezado,
-    /// una ilegible o no hay fila ahí.
+    /// una ilegible o no hay fila ahí. En una opción del menú, la elige como
+    /// Enter. Cierra el menú, y el campo de renombrar si el clic no es en él.
     [[nodiscard]] ListAction click(std::size_t line, const std::vector<SidebarRow>& rows);
 
     [[nodiscard]] const ConversationList& list() const { return list_; }
@@ -111,12 +142,20 @@ private:
     void select_row(const SidebarRow& row);
     /// Va a la conversación index desde una fila fija.
     void pick_conversation(std::size_t index);
+    /// Abre el campo de renombrar de la seleccionada, si es legible.
+    void start_rename();
+    /// Lo que hace la opción del menú (lo cierra antes).
+    [[nodiscard]] ListAction choose(ConversationMenuItem item, std::size_t page_size);
 
     /// Qué fila está seleccionada: una fija o la conversación de list_.
     enum class Pick { New, Settings, Conversation };
     ConversationList list_;
     Pick pick_ = Pick::New;
     std::size_t top_ = 0;
+    std::string menu_id_; ///< Conversación con el menú abierto (la seleccionada).
+    std::size_t menu_choice_ = 0;
+    std::string renaming_id_;
+    std::string rename_text_;
 };
 
 } // namespace chatbot::cli

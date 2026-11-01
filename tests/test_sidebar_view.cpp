@@ -206,3 +206,67 @@ TEST_CASE("barra: un título con saltos de línea ocupa una sola fila", "[barra]
     REQUIRE(first >= 0);
     CHECK(row_with(rows, "otra") == first + 1);
 }
+
+TEST_CASE("barra: marca de búsqueda al final del título; se quita primero si no cabe",
+          "[barra][vista][menu]") {
+    Sidebar sidebar;
+    std::vector<ConversationSummary> items = sample();
+    items[0].used_search = true;
+    sidebar.open(items, "");
+    ftxui::Screen screen = draw(sidebar, 30, 12, false);
+    std::vector<std::string> rows = rows_of(screen);
+    const int y = row_with(rows, "Recursividad");
+    REQUIRE(y >= 0);
+    CHECK(rows[static_cast<std::size_t>(y)] == "│   Recursividad en C++ co… ⌕ │");
+    CHECK(screen.CellAt(28, y).character == "⌕");
+    CHECK(screen.CellAt(28, y).dim);
+    CHECK(row_with(rows, "漢字") >= 0);
+    CHECK(rows[static_cast<std::size_t>(row_with(rows, "漢字"))].find("⌕") == std::string::npos);
+
+    // Angosta: el título conservaría menos de 8 columnas, así que la marca no sale.
+    rows = rows_of(draw(sidebar, 12, 12, false));
+    CHECK(row_with(rows, "⌕") == -1);
+    CHECK(rows[static_cast<std::size_t>(row_with(rows, "Recurs"))] == "│   Recurs… │");
+}
+
+TEST_CASE("barra: el campo de renombrar va en lugar del título, sin resaltado",
+          "[barra][vista][menu]") {
+    Sidebar sidebar;
+    sidebar.open(sample(), "a");
+    (void)sidebar.handle(ListKey::Other, "r", 10);
+    REQUIRE(sidebar.renaming() == "a");
+    const auto rows = sidebar.rows(kToday);
+    ftxui::Element element = chatbot::cli::render_sidebar(
+        sidebar, rows, 24, 12, true, chatbot::cli::terminal_palette(), ftxui::text("Nuevo título"));
+    ftxui::Screen screen = ftxui::Screen::Create(ftxui::Dimension::Fixed(24),
+                                                 ftxui::Dimension::Fixed(12));
+    ftxui::Render(screen, element);
+    const auto lines = rows_of(screen);
+    const int y = row_with(lines, "Nuevo título");
+    REQUIRE(y >= 0);
+    CHECK(lines[static_cast<std::size_t>(y)] == "│ ● Nuevo título        ");
+    CHECK(row_with(lines, "Recursividad") == -1);
+    for (int x = 0; x < screen.dimx(); ++x) {
+        CHECK_FALSE(screen.CellAt(x, y).inverted);
+    }
+}
+
+TEST_CASE("barra: el menú va debajo de su conversación, con el cursor",
+          "[barra][vista][menu]") {
+    Sidebar sidebar;
+    sidebar.open(sample(), "");
+    REQUIRE(sidebar.open_menu(3, sidebar.rows(kToday))); // "a".
+    (void)sidebar.handle(ListKey::Down, {}, 10);
+    const ftxui::Screen screen = draw(sidebar, 24, 12, true);
+    const auto rows = rows_of(screen);
+    const int title = row_with(rows, "Recursividad");
+    REQUIRE(title >= 0);
+    const auto at = [&](int offset) { return rows[static_cast<std::size_t>(title + offset)]; };
+    CHECK(at(1) == "│     Renombrar         │");
+    CHECK(at(2) == "│     Exportar          │");
+    CHECK(at(3) == "│     Borrar            │");
+    CHECK(row_with(rows, "漢字") == title + 4);
+    CHECK(screen.CellAt(4, title + 2).inverted); // "Exportar".
+    CHECK_FALSE(screen.CellAt(4, title).inverted);
+    CHECK_FALSE(screen.CellAt(4, title + 1).inverted);
+}

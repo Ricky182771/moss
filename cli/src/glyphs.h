@@ -64,6 +64,7 @@ enum class Glyph : std::uint8_t {
     BulletLevel2,  ///< Viñeta del segundo nivel de una lista de markdown.
     BulletLevel3,  ///< Viñeta del tercer nivel (el primero, "•", se queda).
     ReasoningClosed, ///< "▸ Pensamiento" plegado (abierto: DropdownClosed, "▾").
+    SearchMark,    ///< Al final del título en la barra: la conversación usó /buscar.
     // Los de FTXUI: los cambia Palette (border_style, vscroll).
     RoundedTopLeft, ///< borderRounded y window.
     RoundedTopRight,
