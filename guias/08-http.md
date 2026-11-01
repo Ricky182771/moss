@@ -2,13 +2,13 @@
 > Las reglas resumidas están en [AGENTS.md](../AGENTS.md).
 ## 8. HTTP y API
 
-- Cuerpo de la petición: `model`, `messages` (cada uno con `role` y `content`), `stream: false` en el hito 1.
+- Cuerpo de la petición (`build_request_body` → `request_json`, con `nlohmann::ordered_json`), en este orden: `model`, `stream` (`false` en `complete`, `true` en `complete_stream`), `messages` (cada uno con `role` y `content`), luego los ajustes del modelo que no están en Predeterminado (`temperature`, `top_p`, `top_k`, `max_tokens` o, en `openai`, `max_completion_tokens`, `frequency_penalty`, `presence_penalty`, `seed`), la traducción del razonamiento (`reasoning_fields`) y al final el JSON avanzado mezclado con JSON Merge Patch (guía 7). Sin ajustes, el cuerpo es el de antes de M2 salvo el orden de las llaves (antes salían en orden alfabético). `CHAT_DEBUG_SSE` sigue sin volcar la petición: para verla está la vista previa (`request_preview`).
 - Respuesta: leer `choices[0].message.content`. Validar que cada campo exista; si falta algo, devolver `BadResponse`, nunca tronar ni acceder a un índice inexistente.
 - **Mapeo de estados HTTP:**
   - 2xx: éxito.
   - 401 y 403: `Auth`.
   - 404 y 410: `ModelNotFound`.
-  - 400, 413 y 422: `InvalidRequest` (por ejemplo, "maximum context length exceeded").
+  - 400, 413 y 422: `InvalidRequest` (por ejemplo, "maximum context length exceeded"). Con un 400 o 422 y ajustes del modelo en la petición, `Session` agrega la pista `Puede ser un ajuste de <modelo>: revísalo en Configuración del modelo.`
   - 429: `RateLimited`.
   - 5xx: `Server`.
   - Otros estados no exitosos: `BadResponse`.

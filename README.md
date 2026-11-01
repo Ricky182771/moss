@@ -232,9 +232,30 @@ En todas las listas, la fila del cursor se marca con el color de selección (o i
 
 Si tu terminal no muestra colores de 24 bits, se aproximan a 256 o 16. Con `NO_COLOR` definida y no vacía se usa automáticamente `De la terminal`, con fondo transparente y cursor invertido. Tema y fondo aparecen deshabilitados con la nota `Desactivado por NO_COLOR`; la configuración guardada se conserva. Los símbolos se eligen igual con `NO_COLOR`.
 
+#### Configuración del modelo
+
+La categoría **Configuración del modelo** de F2 tiene tres pestañas arriba, con el modelo en uso en el título (`Configuración del modelo — <modelo> (<proveedor>)`). Con el foco en la barra de pestañas, ← y → cambian de pestaña (también con un clic); Tab y Shift+Tab siguen moviendo el foco entre campos, como en el resto de F2.
+
+- **Instrucciones:** el mensaje de sistema, para todos los modelos (abajo).
+- **Parámetros:** los ajustes del modelo en uso, guardados **por proveedor y modelo**: Razonamiento (Predeterminado · Apagado · Bajo · Medio · Alto), Temperatura, Top P, Top K, Máx. tokens, Penalización por frecuencia y por presencia, y Semilla. Cada campo empieza vacío, en **Predeterminado**: lo que no tocas no se manda, y el modelo usa su valor de siempre. Junto a cada campo está su rango, o el error si lo que escribiste no sirve. La ayuda del razonamiento dice qué hace cada nivel con tu proveedor (en NIM, Bajo, Medio y Alto solo lo encienden). **Restaurar todo** regresa todo a Predeterminado.
+- **Avanzado:** un objeto JSON que se mezcla al final del cuerpo de la petición (JSON Merge Patch): sus llaves ganan sobre el formulario, los objetos se mezclan por dentro y `null` quita una llave. Sirve para lo que el formulario no cubre, como `{"chat_template_kwargs": {"thinking": true}}` en algunos modelos de NIM. `model`, `messages`, `stream`, `stream_options`, `tools` y `tool_choice` los pone Moss y no se pueden cambiar. Abajo, la **vista previa** muestra el JSON exacto que se mandaría (sin la conversación ni la key), y se actualiza al escribir.
+
+Los ajustes se guardan en `config.json` bajo `"models"` y valen desde el siguiente mensaje. Al cambiar de modelo (F2 o `/model`) se usan los del modelo nuevo; con `CHAT_MODEL`, los de ese modelo. Si el servidor rechaza la petición con un 400 y llevaba ajustes, el error dice `Puede ser un ajuste de <modelo>: revísalo en Configuración del modelo.` Sin modelo elegido, Parámetros y Avanzado piden elegir uno.
+
+```json
+{
+    "models": {
+        "nvidia": {
+            "z-ai/glm5": {"reasoning": "high", "temperature": 0.6,
+                          "extra": {"chat_template_kwargs": {"clear_thinking": false}}}
+        }
+    }
+}
+```
+
 #### Instrucciones del sistema
 
-En la configuración, la categoría **Instrucciones del sistema** edita el mensaje de sistema que se manda al principio de cada conversación (también de las que abres desde la barra). El campo ajusta el texto al ancho como la caja de la conversación y usa el alto que deja la sección (con barra y rueda si no cabe); PgUp y PgDn mueven el cursor y la vista una altura del campo. Enter agrega un salto de línea; Tab y Shift+Tab cambian de campo. **Restaurar predeterminado** vuelve a poner las instrucciones de fábrica. Al guardar se aplican sin reiniciar y sin perder la conversación abierta: valen desde el siguiente mensaje.
+En la configuración, **Configuración del modelo → Instrucciones** edita el mensaje de sistema que se manda al principio de cada conversación (también de las que abres desde la barra), igual para todos los modelos. El campo ajusta el texto al ancho como la caja de la conversación y usa el alto que deja la sección (con barra y rueda si no cabe); PgUp y PgDn mueven el cursor y la vista una altura del campo. Enter agrega un salto de línea; Tab y Shift+Tab cambian de campo. **Restaurar predeterminado** vuelve a poner las instrucciones de fábrica. Al guardar se aplican sin reiniciar y sin perder la conversación abierta: valen desde el siguiente mensaje.
 
 Se guardan en `config.json` como `"system_prompt"`:
 
