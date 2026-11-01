@@ -13,6 +13,7 @@
 #include "chatbot/chat_client.h"
 #include "chatbot/config.h"
 #include "chatbot/error.h"
+#include "chatbot/model_params.h"
 #include "chatbot/result.h"
 #include "chatbot/web_search.h"
 
@@ -110,6 +111,21 @@ inline constexpr std::string_view kNoKeyNote = "sin key";
 
 /// El aviso de save_provider y switch_model.
 [[nodiscard]] std::string provider_switched_notice(std::string_view model, std::string_view label);
+
+/// Sin proveedor o sin modelo: Parámetros y Avanzado no se pueden ajustar.
+inline constexpr std::string_view kNoModelForParams =
+    "Elige un modelo en Proveedor de IA (o con /model) para ajustarlo.";
+
+/// Lo que dio Session::check_model_params.
+struct ModelParamsCheck {
+    std::vector<FieldProblem> problems; ///< Por campo ("extra" incluido); vacío si se puede guardar.
+    /// El cuerpo que se mandaría con la conversación abierta (request_preview),
+    /// o nullopt si hay problemas.
+    std::optional<std::string> preview;
+};
+
+/// La pista que agrega Session a un 400/422 si la petición llevó ajustes.
+[[nodiscard]] std::string model_params_hint(std::string_view model);
 
 /// Lo que pasó con Session::delete_endpoint.
 struct EndpointDeletion {
@@ -276,6 +292,19 @@ public:
     /// credentials.json ni la conversación abierta.
     [[nodiscard]] ModelSwitch switch_model(const std::optional<std::string>& provider,
                                            const std::string& model);
+    // --- Ajustes del modelo efectivo (provider y model de config(), con CHAT_MODEL) ---
+    /// Los guardados en "models" (Config::model_params).
+    [[nodiscard]] const ModelParams& model_params() const { return config_.model_params; }
+    /// kNoModelForParams si no hay proveedor o modelo; nullopt si se puede ajustar.
+    [[nodiscard]] std::optional<std::string> model_params_problem() const;
+    /// validate_model_params y la vista previa con el historial abierto más
+    /// el siguiente mensaje. Sin modelo, el problema va en "model".
+    [[nodiscard]] ModelParamsCheck check_model_params(const ModelParams& draft) const;
+    /// Como los demás save_*: kWaitOrCancel con una respuesta en curso; si
+    /// no, valida, escribe "models" y aplica desde el siguiente mensaje (el
+    /// aviso va al historial). Sin ajustes, quita el modelo de "models".
+    [[nodiscard]] std::optional<std::string> save_model_params(const ModelParams& draft);
+
     [[nodiscard]] std::optional<std::string> save_system_prompt(
         const std::optional<std::string>& stored);
     /// validate_system_prompt y luego save_system_prompt con
