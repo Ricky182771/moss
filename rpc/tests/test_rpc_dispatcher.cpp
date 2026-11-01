@@ -307,6 +307,10 @@ TEST_CASE("RPC: chat.send con search", "[rpc]") {
         CHECK(got[1]["params"]["entry"]["text"] == "/buscar clima");
         CHECK(got[7]["params"]["entry"]["sources"].dump() ==
               R"([{"n":1,"title":"T","url":"https://ejemplo.mx","published_date":null}])");
+        rpc.call(3, "conversations.list");
+        const std::vector<Json> listed = rpc.take();
+        REQUIRE(listed.size() == 1);
+        CHECK(listed[0]["result"]["items"][0]["used_search"] == true);
     }
     SECTION("sin resultados: aviso, sin llamar al modelo") {
         rpc.search_responses = {chatbot_test::tavily_response(nlohmann::json::array())};
@@ -912,6 +916,73 @@ TEST_CASE("RPC: conversations.list, conversation.open y conversation.delete", "[
     CHECK(std::filesystem::exists(rpc.dir.path() / "conversations" / (unreadable + ".json")));
     rpc.call(11, "conversations.list");
     CHECK(only(rpc)["result"]["items"].size() == 1);
+}
+
+TEST_CASE("RPC: conversation.rename y conversation.export con id", "[rpc]") {
+    Rpc rpc;
+    rpc.initialize();
+    exchange(rpc, 2, "c1", "uno");
+    rpc.call(3, "conversation.new");
+    (void)rpc.take();
+    exchange(rpc, 4, "c2", "dos");
+    rpc.call(5, "conversations.list");
+    const Json list = only(rpc)["result"]["items"];
+    REQUIRE(list.size() == 2);
+    CHECK(list[0]["used_search"] == false);
+    const std::string open = list[0]["open_as"].is_null() ? list[1]["id"] : list[0]["id"];
+    const std::string other = list[0]["open_as"].is_null() ? list[0]["id"] : list[1]["id"];
+    const std::string unreadable = "20260101-000000-abcdef";
+    std::ofstream{rpc.dir.path() / "conversations" / (unreadable + ".json")} << "{no es json";
+    const chatbot::cli::ConversationStore store{rpc.path("conversations")};
+
+    // Otra: sin conversation.renamed.
+    rpc.call(6, "conversation.rename", {{"id", other}, {"title", "  Otra\n cosa "}});
+    std::vector<Json> got = rpc.take();
+    CHECK(summaries(got) == std::vector<std::string>{"#6 result", "conversations.changed"});
+    CHECK(got[0]["result"].dump() == R"({"title":"Otra cosa"})");
+    CHECK(store.load(other).conversation->title == "Otra cosa");
+
+    // La abierta: el evento, con su rev, antes de conversations.changed.
+    rpc.call(7, "conversation.get", {{"conversation", "c2"}});
+    const std::uint64_t rev = only(rpc)["result"]["rev"];
+    rpc.call(8, "conversation.rename", {{"id", open}, {"title", "Nueva"}});
+    got = rpc.take();
+    CHECK(summaries(got) == std::vector<std::string>{"#8 result", "conversation.renamed",
+                                                     "conversations.changed"});
+    CHECK(got[1]["params"].dump() ==
+          R"({"conversation":"c2","rev":)" + std::to_string(rev + 1) + R"(,"title":"Nueva"})");
+    rpc.call(9, "conversation.get", {{"conversation", "c2"}});
+    CHECK(only(rpc)["result"]["title"] == "Nueva");
+
+    // Errores.
+    rpc.call(10, "conversation.rename", {{"id", open}, {"title", " "}});
+    check_error(only(rpc), -32005, "Escribe un título.");
+    rpc.call(11, "conversation.rename", {{"id", open}, {"title", std::string(61, 'x')}});
+    check_error(only(rpc), -32005, "El título puede tener hasta 60 caracteres.");
+    rpc.call(12, "conversation.rename", {{"id", ""}, {"title", "x"}});
+    check_error(only(rpc), -32005, std::string{chatbot::cli::kNothingToRename});
+    rpc.call(13, "conversation.rename", {{"id", unreadable}, {"title", "x"}});
+    check_error(only(rpc), -32007, store.load(unreadable).error);
+    rpc.call(14, "conversation.rename", {{"id", open}});
+    CHECK(only(rpc)["error"]["code"] == -32602);
+
+    // Exportar por id la que no está abierta, sin tocar la abierta.
+    rpc.download_base = rpc.path("descargas");
+    std::filesystem::create_directory(*rpc.download_base);
+    rpc.call(15, "conversation.export", {{"id", other}});
+    const Json exported = only(rpc);
+    const std::string path = exported["result"]["path"];
+    CHECK(path.find("conversacion-" + other + ".md") != std::string::npos);
+    CHECK(std::filesystem::exists(path));
+    CHECK(exported["result"]["message"] == "Conversación exportada a " + path);
+    rpc.call(16, "conversation.export", {{"id", unreadable}});
+    check_error(only(rpc), -32007, store.load(unreadable).error);
+    rpc.call(17, "conversation.export", {{"id", other}, {"conversation", "c2"}});
+    CHECK(only(rpc)["error"]["code"] == -32602);
+    rpc.call(18, "conversation.export");
+    CHECK(only(rpc)["error"]["code"] == -32602);
+    rpc.call(19, "conversation.export", {{"conversation", "c2"}});
+    CHECK(only(rpc).contains("result"));
 }
 
 TEST_CASE("RPC: abrir y borrar con una respuesta en curso → Busy", "[rpc]") {

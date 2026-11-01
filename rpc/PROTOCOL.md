@@ -25,6 +25,7 @@ Versión del protocolo: **1**.
 | `settings.model_params.*`; `settings.changed` con `model_params` | 6.7, 7 | Implementado |
 | Pensamiento: `reasoning` en `Entry`, evento `conversation.reasoning_delta` | 5, 7 | Implementado |
 | `service.log` (el registro del bot) | 6.8 | Implementado |
+| `conversation.rename`, evento `conversation.renamed`, `used_search` en `Summary`, `conversation.export` con `id` | 6.2, 6.3, 7 | Implementado |
 | `CHAT_DEBUG_RPC` | 10 | Implementado |
 | Windows: stdio en modo binario | 2 | Implementado, probado en la CI con pipes (`tools/check-rpc-pipes.sh`) |
 
@@ -253,6 +254,7 @@ Notación: `→` parámetros, `←` resultado. `?` = opcional.
 {"id":"...", "title":"...", "updated_at":"...", "message_count":6,
  "last_model":"...", "readable":true, "error":"",
  "group":"Hoy",                       // "Hoy" | "Ayer" | "Últimos 7 días" | "2 oct" | "Sin fecha"
+ "used_search":false,                 // algún mensaje del usuario se hizo con /buscar (el globo)
  "open_as":"c1"}                      // handle si está abierta en este proceso, o null
 ```
 
@@ -263,6 +265,13 @@ Mismo orden que el almacén: la más reciente primero y las ilegibles al final. 
 - Si es la abierta, el servidor empieza una nueva, igual que la TUI con `new_conversation()`: el handle viejo recibe `conversation.closed` (`reason: "deleted"`) antes de la respuesta y `replaced_by` trae la nueva. Si no era la abierta, `replaced_by: null`.
 - Después de la respuesta emite `conversations.changed`.
 - Errores: `-32002 Busy` (`data.message`: `Espera la respuesta o cancélala con Esc.`) con **cualquier** respuesta en curso, como la TUI; `-32007` con `data.message` si es ilegible (nunca se borra), no existe o falló el borrado.
+
+**`conversation.rename`** `→ {id, title}` `← {title}`
+- Es `Session::rename_conversation`, lo mismo que `r` en la barra de la TUI. `title` se normaliza como el título automático (extremos recortados, espacios y saltos colapsados a uno) y la respuesta trae el resultado. Debe quedar de 1 a 60 puntos de código, en UTF-8 válido y sin caracteres de control; un título largo **no** se recorta.
+- `updated_at` no cambia: renombrar no es actividad y la conversación no sube en la lista.
+- Se permite **con una respuesta en curso**: solo cambia el título, y el par que termine se guarda con el nuevo.
+- Después de la respuesta emite `conversations.changed` y, si es la abierta, antes de él `conversation.renamed`.
+- Errores: `-32005` con `data.message` si el título no es válido (`Escribe un título.`, `El título puede tener hasta 60 caracteres.`, `El título no es UTF-8 válido.`, `El título tiene un carácter de control no permitido.`) o si `id` está vacío (`Todavía no hay nada guardado que renombrar.`: una conversación nueva no tiene id hasta su primer par); `-32007` con `data.message` si es ilegible (nunca se toca), no existe o falló la escritura.
 
 ### 6.3 Conversación abierta
 
@@ -278,9 +287,10 @@ Siempre hay exactamente una conversación abierta, igual que en la TUI: al arran
 
 **`conversation.get`** `→ {conversation}` `← ConversationSnapshot`
 
-**`conversation.export`** `→ {conversation}` `← {path, message}`
-- Es el botón `[Exportar]`: `export_conversation` hacia la carpeta de descargas, **sin tocar el historial** y también con una respuesta en curso (exporta los pares ya guardados). `path` es la ruta completa del archivo; `message` es el aviso largo (`Conversación exportada a ~/…`).
-- Errores: `-32005` sin pares (`Todavía no hay respuestas que exportar.`); `-32007` sin carpeta de descargas o si falla la escritura, con `data.message`.
+**`conversation.export`** `→ {conversation} | {id}` `← {path, message}`
+- Exactamente uno de los dos; con los dos o con ninguno, `-32602`.
+- Con `conversation` es el botón `[Exportar]`: `export_conversation` de la abierta hacia la carpeta de descargas, **sin tocar el historial** y también con una respuesta en curso (exporta los pares ya guardados). Con `id` es `e` en la barra de la TUI: exporta lo que hay en disco (`Session::export_stored`), esté abierta o no, también con una respuesta en curso. Mismo nombre de archivo y mismo aviso en los dos casos. `path` es la ruta completa del archivo; `message` es el aviso largo (`Conversación exportada a ~/…`).
+- Errores: `-32005` sin pares (`Todavía no hay respuestas que exportar.`); `-32007` sin carpeta de descargas, si falla la escritura o, con `id`, si la conversación es ilegible o no existe (el mensaje de `ConversationStore::load`; no se escribe nada), con `data.message`.
 
 ### 6.4 Chat
 
@@ -615,9 +625,10 @@ Todas las `service.*` salvo `service.status` y `service.log`, y `invited.remove`
 | `conversation.entry_updated` | `{conversation, rev, index, entry}` | Cambiaron las marcas (termina, se cancela, nota) |
 | `conversation.phase` | `{conversation, rev, phase}` | idle / searching / thinking / streaming |
 | `conversation.saved` | `{conversation, rev, id, title}` | Se guardó después de un par (la primera vez trae id y título). Si el guardado falla no llega: llega la entrada de error |
+| `conversation.renamed` | `{conversation, rev, title}` | `conversation.rename` cambió el título de la abierta (también con una respuesta en curso) |
 | `conversation.closed` | `{conversation, reason}` | `replaced` (`new`, `open`), `deleted`, o `shutdown`: siempre en `shutdown` si hay sesión, con o sin respuesta en curso |
 | `chat.finished` | ver abajo | Una vez por cada `chat.send` aceptado, salvo si antes llegó `shutdown` (sección 3) |
-| `conversations.changed` | `{}` | Se guardó, borró o creó un archivo: la GUI vuelve a pedir la lista |
+| `conversations.changed` | `{}` | Se guardó, borró, renombró o creó un archivo: la GUI vuelve a pedir la lista |
 | `settings.changed` | `{section}` | Se guardó: `provider` / `system_prompt` / `model_params` / `search` / `gui` / `telegram`. Sale después de la respuesta y antes de los avisos en el historial |
 | `service.changed` | `{addon}` | Terminó `service.apply`, `restart`, `disable`, `reload` o `addons.telegram.invited.remove`, aunque se haya cancelado o haya fallado; después de su respuesta (sección 6.8). `service.status` y `service.log` no lo emiten |
 
@@ -681,6 +692,9 @@ La primera entrada del asistente llega con `entry_added` (la crea el primer delt
 | Ctrl+N / `+ Nueva` | `conversation.new` |
 | Abrir desde la barra (con aviso de modelo) | `conversation.open` |
 | Supr + `s` | (confirmación en la GUI) + `conversation.delete` |
+| Barra: `r` / menú del clic derecho → Renombrar | `conversation.rename` (+ `conversation.renamed` si es la abierta) |
+| Barra: `e` / menú del clic derecho → Exportar | `conversation.export` con `id` |
+| Barra: marca de búsqueda al final del título | `Summary.used_search` |
 | `[Copiar]` / `/copiar` | `blocks.get` + portapapeles de Flutter / `commands.run` |
 | `[Guardar]` / `/guardar` | `blocks.save` / `commands.run` |
 | `[Exportar]` / `/exportar` | `conversation.export` / `commands.run` |
