@@ -75,11 +75,17 @@ struct ReloadHarness {
         env.values["CHAT_API_KEY"] = kKey;
     }
 
+    /// "models" de config.json (null: sin la llave).
+    json models;
+
     void write_config(const json& telegram) {
-        const json app{{"provider", "nvidia"},
-                       {"base_url", "https://integrate.api.nvidia.com/v1"},
-                       {"model", "meta/llama-3.3-70b-instruct"},
-                       {"addons", {{"telegram", telegram}}}};
+        json app{{"provider", "nvidia"},
+                 {"base_url", "https://integrate.api.nvidia.com/v1"},
+                 {"model", "meta/llama-3.3-70b-instruct"},
+                 {"addons", {{"telegram", telegram}}}};
+        if (!models.is_null()) {
+            app["models"] = models;
+        }
         std::ofstream{paths.config, std::ios::binary} << app.dump(2);
     }
 
@@ -239,4 +245,37 @@ TEST_CASE("recarga de Telegram: SIGTERM corta un setMyCommands colgado", "[teleg
         h.check_no_secrets();
     }
     pthread_sigmask(SIG_SETMASK, &old_mask, nullptr);
+}
+
+TEST_CASE("recarga de Telegram: el cuerpo lleva los ajustes del modelo del bot",
+          "[telegram][recarga][ajustes]") {
+    ReloadHarness h;
+    h.models = {{"nvidia",
+                 {{"meta/llama-3.3-70b-instruct", {{"temperature", 0.9}}},
+                  {"bot/modelo", {{"temperature", 0.2}, {"reasoning", "off"}}}}}};
+    h.start(section({{"model", "bot/modelo"}}));
+    REQUIRE(h.reaches_model(10, 1));
+    json body = json::parse(h.recorder->requests().back().body);
+    CHECK(body.at("model") == "bot/modelo");
+    CHECK(body.at("temperature") == 0.2); // Los de su modelo, no los de la app.
+    CHECK(body.at("chat_template_kwargs").at("enable_thinking") == false);
+
+    // SIGHUP los vuelve a leer.
+    h.models["nvidia"]["bot/modelo"] = {{"top_p", 0.5}};
+    h.write_config(section({{"model", "bot/modelo"}}));
+    REQUIRE(h.reload() == ReloadResult::Applied);
+    REQUIRE(h.reaches_model(10, 1));
+    body = json::parse(h.recorder->requests().back().body);
+    CHECK_FALSE(body.contains("temperature"));
+    CHECK_FALSE(body.contains("chat_template_kwargs"));
+    CHECK(body.at("top_p") == 0.5);
+
+    // Sin "model" en la sección, los del modelo de la app.
+    h.write_config(section());
+    REQUIRE(h.reload() == ReloadResult::Applied);
+    REQUIRE(h.reaches_model(10, 1));
+    body = json::parse(h.recorder->requests().back().body);
+    CHECK(body.at("model") == "meta/llama-3.3-70b-instruct");
+    CHECK(body.at("temperature") == 0.9);
+    h.check_no_secrets();
 }
