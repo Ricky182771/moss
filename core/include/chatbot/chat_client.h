@@ -62,6 +62,10 @@ public:
     /// lanza excepciones.
     [[nodiscard]] Result<std::vector<std::string>> list_models(const CancelToken* cancel = nullptr);
 
+    /// Las llaves de primer nivel que los ajustes del modelo agregan al
+    /// cuerpo (request_param_keys de su Config); vacío sin ajustes.
+    [[nodiscard]] std::vector<std::string> param_keys() const;
+
 private:
     /// Envía request con la política de reintentos (sección 6) y devuelve el
     /// cuerpo de la respuesta 2xx, o el error mapeado.

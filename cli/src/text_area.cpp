@@ -318,8 +318,15 @@ bool TextArea::handle_mouse(ftxui::Event event) { // mouse() no es const.
         if (!s.bar) {
             return false; // Todo cabe: la rueda es de quien contiene el campo.
         }
-        (void)s.edit.scroll(mouse.button == ftxui::Mouse::WheelUp ? -kWheelStep : kWheelStep,
-                            s.text_width, s.height);
+        const bool moved = s.edit.scroll(
+            mouse.button == ftxui::Mouse::WheelUp ? -kWheelStep : kWheelStep, s.text_width,
+            s.height);
+        if (moved && s.option.read_only) {
+            // Solo lectura: el cursor sube o baja con la vista (a su primera
+            // fila). Si no, un alto distinto en otra pasada del cuadro (con
+            // otro campo flexible al lado) regresaría la vista al cursor.
+            s.edit.click(s.edit.peek_top_row(s.text_width, s.height), 0, s.text_width);
+        }
         return true;
     }
     if (mouse.button != ftxui::Mouse::Left || mouse.motion != ftxui::Mouse::Pressed) {
@@ -337,6 +344,12 @@ bool TextArea::handle_key(const ftxui::Event& event) {
     const int height = state_->height;
     if (event == ftxui::Event::Tab || event == ftxui::Event::TabReverse) {
         return false; // Nunca insertan: mueven el foco.
+    }
+    const bool edits = event == ftxui::Event::Return || event.is_character() ||
+                       event == ftxui::Event::Backspace || event == ftxui::Event::Delete ||
+                       event == ftxui::Event::Insert;
+    if (state_->option.read_only && edits) {
+        return false;
     }
     if (event == ftxui::Event::Return) {
         if (state_->option.enter == EnterKey::Newline) {

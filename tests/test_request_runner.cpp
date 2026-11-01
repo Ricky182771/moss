@@ -3,8 +3,10 @@
 
 #include "blocking_transport.hpp"
 #include "chatbot/chat_client.h"
+#include "chatbot/model_params.h"
 #include "chatbot/sleeper.h"
 #include "chatbot/tavily_search.h"
+#include "chatbot/trimmed_completion.h"
 #include "fake_search_provider.hpp"
 #include "fake_transport.hpp"
 #include "system_prompt_invariants.hpp"
@@ -12,6 +14,7 @@
 #include <nlohmann/json.hpp>
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 
 #include <chrono>
 #include <cstddef>
@@ -52,9 +55,10 @@ struct RunnerHarness {
     std::thread::id ui_thread = std::this_thread::get_id();
 
     RunnerHarness(std::unique_ptr<chatbot::Transport> transport,
-                  std::unique_ptr<chatbot::Sleeper> sleeper, std::size_t limit = 0) {
-        client = std::make_unique<chatbot::ChatClient>(chatbot_test::test_config(),
-                                                       std::move(transport), std::move(sleeper));
+                  std::unique_ptr<chatbot::Sleeper> sleeper, std::size_t limit = 0,
+                  chatbot::Config config = chatbot_test::test_config()) {
+        client = std::make_unique<chatbot::ChatClient>(std::move(config), std::move(transport),
+                                                       std::move(sleeper));
         runner = std::make_unique<RequestRunner>(
             *client, limit, [this](RequestRunner::Task task) { queue.post(std::move(task)); });
     }
@@ -730,4 +734,159 @@ TEST_CASE("RequestRunner: reintento por contexto tras /buscar conserva sistema y
             CHECK(message.content.find("/buscar") == std::string::npos);
         }
     }
+}
+
+namespace {
+
+/// test_config con ajustes del modelo: temperature y reasoning_effort.
+chatbot::Config config_with_params() {
+    chatbot::Config config = chatbot_test::test_config();
+    config.model_params.temperature = 0.3;
+    config.model_params.top_k = 40;
+    config.model_params.reasoning = chatbot::Reasoning::High;
+    return config;
+}
+
+HttpResponse error_400(const std::string& message) {
+    return HttpResponse{400, R"({"error":{"message":")" + message + R"("}})", std::nullopt, false,
+                        ""};
+}
+
+} // namespace
+
+TEST_CASE("RequestRunner: un 400 que nombra un ajuste no reintenta por contexto",
+          "[runner][hilos][contexto][ajustes]") {
+    // Sin distinguir mayúsculas; también las llaves del razonamiento.
+    const std::string message = GENERATE(std::string{"Unsupported parameter: Temperature."},
+                                         std::string{"Unsupported parameter: temperature"},
+                                         std::string{"'top_k' is not supported"},
+                                         std::string{"Unknown field REASONING_EFFORT"});
+    auto transport = std::make_unique<chatbot_test::FakeTransport>();
+    chatbot_test::FakeTransport* fake = transport.get();
+    fake->responses.push_back(error_400(message));
+    fake->responses.push_back(HttpResponse{200, sse_flow({"ok"}), std::nullopt, false, ""});
+    RunnerHarness harness(std::move(transport), std::make_unique<chatbot_test::FakeSleeper>(),
+                          1000, config_with_params());
+
+    REQUIRE(harness.start(history_with_old_turn()));
+    REQUIRE(harness.wait_done());
+
+    REQUIRE(harness.outcome.result->is_error());
+    CHECK(harness.outcome.result->error().message == message);
+    CHECK(fake->requests.size() == 1);
+    CHECK(harness.outcome.dropped == 0);
+}
+
+TEST_CASE("RequestRunner: un 400 de contexto con ajustes sí reintenta",
+          "[runner][hilos][contexto][ajustes]") {
+    auto transport = std::make_unique<chatbot_test::FakeTransport>();
+    chatbot_test::FakeTransport* fake = transport.get();
+    fake->responses.push_back(error_400("maximum context length exceeded"));
+    fake->responses.push_back(HttpResponse{200, sse_flow({"ok"}), std::nullopt, false, ""});
+    RunnerHarness harness(std::move(transport), std::make_unique<chatbot_test::FakeSleeper>(),
+                          1000, config_with_params());
+
+    REQUIRE(harness.start(history_with_old_turn()));
+    REQUIRE(harness.wait_done());
+
+    REQUIRE(harness.outcome.result->is_ok());
+    REQUIRE(fake->requests.size() == 2);
+    CHECK(sent_messages(fake->requests[1]) == 2);
+    CHECK(harness.outcome.dropped == 2);
+}
+
+TEST_CASE("RequestRunner: si el reintento también falla, el error y el recorte del primero",
+          "[runner][hilos][contexto]") {
+    auto transport = std::make_unique<chatbot_test::FakeTransport>();
+    chatbot_test::FakeTransport* fake = transport.get();
+    fake->responses.push_back(error_400("primero"));
+    fake->responses.push_back(error_400("segundo"));
+    RunnerHarness harness(std::move(transport), std::make_unique<chatbot_test::FakeSleeper>(),
+                          1000);
+
+    REQUIRE(harness.start(history_with_old_turn()));
+    REQUIRE(harness.wait_done());
+
+    REQUIRE(fake->requests.size() == 2);
+    REQUIRE(harness.outcome.result->is_error());
+    CHECK(harness.outcome.result->error().message == "primero");
+    CHECK(harness.outcome.dropped == 0); // Sin "Se omitieron N mensajes".
+}
+
+TEST_CASE("request_param_keys: las llaves que ponen los ajustes, después del merge patch",
+          "[ajustes]") {
+    chatbot::ModelParams params;
+    CHECK(chatbot::request_param_keys("nvidia", params).empty());
+    params.temperature = 0.3;
+    params.max_tokens = 10;
+    params.reasoning = chatbot::Reasoning::Off;
+    params.extra = R"({"temperature": null, "repetition_penalty": 1.1})";
+    CHECK(chatbot::request_param_keys("openai", params) ==
+          std::vector<std::string>{"max_completion_tokens", "reasoning_effort",
+                                   "repetition_penalty"});
+    CHECK(chatbot::request_param_keys("nvidia", params) ==
+          std::vector<std::string>{"max_tokens", "chat_template_kwargs", "repetition_penalty"});
+}
+
+TEST_CASE("complete_trimmed: un reintento cancelado o que ya entregó texto da su propio resultado",
+          "[contexto]") {
+    auto transport = std::make_unique<chatbot_test::FakeTransport>();
+    chatbot_test::FakeTransport* fake = transport.get();
+    chatbot::ChatClient client{chatbot_test::test_config(), std::move(transport),
+                               std::make_unique<chatbot_test::FakeSleeper>()};
+    chatbot::CancelToken cancel;
+    fake->responses.push_back(error_400("primero"));
+    std::vector<std::string> deltas;
+    const auto collect = [&deltas](std::string_view delta) {
+        deltas.emplace_back(delta);
+        return true;
+    };
+
+    SECTION("cancelado durante el reintento: gana la cancelación") {
+        fake->responses.push_back(error_400("segundo"));
+        fake->on_send = [&] {
+            if (fake->requests.size() == 2) {
+                cancel.cancel();
+            }
+        };
+        const chatbot::TrimmedCompletion done =
+            chatbot::complete_trimmed(client, history_with_old_turn(), 1000, collect, &cancel);
+        REQUIRE(fake->requests.size() == 2);
+        REQUIRE(done.result.is_error());
+        CHECK(done.result.error().kind == ErrorKind::Cancelled);
+    }
+    SECTION("el reintento entregó texto y después falló: su error y su recorte") {
+        HttpResponse partial{200,
+                             "data: {\"choices\":[{\"delta\":{\"content\":\"parcial\"}}]}\n\n"
+                             "data: {\"error\":{\"code\":500,\"message\":\"se cayó\"}}\n\n",
+                             std::nullopt, false, ""};
+        fake->responses.push_back(partial);
+        const chatbot::TrimmedCompletion done =
+            chatbot::complete_trimmed(client, history_with_old_turn(), 1000, collect, &cancel);
+        REQUIRE(fake->requests.size() == 2);
+        CHECK(deltas == std::vector<std::string>{"parcial"});
+        REQUIRE(done.result.is_error());
+        CHECK(done.result.error().kind == ErrorKind::Server);
+        CHECK(done.dropped == 2);
+    }
+}
+
+TEST_CASE("RequestRunner: una llave corta de extra dentro de otra palabra no apaga el reintento",
+          "[runner][hilos][contexto][ajustes]") {
+    chatbot::Config config = config_with_params();
+    config.model_params.extra = GENERATE(std::string{R"({"n": 1})"},
+                                         std::string{R"({"stop": ["fin"]})"});
+    auto transport = std::make_unique<chatbot_test::FakeTransport>();
+    chatbot_test::FakeTransport* fake = transport.get();
+    fake->responses.push_back(error_400("maximum context length is 8192 tokens"));
+    fake->responses.push_back(HttpResponse{200, sse_flow({"ok"}), std::nullopt, false, ""});
+    RunnerHarness harness(std::move(transport), std::make_unique<chatbot_test::FakeSleeper>(),
+                          1000, config);
+
+    REQUIRE(harness.start(history_with_old_turn()));
+    REQUIRE(harness.wait_done());
+
+    REQUIRE(harness.outcome.result->is_ok());
+    CHECK(fake->requests.size() == 2);
+    CHECK(harness.outcome.dropped == 2);
 }

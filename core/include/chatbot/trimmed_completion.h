@@ -24,6 +24,10 @@ struct TrimmedCompletion {
 /// (p. ej. "maximum context length exceeded") antes de entregar texto y sin
 /// cancelación, reintenta una sola vez recortando a la mitad de
 /// min(limit_bytes, tamaño de lo enviado), si eso quita algún mensaje más.
+/// No reintenta si el mensaje del error nombra (sin distinguir mayúsculas y
+/// como palabra completa: sin [a-z0-9_] pegado antes ni después) una de las
+/// llaves que pusieron los ajustes del modelo (ChatClient::param_keys). Si el reintento también falla (sin cancelación
+/// ni texto), devuelve el error y el dropped del primer intento.
 /// La usan la interfaz (RequestRunner) y los addons. Nunca lanza excepciones.
 [[nodiscard]] TrimmedCompletion complete_trimmed(ChatClient& client,
                                                  const std::vector<Message>& history,

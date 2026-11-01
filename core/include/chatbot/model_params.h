@@ -110,6 +110,13 @@ struct ParsedModelParams {
 /// objeto JSON.
 [[nodiscard]] Result<ParsedModelParams> model_params_from_json(std::string_view json);
 
+/// Las llaves de primer nivel que los ajustes agregan al cuerpo (las del
+/// formulario, la traducción del razonamiento y las de extra, después del
+/// merge patch), sin model, stream ni messages, en el orden del cuerpo. Vacío
+/// sin ajustes. Requiere ajustes válidos.
+[[nodiscard]] std::vector<std::string> request_param_keys(std::string_view provider,
+                                                          const ModelParams& params);
+
 /// Vista previa del cuerpo que se mandaría (sangría de 2, en el orden de la
 /// petición), con "messages" cambiado por "[…N mensajes…]". La key va en la
 /// cabecera: nunca aparece aquí. Requiere ajustes válidos.

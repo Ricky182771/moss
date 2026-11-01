@@ -1318,3 +1318,52 @@ TEST_CASE("Session: borrar un endpoint borra sus ajustes", "[session][ajustes][e
     CHECK_FALSE(saved.at("models").contains("custom:a"));
     CHECK(saved.at("models").contains("nvidia"));
 }
+
+TEST_CASE("Session: el reintento por contexto con ajustes del modelo", "[session][ajustes]") {
+    Harness h;
+    save_nvidia(h);
+    const auto error_400 = [](const std::string& message) {
+        chatbot::HttpResponse response;
+        response.status = 400;
+        response.body = R"({"error":{"message":")" + message + R"("}})";
+        return response;
+    };
+    SECTION("un 400 que nombra temperature: un solo intento y la pista") {
+        h.responses = {stream("Hola."), error_400("Unsupported parameter: temperature.")};
+        h.start(h.load());
+        REQUIRE(h.session->save_model_params(sample_params()) == std::nullopt);
+        REQUIRE(h.exchange("hola"));
+        REQUIRE(h.session->submit("otra").type == Type::Started);
+        REQUIRE(h.finish());
+        CHECK(h.chat->requests.size() == 2); // El par bueno y un solo intento.
+        REQUIRE(h.finished.back().error.has_value());
+        CHECK(h.finished.back().error->message ==
+              "Unsupported parameter: temperature. Puede ser un ajuste de m1: revísalo en "
+              "Configuración del modelo.");
+        CHECK(h.finished.back().dropped == 0);
+    }
+    SECTION("un 400 de contexto: reintenta con menos historial") {
+        h.responses = {stream("Hola."), error_400("maximum context length exceeded"),
+                       stream("Bien.")};
+        h.start(h.load());
+        REQUIRE(h.session->save_model_params(sample_params()) == std::nullopt);
+        REQUIRE(h.exchange("hola"));
+        REQUIRE(h.exchange("otra"));
+        CHECK(h.chat->requests.size() == 3);
+        CHECK(h.finished.back().dropped > 0);
+    }
+    SECTION("el reintento también falla: el error del primero, sin recorte") {
+        h.responses = {stream("Hola."), error_400("primero"), error_400("segundo")};
+        h.start(h.load());
+        REQUIRE(h.session->save_model_params(sample_params()) == std::nullopt);
+        REQUIRE(h.exchange("hola"));
+        REQUIRE(h.session->submit("otra").type == Type::Started);
+        REQUIRE(h.finish());
+        CHECK(h.chat->requests.size() == 3);
+        REQUIRE(h.finished.back().error.has_value());
+        CHECK(h.finished.back().error->message ==
+              "primero Puede ser un ajuste de m1: revísalo en Configuración del modelo.");
+        CHECK(h.finished.back().dropped == 0);
+        CHECK(h.session->last_dropped() == 0);
+    }
+}

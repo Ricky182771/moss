@@ -514,3 +514,43 @@ TEST_CASE("TextArea: modo Sencillos, la barra con los respaldos", "[text_area][s
         chatbot_test::check_simple_matches(draw_with(same), draw_with(palette));
     }
 }
+
+TEST_CASE("TextArea: solo lectura no edita, pero se mueve y se desplaza", "[text_area]") {
+    chatbot::cli::TextAreaOption option;
+    option.palette = &unicode_palette();
+    option.max_rows = 3;
+    option.read_only = true;
+    int changes = 0;
+    option.on_change = [&changes] { ++changes; };
+    const auto field = chatbot::cli::make_text_area(std::move(option));
+    field->TakeFocus();
+    field->set_text("uno\ndos\ntres\ncuatro\ncinco", 0);
+    (void)draw(field, 20);
+
+    for (const ftxui::Event& event :
+         {ftxui::Event::Character("x"), ftxui::Event::Return, ftxui::Event::Backspace,
+          ftxui::Event::Delete, ftxui::Event::Insert}) {
+        CHECK_FALSE(field->OnEvent(event));
+    }
+    CHECK(field->text() == "uno\ndos\ntres\ncuatro\ncinco");
+    CHECK(changes == 0);
+
+    CHECK(field->scrollable());
+    REQUIRE(field->OnEvent(ftxui::Event::PageDown));
+    ftxui::Screen screen = draw(field, 20);
+    CHECK(row_text(screen, 0).find("uno") == std::string::npos);
+    REQUIRE(field->OnEvent(ftxui::Event::PageUp));
+    screen = draw(field, 20);
+    CHECK(row_text(screen, 0).find("uno") == 0);
+
+    // La rueda lleva el cursor con la vista.
+    ftxui::Mouse mouse;
+    mouse.x = 1;
+    mouse.y = 1;
+    mouse.button = ftxui::Mouse::WheelDown;
+    mouse.motion = ftxui::Mouse::Pressed;
+    REQUIRE(field->OnEvent(ftxui::Event::Mouse("", mouse)));
+    screen = draw(field, 20);
+    CHECK(row_text(screen, 0).find("uno") == std::string::npos);
+    CHECK(field->cursor() > 0);
+}
