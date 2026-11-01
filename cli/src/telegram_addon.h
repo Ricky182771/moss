@@ -151,6 +151,10 @@ public:
     void restart(std::function<void(const ServiceAction&)> done);
     void disable(std::function<void(const ServiceAction&)> done);
     void reload(std::function<void(const ServiceAction&)> done);
+    /// Las últimas lines del registro (ServiceControl::log), con el detalle
+    /// de errores solo si está encendido en lo guardado. No cambia el estado.
+    /// Requiere has_service.
+    void log(int lines, std::function<void(const ServiceLog&)> done);
 
 private:
     [[nodiscard]] AddonInstall find_install(const CancelToken& cancel) const;

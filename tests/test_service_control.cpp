@@ -399,3 +399,89 @@ TEST_CASE("servicio: cerrar con una consulta colgada no espera el tope", "[servi
     CHECK(runs == 1); // No siguió con is-enabled, show, loginctl ni journalctl.
 }
 #endif
+
+namespace {
+
+constexpr const char* kJournal200 =
+    "journalctl --user -u moss-telegram.service -n 200 -o short-iso --no-pager";
+
+} // namespace
+
+TEST_CASE("servicio: el registro, en orden y con el detalle según el ajuste", "[servicio][registro]") {
+    ServiceHarness h;
+    h.fake.answers[kJournal200] = exited(
+        0,
+        "2026-11-01T10:00:00-0600 pc moss-telegram[7]: 2026-11-01 10:00:00 info inicio\n"
+        "2026-11-01T10:00:05-0600 pc moss-telegram[7]: 2026-11-01 10:00:05 error chat=5 "
+        "origen=modelo tipo=\"auth\" http=401 ms=12 detalle=\"lo que escribió el alumno\"\n"
+        "2026-11-01T10:00:06-0600 pc moss-telegram[7]: control\x1b[31m\n");
+
+    const chatbot::cli::ServiceLog hidden = h.control.log(200, false);
+    CHECK(h.fake.calls == std::vector<std::string>{kJournal200});
+    CHECK(h.fake.timeouts.front() == chatbot::cli::kServiceCommandTimeout);
+    CHECK(hidden.kind == ServiceAction::Kind::Done);
+    CHECK(hidden.message.empty());
+    CHECK_FALSE(hidden.truncated);
+    REQUIRE(hidden.lines.size() == 3);
+    CHECK(hidden.lines[0].ends_with("info inicio"));
+    CHECK(hidden.lines[1].ends_with("error chat=5 origen=modelo tipo=\"auth\" http=401 ms=12"));
+    CHECK(hidden.lines[2].ends_with("control\xEF\xBF\xBD[31m")); // ESC → U+FFFD.
+
+    const chatbot::cli::ServiceLog shown = h.control.log(200, true);
+    REQUIRE(shown.lines.size() == 3);
+    CHECK(shown.lines[1].ends_with("detalle=\"lo que escribió el alumno\""));
+
+    // Fuera de rango, al tope.
+    (void)h.control.log(5000, false);
+    (void)h.control.log(0, false);
+    CHECK(h.fake.calls[2].find(" -n 1000 ") != std::string::npos);
+    CHECK(h.fake.calls[3].find(" -n 1 ") != std::string::npos);
+}
+
+TEST_CASE("servicio: registro sin entradas, sin systemd o con error", "[servicio][registro]") {
+    ServiceHarness h;
+    h.fake.answers[kJournal200] = exited(0, "-- No entries --\n");
+    const chatbot::cli::ServiceLog empty = h.control.log(200, false);
+    CHECK(empty.kind == ServiceAction::Kind::Done);
+    CHECK(empty.lines.empty());
+    CHECK(empty.message == chatbot::cli::kEmptyLog);
+
+    ProcessResult missing;
+    missing.status = ProcessResult::Status::NotFound;
+    h.fake.answers[kJournal200] = missing;
+    const chatbot::cli::ServiceLog no_systemd = h.control.log(200, false);
+    CHECK(no_systemd.kind == ServiceAction::Kind::NoSystemd);
+    CHECK(no_systemd.message == chatbot::cli::kNoUserSystemd);
+
+    h.fake.answers[kJournal200] = exited(1, "", "Failed to open journal: Permission denied\n");
+    const chatbot::cli::ServiceLog failed = h.control.log(200, false);
+    CHECK(failed.kind == ServiceAction::Kind::Failed);
+    CHECK(failed.message ==
+          "No se pudo leer el registro: Failed to open journal: Permission denied");
+    CHECK(failed.lines.empty());
+}
+
+TEST_CASE("servicio: registro con una línea larga y el tope total", "[servicio][registro]") {
+    ServiceHarness h;
+    // 4095 bytes y una "ñ" (2 bytes) que quedaría partida en el tope.
+    const std::string long_line = std::string(4095, 'a') + "ñ" + std::string(100, 'b');
+    h.fake.answers[kJournal200] = exited(0, long_line + "\ncorta\n");
+    const chatbot::cli::ServiceLog cut = h.control.log(200, false);
+    CHECK(cut.truncated);
+    REQUIRE(cut.lines.size() == 2);
+    CHECK(cut.lines[0] == std::string(4095, 'a'));
+    CHECK(cut.lines[1] == "corta");
+
+    // 300 líneas de 4 KiB: solo caben las más nuevas.
+    std::string many;
+    for (int i = 0; i < 300; ++i) {
+        const std::string number = std::to_string(i);
+        many += number + std::string(chatbot::cli::kMaxLogLineBytes - number.size(), '.') + "\n";
+    }
+    h.fake.answers[kJournal200] = exited(0, many);
+    const chatbot::cli::ServiceLog capped = h.control.log(200, false);
+    CHECK(capped.truncated);
+    REQUIRE(capped.lines.size() == chatbot::cli::kMaxLogBytes / chatbot::cli::kMaxLogLineBytes);
+    CHECK(capped.lines.back().starts_with("299."));
+    CHECK(capped.lines.front().starts_with("44."));
+}

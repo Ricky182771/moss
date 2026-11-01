@@ -303,3 +303,29 @@ TEST_CASE("addons_environment: moss-rpc escribe la misma unidad que la TUI", "[a
     CHECK(unit.find("/opt/moss/moss") != std::string::npos);
     CHECK(unit.find("moss-rpc") == std::string::npos);
 }
+
+TEST_CASE("TelegramAddon: el registro usa el detalle de errores guardado", "[addons][registro]") {
+    constexpr const char* kJournal =
+        "journalctl --user -u moss-telegram.service -n 200 -o short-iso --no-pager";
+    const bool details = GENERATE(false, true);
+    Fixture fixture;
+    nlohmann::json section = enabled_section();
+    section["log_error_details"] = details;
+    fixture.write_config(section);
+    fixture.system.answer(kJournal,
+                          chatbot_test::exited(0, "x: 2026-11-01 10:00:00 error chat=5 "
+                                                  "detalle=\"texto del alumno\"\n"));
+    TelegramAddon addon{fixture.environment()};
+    addon.load();
+    bool done = false;
+    chatbot::cli::ServiceLog log;
+    addon.log(200, [&](const chatbot::cli::ServiceLog& got) {
+        log = got;
+        done = true;
+    });
+    fixture.wait(done);
+    REQUIRE(log.lines.size() == 1);
+    CHECK((log.lines[0].find("texto del alumno") != std::string::npos) == details);
+    CHECK_FALSE(addon.service().has_value()); // No cambia el estado.
+    CHECK(fixture.system.calls() == std::vector<std::string>{kJournal});
+}

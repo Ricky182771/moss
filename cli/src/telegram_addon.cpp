@@ -292,4 +292,12 @@ void TelegramAddon::reload(std::function<void(const ServiceAction&)> done) {
     });
 }
 
+void TelegramAddon::log(int lines, std::function<void(const ServiceLog&)> done) {
+    const bool details = saved_form_.log_error_details;
+    worker_->push([this, lines, details, done = std::move(done)](const CancelToken& cancel) {
+        ServiceLog log = control_->log(lines, details, &cancel);
+        return std::function<void()>{[log = std::move(log), done] { done(log); }};
+    });
+}
+
 } // namespace chatbot::cli

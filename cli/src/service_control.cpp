@@ -1,8 +1,11 @@
 #include "service_control.h"
 
 #include "chatbot/addon_settings/paths.h"
+#include "chatbot/markdown/markdown.h"
 #include "chatbot/platform.h"
+#include "chatbot/utf8.h"
 
+#include <algorithm>
 #include <cctype>
 #include <charconv>
 #include <exception>
@@ -323,6 +326,62 @@ ServiceAction ServiceControl::reload_if_active(const CancelToken* cancel) const 
     }
     return simple({"reload", std::string{addon_.unit}}, "Configuración aplicada al bot.",
                   "No se pudo recargar el bot", cancel);
+}
+
+ServiceLog ServiceControl::log(int lines, bool details, const CancelToken* cancel) const {
+    const ProcessResult result =
+        run({"journalctl", "--user", "-u", std::string{addon_.unit}, "-n",
+             std::to_string(std::clamp(lines, 1, kMaxLogLines)), "-o", "short-iso", "--no-pager"},
+            cancel);
+    ServiceLog log;
+    if (no_user_systemd(result)) {
+        log.kind = ServiceAction::Kind::NoSystemd;
+        log.message = std::string{kNoUserSystemd};
+        return log;
+    }
+    if (!result.ok()) {
+        log.kind = ServiceAction::Kind::Failed;
+        log.message = "No se pudo leer el registro: " + failure_detail(result);
+        return log;
+    }
+    std::string_view out = result.out;
+    if (out.size() >= kMaxProcessOutput) {
+        // shortcut: run_process guarda el principio, no el final; con líneas
+        // del bot (< 1 KiB) 1000 caben de sobra. Se tira la línea partida.
+        out = out.substr(0, out.rfind('\n') + 1);
+        log.truncated = true;
+    }
+    const std::string clean = md::sanitize(out);
+    std::string_view rest = clean;
+    while (!rest.empty()) {
+        const std::size_t end = rest.find('\n');
+        std::string_view line = rest.substr(0, end);
+        rest.remove_prefix(end == std::string_view::npos ? rest.size() : end + 1);
+        if (!details) {
+            line = line.substr(0, line.find(" detalle=")); // Igual que last_error_line.
+        }
+        if (line.empty() || line == "-- No entries --") {
+            continue;
+        }
+        const std::string_view kept = utf8::prefix(line, kMaxLogLineBytes);
+        log.truncated = log.truncated || kept.size() < line.size();
+        log.lines.emplace_back(kept);
+    }
+    // Las más nuevas que quepan en kMaxLogBytes.
+    std::size_t total = 0;
+    std::size_t first = log.lines.size();
+    while (first > 0 && total + log.lines[first - 1].size() <= kMaxLogBytes) {
+        total += log.lines[--first].size();
+    }
+    if (first > 0) {
+        log.lines.erase(log.lines.begin(),
+                        log.lines.begin() + static_cast<std::ptrdiff_t>(first));
+        log.truncated = true;
+    }
+    if (log.lines.empty()) {
+        log.message = std::string{kEmptyLog};
+    }
+    return log;
 }
 
 ServiceWorker::ServiceWorker(Post post)
