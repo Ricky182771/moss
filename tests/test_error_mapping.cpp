@@ -198,3 +198,43 @@ TEST_CASE("InvalidRequest en streaming no se reintenta", "[mapeo][invalid]") {
     CHECK(response.error().kind == ErrorKind::InvalidRequest);
     CHECK(harness.transport->requests.size() == 1);
 }
+
+TEST_CASE("Un error del servidor que repite la key no la muestra", "[mapeo][secretos]") {
+    const std::string key = chatbot_test::test_config().api_key;
+    const std::string prefix = key.substr(0, 8);
+    const std::string quoted = R"({"error":{"message":"key inválida: )" + key + R"("}})";
+
+    SECTION("complete, error HTTP") {
+        auto harness = make_client();
+        harness.transport->responses.push_back(HttpResponse{401, quoted, std::nullopt, false, ""});
+        const chatbot::Result<std::string> response = harness.client->complete(sample_messages());
+        REQUIRE(response.is_error());
+        CHECK(response.error().message == "key inválida: [key oculta]");
+    }
+    SECTION("complete_stream, error HTTP") {
+        auto harness = make_client();
+        harness.transport->responses.push_back(HttpResponse{400, quoted, std::nullopt, false, ""});
+        const auto response = harness.client->complete_stream(
+            sample_messages(), [](const chatbot::StreamDelta&) { return true; });
+        REQUIRE(response.is_error());
+        CHECK(response.error().message == "key inválida: [key oculta]");
+    }
+    SECTION("complete_stream, error dentro del flujo con 200") {
+        auto harness = make_client();
+        harness.transport->responses.push_back(
+            HttpResponse{200, "data: " + quoted + "\n\n", std::nullopt, false, ""});
+        const auto response = harness.client->complete_stream(
+            sample_messages(), [](const chatbot::StreamDelta&) { return true; });
+        REQUIRE(response.is_error());
+        CHECK(response.error().message == "key inválida: [key oculta]");
+    }
+    SECTION("justo en el tope del mensaje: no queda un pedazo") {
+        auto harness = make_client();
+        const std::string body =
+            R"({"error":{"message":")" + std::string(290, 'x') + key + R"("}})";
+        harness.transport->responses.push_back(HttpResponse{400, body, std::nullopt, false, ""});
+        const chatbot::Result<std::string> response = harness.client->complete(sample_messages());
+        REQUIRE(response.is_error());
+        CHECK(response.error().message.find(prefix) == std::string::npos);
+    }
+}

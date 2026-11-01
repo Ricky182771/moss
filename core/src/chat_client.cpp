@@ -5,6 +5,7 @@
 #include "chatbot/platform.h"
 #include "config_internal.h"
 #include "error_body.h"
+#include "hide_secret.h"
 #include "model_params_internal.h"
 #include "redirect.h"
 #include "sse.h"
@@ -218,7 +219,7 @@ std::optional<std::string> redirect_message(const Config& config, const HttpRequ
 /// Retry-After y la explicación de las redirecciones.
 ChatError map_http_error(const Config& config, const HttpRequest& request,
                          const HttpResponse& response) {
-    ChatError error = map_http_error(response.status, response.body);
+    ChatError error = map_http_error(response.status, hide_secret(response.body, config.api_key));
     if (std::optional<std::string> message = redirect_message(config, request, response)) {
         error.message = std::move(*message);
     }
@@ -422,7 +423,9 @@ StreamAttemptOutcome run_stream_attempt(const Config& config, int attempt,
     // quedó al terminar el flujo sin línea en blanco.
     const auto process_events = [&](bool final) {
         while (const std::optional<std::string> raw_event = parser.next_event()) {
-            const Result<sse::Event> event = sse::decode_event(*raw_event);
+            // Un error dentro del flujo puede repetir la key, como el HTTP.
+            const Result<sse::Event> event =
+                sse::decode_event(hide_secret(*raw_event, config.api_key));
             if (event.is_error()) {
                 abort_error = event.error();
                 aborted = true;
