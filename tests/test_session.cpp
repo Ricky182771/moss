@@ -1434,3 +1434,35 @@ TEST_CASE("Session renombra la abierta y otras, también con una respuesta en cu
     CHECK(saved.conversation->title == "Título nuevo");
     CHECK(saved.conversation->messages.size() == 4);
 }
+
+TEST_CASE("Session exporta una conversación guardada por id", "[session]") {
+    using Status = chatbot::cli::FileOutcome::Status;
+    Harness h;
+    h.start();
+    REQUIRE(h.exchange("uno"));
+    const std::string id = h.session->conversation().id();
+    REQUIRE(h.session->new_conversation() == std::nullopt);
+    const std::size_t entries = h.session->conversation().entries().size();
+
+    CHECK(h.session->export_stored(id).status == Status::NoFolder);
+    h.download_base = h.path("descargas");
+    std::filesystem::create_directory(*h.download_base);
+
+    chatbot::cli::FileOutcome got = h.session->export_stored(id);
+    CHECK(got.status == Status::Attempted);
+    CHECK_FALSE(got.result.error);
+    CHECK(got.result.message.rfind("Conversación exportada a ", 0) == 0);
+    CHECK(got.result.path ==
+          (h.dir.path() / "descargas" / "moss" / ("conversacion-" + id + ".md")).string());
+    CHECK(h.session->conversation().entries().size() == entries); // Sin tocar el historial.
+
+    // Ilegible: su error y nada escrito.
+    const std::string bad = "20260101-000000-abcdef";
+    std::ofstream{h.dir.path() / "conversations" / (bad + ".json")} << "{no es json";
+    got = h.session->export_stored(bad);
+    CHECK(got.status == Status::Unreadable);
+    CHECK(got.result.error);
+    CHECK(got.result.message == h.session->store().load(bad).error);
+    CHECK_FALSE(std::filesystem::exists(h.dir.path() / "descargas" / "moss" /
+                                        ("conversacion-" + bad + ".md")));
+}

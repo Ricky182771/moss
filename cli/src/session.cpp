@@ -393,6 +393,20 @@ FileOutcome Session::export_to_downloads() {
             export_conversation(conversation_, env_.now(), *base, env_.home)};
 }
 
+FileOutcome Session::export_stored(const std::string& id) {
+    const LoadResult loaded = store_.load(id);
+    if (!loaded.conversation.has_value()) {
+        return {FileOutcome::Status::Unreadable, {loaded.error, true}};
+    }
+    const std::optional<std::string> base = env_.download_base();
+    if (!base.has_value()) {
+        return {FileOutcome::Status::NoFolder,
+                {std::string{no_download_dir_message(current_os())}, true}};
+    }
+    return {FileOutcome::Status::Attempted,
+            export_conversation(*loaded.conversation, env_.now(), *base, env_.home)};
+}
+
 void Session::cancel() {
     if (runner_ != nullptr) {
         runner_->cancel(); // Sin petición en curso no hace nada.

@@ -149,6 +149,7 @@ struct FileOutcome {
         Attempted, ///< Se intentó escribir: result dice si salió bien (y su path).
         Invalid,   ///< Número de bloque que no existe, nombre inválido o sin pares.
         NoFolder,  ///< No hay carpeta de descargas (no_download_dir_message).
+        Unreadable, ///< export_stored: no se pudo cargar (ilegible o no existe).
     };
     Status status = Status::Attempted;
     ActionResult result; ///< El aviso (Wording::Long) o el motivo; error si no se escribió.
@@ -262,6 +263,10 @@ public:
                                               std::string_view file_name);
     /// export_conversation de la conversación abierta.
     [[nodiscard]] FileOutcome export_to_downloads();
+    /// export_conversation de la guardada con ese id, abierta o no: lo que
+    /// hay en disco (los pares de una respuesta en curso no están ahí todavía).
+    [[nodiscard]] FileOutcome export_stored(const std::string& id);
+
     // --- Conversaciones: un error para la línea de estado, o nullopt ---
     [[nodiscard]] std::optional<std::string> new_conversation();
     [[nodiscard]] std::optional<std::string> open(const std::string& id);
