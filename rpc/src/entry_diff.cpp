@@ -8,6 +8,7 @@ EntriesSeen remember(const std::vector<cli::Entry>& entries) {
     if (!entries.empty()) {
         const cli::Entry& last = entries.back();
         seen.last_text_size = last.text.size();
+        seen.last_reasoning_size = last.reasoning.size();
         seen.last_in_progress = last.in_progress;
         seen.last_incomplete = last.incomplete;
         seen.last_cancelled = last.cancelled;
@@ -24,6 +25,7 @@ EntriesDiff diff_entries(const EntriesSeen& seen, const std::vector<cli::Entry>&
     }
     const cli::Entry& last = entries[seen.count - 1];
     diff.grown = last.text.size() > seen.last_text_size;
+    diff.reasoning_grown = last.reasoning.size() > seen.last_reasoning_size;
     diff.updated = last.in_progress != seen.last_in_progress ||
                    last.incomplete != seen.last_incomplete ||
                    last.cancelled != seen.last_cancelled || last.note != seen.last_note;

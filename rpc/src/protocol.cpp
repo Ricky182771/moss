@@ -129,7 +129,8 @@ Json encode_entry(const cli::Entry& entry) {
                         {"in_progress", entry.in_progress},
                         {"incomplete", entry.incomplete},
                         {"cancelled", entry.cancelled},
-                        {"note", entry.note}};
+                        {"note", entry.note},
+                        {"reasoning", entry.reasoning}};
     if (entry.kind == cli::EntryKind::Sources) {
         Json sources = Json::array();
         int n = 0;

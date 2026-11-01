@@ -23,6 +23,7 @@ Versión del protocolo: **1**.
 | Evento `settings.changed` (`provider`, `system_prompt`, `search`, `gui`) | 7 | Implementado |
 | Evento `service.changed`; `settings.changed` con `telegram` | 7 | Implementado |
 | `settings.model_params.*`; `settings.changed` con `model_params` | 6.7, 7 | Implementado |
+| Pensamiento: `reasoning` en `Entry`, evento `conversation.reasoning_delta` | 5, 7 | Implementado |
 | `CHAT_DEBUG_RPC` | 10 | Implementado |
 | Windows: stdio en modo binario | 2 | Implementado, probado en la CI con pipes (`tools/check-rpc-pipes.sh`) |
 
@@ -206,6 +207,7 @@ La GUI mantiene una **copia exacta** de `Conversation::entries()`. Las entradas 
  "incomplete":false,
  "cancelled":false,
  "note":"...",                // nota por finish_reason; "" si no hay
+ "reasoning":"...",           // pensamiento del modelo (markdown crudo); "" si no hay
  "sources":[{"n":1,"title":"...","url":"https://...","published_date":"2026-10-20"}]}
                              // solo en kind = sources; published_date puede ser null
 ```
@@ -221,9 +223,10 @@ La GUI mantiene una **copia exacta** de `Conversation::entries()`. Las entradas 
  "entries":[Entry, ...]}
 ```
 
-- **`phase`** reemplaza los indicadores de la línea de estado: `searching` es "Buscando en la web…", `thinking` es "Pensando…" (antes del primer texto) y `streaming` es cuando ya llega texto.
+- **`phase`** reemplaza los indicadores de la línea de estado: `searching` es "Buscando en la web…", `thinking` es "Pensando…" (antes del primer texto, también mientras solo llega pensamiento) y `streaming` es cuando ya llega texto.
+- **`reasoning`** (solo `assistant`): el pensamiento que el modelo mandó aparte del texto (`reasoning_content` o `reasoning` en el flujo). Es **para mostrarse plegado** arriba de la respuesta (la TUI lo pliega al llegar el primer texto); no cuenta para los bloques de código, `/copiar`, `/exportar` ni el título, y **nunca se manda de regreso**: el servidor no lo pone en el historial que va al modelo, y la GUI no tiene cómo enviarlo. Se guarda con la conversación (hasta 256 KiB por respuesta), así que una conversación reabierta lo trae en `conversation.get`. Con modelos que no lo mandan queda en `""`.
 - **`rev`:** cada evento de una conversación lleva el `rev` que deja. Como el servidor escribe todo desde un hilo, el orden ya está garantizado. `rev` sirve para que la GUI compruebe que no se saltó nada (si llega `rev` ≠ el suyo + 1, pide `conversation.get`) y para descartar eventos viejos después de un snapshot.
-- **Cómo se calculan los eventos:** función pura `diff_entries(visto, entradas)` (`rpc/src/entry_diff.h`) que da qué entradas se agregaron, si a la última ya vista se le agregó texto y si cambiaron sus marcas. Lo visto es solo cuántas entradas había y la última (largo y marcas), así que el costo por delta no crece con la conversación. Supone lo que hoy cumple `Conversation`: las entradas solo se agregan, de las existentes solo cambia la última, y su texto solo crece por el final.
+- **Cómo se calculan los eventos:** función pura `diff_entries(visto, entradas)` (`rpc/src/entry_diff.h`) que da qué entradas se agregaron, si a la última ya vista se le agregó texto o pensamiento y si cambiaron sus marcas. Lo visto es solo cuántas entradas había y la última (largo del texto y del pensamiento, y marcas), así que el costo por delta no crece con la conversación. Supone lo que hoy cumple `Conversation`: las entradas solo se agregan, de las existentes solo cambia la última, y su texto y su pensamiento solo crecen por el final.
 
 ---
 
@@ -599,6 +602,7 @@ Todas las `service.*` salvo `service.status`, y `invited.remove`, emiten `servic
 |---|---|---|
 | `conversation.entry_added` | `{conversation, rev, index, entry}` | Entrada nueva (usuario, respuesta, error, aviso, fuentes) |
 | `conversation.entry_delta` | `{conversation, rev, index, text}` | Más texto en la respuesta en curso: **se concatena** |
+| `conversation.reasoning_delta` | `{conversation, rev, index, text}` | Más pensamiento en la respuesta en curso: **se concatena** a su `reasoning` |
 | `conversation.entry_updated` | `{conversation, rev, index, entry}` | Cambiaron las marcas (termina, se cancela, nota) |
 | `conversation.phase` | `{conversation, rev, phase}` | idle / searching / thinking / streaming |
 | `conversation.saved` | `{conversation, rev, id, title}` | Se guardó después de un par (la primera vez trae id y título). Si el guardado falla no llega: llega la entrada de error |
@@ -619,9 +623,10 @@ Todas las `service.*` salvo `service.status`, y `invited.remove`, emiten `servic
 ```
 
 - **`outcome`:** `ok` si terminó bien; `cancelled` con `kind: cancelled`; `no_results` si la búsqueda no trajo resultados; `error` con cualquier otro (y entonces `error` trae el `ChatError`). Una respuesta que termina sin texto es `error` con `kind: "bad_response"` y `El modelo no devolvió texto.`, como la entrada de error de la TUI.
-- **Agrupar deltas:** el servidor junta los deltas que lleguen en una ventana de **30 ms** en un solo `entry_delta`. Unas 33 líneas por segundo como máximo, sin que se note. El cliente nunca debe suponer que un delta trae una palabra completa ni un token. Cualquier otro evento, y cualquier respuesta a una petición, primero vacía el delta pendiente: un `conversation.get` nunca trae texto que después llegue repetido.
-- **Orden:** la respuesta a una petición sale antes que los eventos que provocó (`{accepted: true}` antes que el `entry_added` del usuario). Dentro de un cambio: el texto pendiente, la entrada que cambió de marcas, las entradas nuevas, `conversation.saved` y `conversations.changed`, `phase` y al último `chat.finished`.
+- **Agrupar deltas:** el servidor junta los deltas que lleguen en una ventana de **30 ms** en un solo `entry_delta` (y el pensamiento, en un solo `reasoning_delta`). Si en la ventana llegaron los dos, salen los dos eventos en el orden en que empezó a llegar cada uno. Unas 33 líneas por segundo como máximo, sin que se note. El cliente nunca debe suponer que un delta trae una palabra completa ni un token. Cualquier otro evento, y cualquier respuesta a una petición, primero vacía el delta pendiente: un `conversation.get` nunca trae texto que después llegue repetido.
+- **Orden:** la respuesta a una petición sale antes que los eventos que provocó (`{accepted: true}` antes que el `entry_added` del usuario). Dentro de un cambio: el texto y el pensamiento pendientes, la entrada que cambió de marcas, las entradas nuevas, `conversation.saved` y `conversations.changed`, `phase` y al último `chat.finished`.
 - **Respuesta con búsqueda:** `entry_added` (usuario) → `phase: searching` → `phase: thinking` → `entry_added` (asistente, con el primer texto) → `phase: streaming` → `entry_delta`… → `entry_updated` (termina) → `entry_added` (fuentes) → `conversation.saved` → `conversations.changed` → `phase: idle` → `chat.finished`.
+- **Respuesta con pensamiento:** `entry_added` (usuario) → `phase: thinking` → `entry_added` (asistente, con el primer pensamiento en `reasoning` y `text: ""`) → `reasoning_delta`… → `reasoning_delta` (lo que quedaba) y `entry_delta` (el primer texto) → `phase: streaming` → `entry_delta`… → `entry_updated` (termina) → `conversation.saved` → `conversations.changed` → `phase: idle` → `chat.finished`. Con `search`, igual después de `phase: searching`. Si el modelo no piensa, es la secuencia de siempre.
 - `chat.finished` va **al último**: cuando llega, la conversación ya está guardada y en `idle`. Si el guardado falla no hay `conversation.saved`: llega una entrada `error` (`No se pudo guardar la conversación: …`) y `chat.finished` sigue siendo `ok`.
 
 ---
@@ -647,7 +652,7 @@ Todas las `service.*` salvo `service.status`, y `invited.remove`, emiten `servic
 ← {"jsonrpc":"2.0","method":"chat.finished","params":{"conversation":"c1","rev":9,"outcome":"ok","finish_reason":"stop","dropped_messages":0,"error":null,"restore_text":null}}
 ```
 
-La primera entrada del asistente llega con `entry_added` (la crea el primer delta, como `append_delta`), y desde ahí con `entry_delta`.
+La primera entrada del asistente llega con `entry_added` (la crea el primer delta, de texto o de pensamiento, como `append_delta` y `append_reasoning`), y desde ahí con `entry_delta` (y `reasoning_delta`). Si el primero fue de pensamiento, la entrada llega con `reasoning` y `text: ""`.
 
 ---
 
@@ -755,6 +760,9 @@ Future<Peer> startServer(String exe) async {
 
   peer.registerMethod('conversation.entry_delta', (Parameters p) {
     // conversations[p['conversation'].asString].append(p['index'].asInt, p['text'].asString);
+  });
+  peer.registerMethod('conversation.reasoning_delta', (Parameters p) {
+    // Igual, pero al reasoning de la entrada (se muestra plegado; nunca se reenvía).
   });
   peer.registerMethod('chat.finished', (Parameters p) { /* ... */ });
   peer.registerFallback((Parameters p) {}); // eventos que esta versión no conoce

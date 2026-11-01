@@ -192,7 +192,8 @@ std::string summary(const Json& message) {
     std::string text = method;
     if (method == "conversation.entry_added" || method == "conversation.entry_updated") {
         text += " " + params["index"].dump() + " " + params["entry"]["kind"].get<std::string>();
-    } else if (method == "conversation.entry_delta") {
+    } else if (method == "conversation.entry_delta" ||
+               method == "conversation.reasoning_delta") {
         text += " " + params["index"].dump() + " +" + params["text"].get<std::string>();
     } else if (method == "conversation.phase") {
         text += " " + params["phase"].get<std::string>();
@@ -257,12 +258,12 @@ TEST_CASE("RPC: el ejemplo completo de PROTOCOL.md (sección 8)", "[rpc]") {
         Json::parse(R"({"jsonrpc":"2.0","id":3,"result":{"accepted":true}})"),
         Json::parse(R"({"jsonrpc":"2.0","method":"conversation.entry_added","params":{
             "conversation":"c1","rev":1,"index":0,"entry":{"kind":"user","text":"hola",
-            "in_progress":false,"incomplete":false,"cancelled":false,"note":""}}})"),
+            "in_progress":false,"incomplete":false,"cancelled":false,"note":"","reasoning":""}}})"),
         Json::parse(R"({"jsonrpc":"2.0","method":"conversation.phase","params":{
             "conversation":"c1","rev":2,"phase":"thinking"}})"),
         Json::parse(R"({"jsonrpc":"2.0","method":"conversation.entry_added","params":{
             "conversation":"c1","rev":3,"index":1,"entry":{"kind":"assistant","text":"¡Ho",
-            "in_progress":true,"incomplete":false,"cancelled":false,"note":""}}})"),
+            "in_progress":true,"incomplete":false,"cancelled":false,"note":"","reasoning":""}}})"),
         Json::parse(R"({"jsonrpc":"2.0","method":"conversation.phase","params":{
             "conversation":"c1","rev":4,"phase":"streaming"}})"),
         Json::parse(R"({"jsonrpc":"2.0","method":"conversation.entry_delta","params":{
@@ -270,7 +271,7 @@ TEST_CASE("RPC: el ejemplo completo de PROTOCOL.md (sección 8)", "[rpc]") {
         Json::parse(R"({"jsonrpc":"2.0","method":"conversation.entry_updated","params":{
             "conversation":"c1","rev":6,"index":1,"entry":{"kind":"assistant",
             "text":"¡Hola! ¿En qué te ayudo?","in_progress":false,"incomplete":false,
-            "cancelled":false,"note":""}}})"),
+            "cancelled":false,"note":"","reasoning":""}}})"),
         Json::parse(R"({"jsonrpc":"2.0","method":"conversation.saved","params":{
             "conversation":"c1","rev":7,"id":"<id>","title":"hola"}})"),
         Json::parse(R"({"jsonrpc":"2.0","method":"conversations.changed","params":{}})"),
@@ -2446,4 +2447,127 @@ TEST_CASE("RPC: settings.model_params.*", "[rpc][settings][ajustes]") {
         rpc.call(4, "chat.cancel", {{"conversation", "c1"}});
         REQUIRE(rpc.finish());
     }
+}
+
+// Pensamiento (M3): reasoning en Entry y conversation.reasoning_delta.
+
+namespace {
+
+/// Flujo con pensamiento (reasoning_content, o el campo dado) y después texto.
+chatbot::HttpResponse thinking_stream(const std::vector<std::string>& thoughts,
+                                      const std::vector<std::string>& pieces,
+                                      const std::string& field = "reasoning_content") {
+    chatbot::HttpResponse response = stream_of(pieces);
+    std::string head;
+    for (const std::string& thought : thoughts) {
+        head += "data: {\"choices\":[{\"delta\":{\"" + field + "\":\"" + thought + "\"}}]}\n\n";
+    }
+    response.body = head + response.body;
+    return response;
+}
+
+} // namespace
+
+TEST_CASE("RPC: respuesta con pensamiento y texto", "[rpc][pensamiento]") {
+    Rpc rpc;
+    const std::string field = GENERATE(std::string{"reasoning_content"}, std::string{"reasoning"});
+    rpc.responses = {thinking_stream({"uno ", "dos ", "tres"}, {"Ho", "la"}, field)};
+    rpc.initialize();
+    rpc.call(2, "chat.send", {{"conversation", "c1"}, {"text", "hola"}});
+    REQUIRE(rpc.finish()); // El reloj no avanza: todo cae en la ventana.
+    const std::vector<Json> got = rpc.take();
+    // En la misma ventana llegaron pensamiento y texto: primero el pensamiento.
+    CHECK(summaries(got) ==
+          std::vector<std::string>{
+              "#2 result", "conversation.entry_added 0 user", "conversation.phase thinking",
+              "conversation.entry_added 1 assistant",
+              "conversation.reasoning_delta 1 +dos tres", "conversation.entry_delta 1 +Ho",
+              "conversation.phase streaming", "conversation.entry_delta 1 +la",
+              "conversation.entry_updated 1 assistant", "conversation.saved",
+              "conversations.changed", "conversation.phase idle", "chat.finished ok"});
+    check_revs(got, "c1");
+    // La entrada nace con el primer pensamiento y sin texto.
+    CHECK(got[3]["params"]["entry"]["text"] == "");
+    CHECK(got[3]["params"]["entry"]["reasoning"] == "uno ");
+    CHECK(got[3]["params"]["entry"]["in_progress"] == true);
+    CHECK(got[8]["params"]["entry"]["reasoning"] == "uno dos tres");
+    CHECK(got[8]["params"]["entry"]["text"] == "Hola");
+
+    // El snapshot trae el pensamiento; reabierta, también.
+    rpc.call(3, "conversation.get", {{"conversation", "c1"}});
+    const Json snapshot = rpc.take().back()["result"];
+    CHECK(snapshot["entries"][1]["reasoning"] == "uno dos tres");
+    CHECK(snapshot["entries"][0]["reasoning"] == "");
+    const std::string id = snapshot["id"];
+    rpc.call(4, "conversation.new");
+    rpc.call(5, "conversation.open", {{"id", id}});
+    const Json reopened = rpc.take().back()["result"];
+    REQUIRE(reopened["entries"].size() >= 2);
+    CHECK(reopened["entries"][1]["reasoning"] == "uno dos tres");
+    CHECK(reopened["entries"][1]["text"] == "Hola");
+}
+
+TEST_CASE("RPC: el pensamiento se agrupa en la ventana de 30 ms y sale en orden",
+          "[rpc][pensamiento]") {
+    Rpc rpc;
+    BlockingTransport* blocking = nullptr;
+    rpc.chat_transport = [&blocking] {
+        auto transport = std::make_unique<BlockingTransport>(BlockingTransport::Mode::Block);
+        transport->first_chunk =
+            "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"a \"}}]}\n\n"
+            "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"b \"}}]}\n\n"
+            "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"c\"}}]}\n\n";
+        blocking = transport.get();
+        return transport;
+    };
+    rpc.initialize();
+    rpc.call(2, "chat.send", {{"conversation", "c1"}, {"text", "hola"}});
+    REQUIRE(rpc.queue.run_until([&] { return rpc.dispatcher->next_deadline().has_value(); }));
+    REQUIRE(rpc.queue.run_until([&] {
+        return rpc.out.size() == 4 && rpc.out[3]["params"]["entry"]["reasoning"] == "a ";
+    }));
+    // Mientras solo llega pensamiento sigue en thinking.
+    CHECK(summary(rpc.out[2]) == "conversation.phase thinking");
+    rpc.now += chatbot::rpc::kDeltaWindow;
+    REQUIRE(rpc.queue.run_until([] { return false; }, std::chrono::milliseconds{50}) == false);
+    rpc.dispatcher->flush_due();
+    std::vector<Json> got = rpc.take();
+    REQUIRE(got.size() == 5);
+    CHECK(summary(got[4]) == "conversation.reasoning_delta 1 +b c");
+    rpc.call(3, "conversation.get", {{"conversation", "c1"}});
+    got = rpc.take();
+    CHECK(got.back()["result"]["phase"] == "thinking");
+    CHECK(got.back()["result"]["entries"][1]["reasoning"] == "a b c");
+    rpc.call(4, "chat.cancel", {{"conversation", "c1"}});
+    REQUIRE(rpc.finish());
+    got = rpc.take();
+    CHECK(summaries(got).back() == "chat.finished cancelled");
+}
+
+TEST_CASE("RPC: texto y después pensamiento en la misma ventana salen en ese orden",
+          "[rpc][pensamiento]") {
+    Rpc rpc;
+    rpc.chat_transport = [] {
+        auto transport = std::make_unique<BlockingTransport>(BlockingTransport::Mode::Block);
+        transport->first_chunk =
+            "data: {\"choices\":[{\"delta\":{\"content\":\"uno \"}}]}\n\n"
+            "data: {\"choices\":[{\"delta\":{\"content\":\"dos \"}}]}\n\n"
+            "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"hmm\"}}]}\n\n";
+        return transport;
+    };
+    rpc.initialize();
+    rpc.call(2, "chat.send", {{"conversation", "c1"}, {"text", "hola"}});
+    // "uno " crea la entrada; "dos " abre la ventana y "hmm" cae en ella.
+    REQUIRE(rpc.queue.run_until([&] { return rpc.dispatcher->next_deadline().has_value(); }));
+    REQUIRE(rpc.queue.run_until([] { return false; }, std::chrono::milliseconds{50}) == false);
+    rpc.now += chatbot::rpc::kDeltaWindow;
+    rpc.dispatcher->flush_due();
+    const std::vector<Json> got = rpc.take();
+    REQUIRE(got.size() == 7);
+    CHECK(summary(got[3]) == "conversation.entry_added 1 assistant");
+    CHECK(summary(got[4]) == "conversation.phase streaming");
+    CHECK(summary(got[5]) == "conversation.entry_delta 1 +dos ");
+    CHECK(summary(got[6]) == "conversation.reasoning_delta 1 +hmm");
+    rpc.call(3, "chat.cancel", {{"conversation", "c1"}});
+    REQUIRE(rpc.finish());
 }

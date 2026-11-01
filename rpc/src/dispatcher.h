@@ -185,6 +185,8 @@ private:
     EntriesSeen seen_;
     Phase phase_ = Phase::Idle;
     std::optional<TimePoint> pending_since_; ///< Primer delta que aún no sale.
+    /// En la ventana, el texto empezó a llegar antes que el pensamiento.
+    bool text_first_ = false;
 };
 
 } // namespace chatbot::rpc

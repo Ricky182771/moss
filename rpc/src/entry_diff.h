@@ -16,14 +16,16 @@ namespace chatbot::rpc {
 /// Basta porque hoy Conversation cumple estas suposiciones:
 ///  1. las entradas solo se agregan al final; nunca se borran ni se mueven;
 ///  2. de las ya existentes solo cambia la última (la respuesta en curso):
-///     su texto crece por el final y sus marcas (in_progress, incomplete,
-///     cancelled, note) cambian al terminar; kind y sources nunca cambian;
+///     su texto y su pensamiento crecen por el final y sus marcas
+///     (in_progress, incomplete, cancelled, note) cambian al terminar; kind
+///     y sources nunca cambian;
 ///  3. abrir o crear otra conversación reemplaza el objeto: quien llama
 ///     empieza otra vez desde EntriesSeen{} (o remember de la nueva).
 /// Si una dejara de cumplirse, diff_entries tendría que cambiar.
 struct EntriesSeen {
     std::size_t count = 0;
     std::size_t last_text_size = 0;
+    std::size_t last_reasoning_size = 0;
     bool last_in_progress = false;
     bool last_incomplete = false;
     bool last_cancelled = false;
@@ -35,6 +37,8 @@ struct EntriesDiff {
     /// El texto de la última entrada ya vista creció (índice seen.count - 1,
     /// el texto nuevo desde seen.last_text_size).
     bool grown = false;
+    /// Lo mismo con el pensamiento (desde seen.last_reasoning_size).
+    bool reasoning_grown = false;
     /// Cambiaron las marcas de la última entrada ya vista.
     bool updated = false;
     /// Entradas nuevas: [seen.count, added_end).
