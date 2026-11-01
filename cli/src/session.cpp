@@ -230,7 +230,9 @@ SendResult Session::send(std::string_view text, std::optional<std::string> searc
         return SendResult::Empty;
     }
     const auto on_delta = [this](StreamDelta::Kind kind, std::string delta) {
-        if (kind == StreamDelta::Kind::Content) {
+        if (kind == StreamDelta::Kind::Reasoning) {
+            conversation_.append_reasoning(delta);
+        } else {
             conversation_.append_delta(delta);
         }
     };

@@ -94,8 +94,11 @@ struct Session {
         outcome.history = *messages;
         const std::size_t before = model->requests.size();
         bool done = false;
+        // Como Session: el pensamiento va aparte del texto.
         const auto on_delta = [this](chatbot::StreamDelta::Kind kind, std::string delta) {
-            if (kind == chatbot::StreamDelta::Kind::Content) {
+            if (kind == chatbot::StreamDelta::Kind::Reasoning) {
+                conversation.append_reasoning(delta);
+            } else {
                 conversation.append_delta(delta);
             }
         };
@@ -368,4 +371,45 @@ TEST_CASE("Resultados de búsqueda que imitan un mensaje de sistema quedan dentr
     }
     CHECK(systems == 1);
     CHECK(parsed.at("messages").at(0).at("content") == prompt);
+}
+
+TEST_CASE("Extremo a extremo: el pensamiento nunca vuelve al modelo",
+          "[sistema][extremo][pensamiento]") {
+    constexpr std::size_t kLimit = 2000;
+    Session plain{"sistema", kLimit};
+    Session thinking{"sistema", kLimit};
+    // Un pensamiento mayor que el límite: si contara, cambiaría el recorte.
+    thinking.model->responses.front().body =
+        "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"" + std::string(5000, 'p') +
+        "\"}}]}\n\n" + sse_answer("ok");
+
+    for (int turn = 0; turn < 8; ++turn) {
+        INFO("turno " << turn);
+        const std::string text = "pregunta " + std::to_string(turn) + " " + std::string(200, 'q');
+        const TurnOutcome a = plain.turn(text);
+        const TurnOutcome b = thinking.turn(text);
+        REQUIRE(a.requests == 1);
+        REQUIRE(b.requests == 1);
+        CHECK(a.dropped == b.dropped);
+        REQUIRE(a.sent.size() == b.sent.size());
+        for (std::size_t i = 0; i < a.sent.size(); ++i) {
+            CHECK(a.sent[i].role == b.sent[i].role);
+            CHECK(a.sent[i].content == b.sent[i].content);
+        }
+        REQUIRE(thinking.conversation.entries().back().reasoning.size() == 5000);
+    }
+    // Ni el cuerpo crudo de ninguna petición lo lleva.
+    for (const chatbot::HttpRequest& request : thinking.model->requests) {
+        CHECK(request.body.find("ppppp") == std::string::npos);
+        CHECK(request.body.find("reasoning") == std::string::npos);
+    }
+    // Reabierta: el historial que se manda es el mismo.
+    const auto reopened_plain = Conversation::from_stored(
+        plain.conversation.to_stored("2026-10-31T10:00:00-06:00"), "sistema");
+    const auto reopened = Conversation::from_stored(
+        thinking.conversation.to_stored("2026-10-31T10:00:00-06:00"), "sistema");
+    REQUIRE(reopened.history().size() == reopened_plain.history().size());
+    for (std::size_t i = 0; i < reopened.history().size(); ++i) {
+        CHECK(reopened.history()[i].content == reopened_plain.history()[i].content);
+    }
 }

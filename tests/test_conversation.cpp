@@ -1,3 +1,4 @@
+#include "code_blocks.h"
 #include "conversation.h"
 
 #include "system_prompt_invariants.hpp"
@@ -10,6 +11,7 @@
 #include "chatbot/web_search.h"
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 
 #include <cstddef>
 #include <fstream>
@@ -355,8 +357,8 @@ TEST_CASE("Conversation: al reconstruir se usa el prompt dado",
     chatbot::cli::StoredConversation stored;
     stored.id = "20261002-235800-a1b2c3";
     stored.title = "Hola";
-    stored.messages = {{Role::User, "Hola", "", "", std::nullopt},
-                       {Role::Assistant, "Qué tal", "m", "stop", std::nullopt}};
+    stored.messages = {{Role::User, "Hola", "", "", std::nullopt, {}},
+                       {Role::Assistant, "Qué tal", "m", "stop", std::nullopt, {}}};
     const Conversation rebuilt = Conversation::from_stored(stored, kDefaultSystemPrompt);
     REQUIRE(rebuilt.history().size() == 3);
     CHECK(rebuilt.history()[0].role == Role::System);
@@ -512,8 +514,8 @@ TEST_CASE("Conversation: sin instrucciones el primer mensaje es del usuario",
 TEST_CASE("Conversation: from_stored usa las instrucciones dadas", "[conversacion][sistema]") {
     chatbot::cli::StoredConversation stored;
     stored.id = "20261002-235800-a1b2c3";
-    stored.messages = {{Role::User, "Hola", "", "", std::nullopt},
-                       {Role::Assistant, "Qué tal", "m", "stop", std::nullopt}};
+    stored.messages = {{Role::User, "Hola", "", "", std::nullopt, {}},
+                       {Role::Assistant, "Qué tal", "m", "stop", std::nullopt, {}}};
 
     const Conversation custom = Conversation::from_stored(stored, "Sé breve.");
     REQUIRE(custom.history().size() == 3);
@@ -697,8 +699,8 @@ TEST_CASE("Conversation: sin \"date\" se usa la fecha de created_at",
     stored.id = "20261002-235800-a1b2c3";
     stored.created_at = "2026-10-02T23:58:00-06:00";
     stored.messages = {{Role::User, "/buscar algo", "", "",
-                        chatbot::cli::StoredSearch{"", sample_search()}},
-                       {Role::Assistant, "Respuesta", "m", "stop", std::nullopt}};
+                        chatbot::cli::StoredSearch{"", sample_search()}, {}},
+                       {Role::Assistant, "Respuesta", "m", "stop", std::nullopt, {}}};
     const Conversation rebuilt = Conversation::from_stored(stored, "", [] { return "n"; });
     REQUIRE(rebuilt.history().size() == 2); // Sin mensaje de sistema.
     CHECK(rebuilt.history()[0].content.find("Fecha de la búsqueda: 2 de octubre de 2026.") == 0);
@@ -708,8 +710,8 @@ TEST_CASE("Conversation: una conversación vieja sin search carga igual que ante
           "[conversacion][busqueda][persistencia]") {
     chatbot::cli::StoredConversation stored;
     stored.id = "20261002-235800-a1b2c3";
-    stored.messages = {{Role::User, "/buscar no era comando", "", "", std::nullopt},
-                       {Role::Assistant, "Qué tal", "m", "stop", std::nullopt}};
+    stored.messages = {{Role::User, "/buscar no era comando", "", "", std::nullopt, {}},
+                       {Role::Assistant, "Qué tal", "m", "stop", std::nullopt, {}}};
     const Conversation rebuilt = Conversation::from_stored(stored, kDefaultSystemPrompt);
     REQUIRE(rebuilt.history().size() == 3);
     CHECK(rebuilt.history()[1].content == "/buscar no era comando");
@@ -790,8 +792,8 @@ TEST_CASE("Conversation: una búsqueda guardada sin resultados no deja fuentes v
     chatbot::cli::StoredConversation stored;
     stored.id = "20261002-235800-a1b2c3";
     stored.messages = {{Role::User, "/buscar algo", "", "",
-                        chatbot::cli::StoredSearch{"2026-10-02", empty}},
-                       {Role::Assistant, "Respuesta", "m", "stop", std::nullopt}};
+                        chatbot::cli::StoredSearch{"2026-10-02", empty}, {}},
+                       {Role::Assistant, "Respuesta", "m", "stop", std::nullopt, {}}};
     const Conversation rebuilt = Conversation::from_stored(stored, "", [] { return "n"; });
     REQUIRE(rebuilt.entries().size() == 2);
     CHECK(rebuilt.entries()[0].kind == EntryKind::User);
@@ -1063,4 +1065,92 @@ TEST_CASE("Conversation: sesión larga de 300 turnos conserva el sistema",
     CHECK(searches_ok > 10);
     CHECK(round_trips == 6);
     CHECK(prompt == p3);
+}
+
+// Pensamiento (M3): Entry::reasoning, aparte del texto y fuera del historial.
+
+TEST_CASE("Conversation: el primer delta de pensamiento crea la respuesta",
+          "[conversacion][pensamiento]") {
+    Conversation conversation{kDefaultSystemPrompt};
+    REQUIRE(conversation.submit("Hola").has_value());
+    conversation.append_reasoning("Pienso ");
+    REQUIRE(conversation.entries().size() == 2);
+    CHECK(conversation.entries()[1].kind == EntryKind::Assistant);
+    CHECK(conversation.entries()[1].in_progress);
+    CHECK(conversation.entries()[1].text.empty());
+    conversation.append_reasoning("un poco");
+    conversation.append_delta("Hola");
+    conversation.append_reasoning(""); // Vacío: no hace nada.
+    REQUIRE(conversation.entries().size() == 2);
+    CHECK(conversation.entries()[1].reasoning == "Pienso un poco");
+    CHECK(conversation.entries()[1].text == "Hola");
+
+    REQUIRE_FALSE(conversation.finish_success("stop", "m").has_value());
+    // El historial lleva solo el texto.
+    REQUIRE(conversation.history().back().role == Role::Assistant);
+    CHECK(conversation.history().back().content == "Hola");
+    const auto stored = conversation.to_stored("2026-10-31T10:00:00-06:00");
+    REQUIRE(stored.messages.size() == 2);
+    CHECK(stored.messages[1].reasoning == "Pienso un poco");
+    CHECK(stored.messages[0].reasoning.empty());
+}
+
+TEST_CASE("Conversation: sin petición en curso el pensamiento se ignora",
+          "[conversacion][pensamiento]") {
+    Conversation conversation{kDefaultSystemPrompt};
+    conversation.append_reasoning("nada");
+    CHECK(conversation.entries().empty());
+}
+
+TEST_CASE("Conversation: cancelada o con error conserva el pensamiento",
+          "[conversacion][pensamiento][cancelacion]") {
+    Conversation conversation{kDefaultSystemPrompt};
+    REQUIRE(conversation.submit("Hola").has_value());
+    conversation.append_reasoning("a medias");
+    const bool cancel = GENERATE(true, false);
+    (void)conversation.finish_error(cancel ? cancelled_error() : sample_error());
+    const Entry& answer = conversation.entries()[1];
+    CHECK(answer.kind == EntryKind::Assistant);
+    CHECK(answer.reasoning == "a medias");
+    CHECK(answer.cancelled == cancel);
+    CHECK(answer.incomplete == !cancel);
+    CHECK_FALSE(conversation.has_turns()); // No se guarda.
+    REQUIRE(conversation.history().size() == 1);
+}
+
+TEST_CASE("Conversation: solo pensamiento y éxito es respuesta vacía",
+          "[conversacion][pensamiento]") {
+    Conversation conversation{kDefaultSystemPrompt};
+    REQUIRE(conversation.submit("Hola").has_value());
+    conversation.append_reasoning("pensé y no dije nada");
+    REQUIRE(conversation.finish_success("stop", "m").has_value());
+    CHECK(conversation.entries()[1].reasoning == "pensé y no dije nada");
+    CHECK(conversation.entries()[1].incomplete);
+    CHECK_FALSE(conversation.has_turns());
+    check_no_empty_messages(conversation);
+}
+
+TEST_CASE("Conversation: from_stored devuelve el pensamiento a su respuesta",
+          "[conversacion][pensamiento][persistencia]") {
+    chatbot::cli::StoredConversation stored;
+    stored.id = "x";
+    stored.created_at = "2026-10-31T10:00:00-06:00";
+    stored.messages = {{Role::User, "Hola", "", "", std::nullopt, {}},
+                       {Role::Assistant, "Qué tal", "m", "stop", std::nullopt, "pensé"}};
+    const Conversation rebuilt = Conversation::from_stored(stored, kDefaultSystemPrompt);
+    REQUIRE(rebuilt.entries().size() == 2);
+    CHECK(rebuilt.entries()[1].reasoning == "pensé");
+    CHECK(rebuilt.entries()[0].reasoning.empty());
+    CHECK(rebuilt.history().back().content == "Qué tal");
+}
+
+TEST_CASE("collect_code_blocks: un bloque dentro del pensamiento no se numera",
+          "[conversacion][pensamiento][bloques]") {
+    Entry answer{EntryKind::Assistant, "Sin código", false, false, false, {}, {},
+                 "```cpp\nint x;\n```"};
+    CHECK(chatbot::cli::collect_code_blocks({answer}).empty());
+    answer.text = "```py\nprint(1)\n```";
+    const auto blocks = chatbot::cli::collect_code_blocks({answer});
+    REQUIRE(blocks.size() == 1);
+    CHECK(blocks[0].code.find("print") != std::string::npos);
 }

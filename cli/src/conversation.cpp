@@ -65,7 +65,7 @@ std::optional<std::vector<Message>> Conversation::submit(std::string_view text) 
         return std::nullopt;
     }
     pending_user_text_ = std::string{trimmed};
-    entries_.push_back(Entry{EntryKind::User, pending_user_text_, false, false, false, {}, {}});
+    entries_.push_back(Entry{EntryKind::User, pending_user_text_, false, false, false, {}, {}, {}});
     history_.push_back(Message{Role::User, pending_user_text_});
     busy_ = true;
     return history_;
@@ -90,15 +90,28 @@ Entry* Conversation::current_answer() {
     return last.kind == EntryKind::Assistant && last.in_progress ? &last : nullptr;
 }
 
-void Conversation::append_delta(std::string_view text) {
+Entry* Conversation::answer_for_delta(std::string_view text) {
     if (!busy_ || text.empty()) {
-        return;
+        return nullptr;
     }
     if (Entry* answer = current_answer()) {
-        answer->text.append(text);
-        return;
+        return answer;
     }
-    entries_.push_back(Entry{EntryKind::Assistant, std::string{text}, true, false, false, {}, {}});
+    // La entrada nace con el primer delta, sea de texto o de pensamiento.
+    entries_.push_back(Entry{EntryKind::Assistant, {}, true, false, false, {}, {}, {}});
+    return &entries_.back();
+}
+
+void Conversation::append_delta(std::string_view text) {
+    if (Entry* answer = answer_for_delta(text)) {
+        answer->text.append(text);
+    }
+}
+
+void Conversation::append_reasoning(std::string_view text) {
+    if (Entry* answer = answer_for_delta(text)) {
+        answer->reasoning.append(text);
+    }
 }
 
 std::optional<std::string> Conversation::finish_success(std::string_view finish_reason,
@@ -115,17 +128,19 @@ std::optional<std::string> Conversation::finish_success(std::string_view finish_
     answer->note = finish_note(finish_reason);
     history_.push_back(Message{Role::Assistant, answer->text});
     const std::string answer_text = answer->text;
+    std::string answer_reasoning = answer->reasoning;
     if (pending_search_.has_value()) {
-        Entry sources{EntryKind::Sources, {}, false, false, false, {}, {}};
+        Entry sources{EntryKind::Sources, {}, false, false, false, {}, {}, {}};
         sources.sources = pending_search_->response.results;
         entries_.push_back(std::move(sources)); // answer deja de ser válido.
     }
     // Par terminado: es lo único que se guarda.
     turns_.push_back(
-        StoredMessage{Role::User, pending_user_text_, {}, {}, std::move(pending_search_)});
+        StoredMessage{Role::User, pending_user_text_, {}, {}, std::move(pending_search_), {}});
     pending_search_.reset();
     turns_.push_back(StoredMessage{Role::Assistant, answer_text, std::string{model},
-                                   std::string{finish_reason}, std::nullopt});
+                                   std::string{finish_reason}, std::nullopt,
+                                   std::move(answer_reasoning)});
     if (title_.empty()) {
         title_ = make_title(turns_.front().content);
     }
@@ -135,11 +150,11 @@ std::optional<std::string> Conversation::finish_success(std::string_view finish_
 }
 
 void Conversation::add_error(std::string text) {
-    entries_.push_back(Entry{EntryKind::Error, std::move(text), false, false, false, {}, {}});
+    entries_.push_back(Entry{EntryKind::Error, std::move(text), false, false, false, {}, {}, {}});
 }
 
 void Conversation::add_notice(std::string text) {
-    entries_.push_back(Entry{EntryKind::Notice, std::move(text), false, false, false, {}, {}});
+    entries_.push_back(Entry{EntryKind::Notice, std::move(text), false, false, false, {}, {}, {}});
 }
 
 void Conversation::set_identity(std::string id, std::string created_at) {
@@ -172,7 +187,7 @@ Conversation Conversation::from_stored(const StoredConversation& stored,
     std::optional<std::vector<SearchResult>> sources;
     const auto flush_sources = [&conversation, &sources] {
         if (sources.has_value()) {
-            Entry entry{EntryKind::Sources, {}, false, false, false, {}, {}};
+            Entry entry{EntryKind::Sources, {}, false, false, false, {}, {}, {}};
             entry.sources = std::move(*sources);
             conversation.entries_.push_back(std::move(entry));
             sources.reset();
@@ -183,7 +198,8 @@ Conversation Conversation::from_stored(const StoredConversation& stored,
             conversation.history_.push_back(Message{message.role, message.content});
             conversation.entries_.push_back(Entry{EntryKind::Assistant, message.content, false,
                                                   false, false,
-                                                  finish_note(message.finish_reason), {}});
+                                                  finish_note(message.finish_reason), {},
+                                                  message.reasoning});
             flush_sources();
             continue;
         }
@@ -201,7 +217,7 @@ Conversation Conversation::from_stored(const StoredConversation& stored,
         }
         conversation.history_.push_back(Message{message.role, std::move(content)});
         conversation.entries_.push_back(
-            Entry{EntryKind::User, message.content, false, false, false, {}, {}});
+            Entry{EntryKind::User, message.content, false, false, false, {}, {}, {}});
     }
     flush_sources();
     return conversation;
@@ -221,7 +237,7 @@ std::string Conversation::finish_error(const ChatError& error) {
     if (error.kind == ErrorKind::NoSearchResults) {
         // No se llamó al modelo: no hay respuesta parcial ni es un error.
         entries_.push_back(
-            Entry{EntryKind::Notice, error.message, false, false, false, {}, {}});
+            Entry{EntryKind::Notice, error.message, false, false, false, {}, {}, {}});
     } else if (error.kind == ErrorKind::Cancelled) {
         // Cancelar no es un error: sin entrada en rojo.
         if (answer != nullptr) {
@@ -229,7 +245,7 @@ std::string Conversation::finish_error(const ChatError& error) {
             answer->cancelled = true;
         } else {
             entries_.push_back(
-                Entry{EntryKind::Notice, "Respuesta cancelada.", false, false, false, {}, {}});
+                Entry{EntryKind::Notice, "Respuesta cancelada.", false, false, false, {}, {}, {}});
         }
     } else {
         if (answer != nullptr) {
@@ -239,7 +255,7 @@ std::string Conversation::finish_error(const ChatError& error) {
         entries_.push_back(Entry{EntryKind::Error,
                                  "[" + std::string{error_kind_label(error.kind)} + "] " +
                                      error.message,
-                                 false, false, false, {}, {}});
+                                 false, false, false, {}, {}, {}});
     }
     busy_ = false;
     return std::exchange(pending_user_text_, std::string{});

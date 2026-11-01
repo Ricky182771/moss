@@ -41,6 +41,9 @@ struct Entry {
     /// en el mismo orden que en el bloque. Salen de la búsqueda, no del texto
     /// del modelo (que podría inventar URLs).
     std::vector<SearchResult> sources;
+    /// Solo Assistant: el pensamiento del modelo, para mostrarse plegado.
+    /// Nunca va en el historial que se envía.
+    std::string reasoning;
 };
 
 /// Estado de la conversación. Se usa solo desde el hilo de la interfaz y no
@@ -71,9 +74,13 @@ public:
     /// hace nada y devuelve false.
     bool attach_search(SearchResponse response, std::string date, std::string block);
 
-    /// Agrega texto a la respuesta en curso; la crea con el primer delta.
-    /// Sin petición en curso o con texto vacío, no hace nada.
+    /// Agrega texto a la respuesta en curso; la crea con el primer delta (de
+    /// texto o de pensamiento). Sin petición en curso o con texto vacío, no
+    /// hace nada.
     void append_delta(std::string_view text);
+    /// Igual que append_delta, pero al pensamiento (Entry::reasoning), que
+    /// se guarda con el par y nunca entra al historial que se envía.
+    void append_reasoning(std::string_view text);
 
     /// Cierra la respuesta y la agrega al historial. Si no llegó texto, se
     /// trata como error ("El modelo no devolvió texto.") y devuelve el texto
@@ -132,6 +139,9 @@ public:
 private:
     /// Respuesta del asistente en curso, o nullptr si aún no llega texto.
     Entry* current_answer();
+    /// La respuesta en curso para un delta, creándola si hace falta; nullptr
+    /// si el delta se ignora.
+    Entry* answer_for_delta(std::string_view text);
 
     std::vector<Message> history_; ///< Lo que se envía a la API.
     std::vector<Entry> entries_;   ///< Lo que se muestra en pantalla.
