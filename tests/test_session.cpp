@@ -1388,3 +1388,49 @@ TEST_CASE("Session: el reintento por contexto con ajustes del modelo", "[session
         CHECK(h.session->last_dropped() == 0);
     }
 }
+
+TEST_CASE("Session renombra la abierta y otras, también con una respuesta en curso",
+          "[session][renombrar]") {
+    using Status = chatbot::cli::RenameOutcome::Status;
+    Harness h;
+    h.start();
+
+    // Nueva sin guardar: no hay id.
+    chatbot::cli::RenameOutcome got = h.session->rename_conversation("", "Algo");
+    CHECK(got.status == Status::Invalid);
+    CHECK(got.message == chatbot::cli::kNothingToRename);
+
+    REQUIRE(h.exchange("uno"));
+    const std::string other = h.session->conversation().id();
+    REQUIRE(h.session->new_conversation() == std::nullopt);
+    REQUIRE(h.exchange("dos"));
+    const std::string open = h.session->conversation().id();
+
+    // Otra: solo el disco; la abierta no cambia.
+    got = h.session->rename_conversation(other, "  Otra   cosa ");
+    CHECK(got.status == Status::Renamed);
+    CHECK(got.message == "Otra cosa");
+    CHECK(h.session->store().load(other).conversation->title == "Otra cosa");
+    CHECK(h.session->conversation().title() == "dos");
+
+    got = h.session->rename_conversation(open, "");
+    CHECK(got.status == Status::Invalid);
+    CHECK(got.message == "Escribe un título.");
+    got = h.session->rename_conversation("20260101-000000-abcdef", "X");
+    CHECK(got.status == Status::Failed);
+    CHECK(got.message == h.session->store().load("20260101-000000-abcdef").error);
+
+    // La abierta, con una respuesta en curso: el par que termina se guarda
+    // con el título nuevo.
+    REQUIRE(h.session->submit("tres").type == Type::Started);
+    got = h.session->rename_conversation(open, "Título nuevo");
+    CHECK(got.status == Status::Renamed);
+    CHECK(h.session->conversation().title() == "Título nuevo");
+    CHECK(h.session->store().load(open).conversation->title == "Título nuevo");
+    REQUIRE(h.finish());
+    REQUIRE(h.finished.back().saved);
+    const chatbot::cli::LoadResult saved = h.session->store().load(open);
+    REQUIRE(saved.conversation.has_value());
+    CHECK(saved.conversation->title == "Título nuevo");
+    CHECK(saved.conversation->messages.size() == 4);
+}

@@ -722,3 +722,74 @@ TEST_CASE("ConversationStore: used_search marca las conversaciones con /buscar",
     CHECK(list[0].used_search);
     CHECK_FALSE(list[1].used_search);
 }
+
+TEST_CASE("normalize_title: recorta, colapsa y valida", "[almacen][titulo]") {
+    using chatbot::cli::normalize_title;
+    CHECK(normalize_title("  Mi\t título\n\n nuevo  ").title == "Mi título nuevo");
+    CHECK(normalize_title("  Mi\t título\n\n nuevo  ").error.empty());
+    CHECK(normalize_title("").error == "Escribe un título.");
+    CHECK(normalize_title(" \n\t ").error == "Escribe un título.");
+
+    std::string sixty;
+    for (int i = 0; i < 60; ++i) {
+        sixty += "ñ";
+    }
+    CHECK(normalize_title(sixty).title == sixty); // 60 puntos de código, 120 bytes.
+    CHECK(normalize_title(sixty + "a").error == "El título puede tener hasta 60 caracteres.");
+    CHECK(normalize_title(sixty + "a").title.empty()); // Nunca se recorta en silencio.
+
+    CHECK(normalize_title(std::string{"a\x01" "b"}).error ==
+          "El título tiene un carácter de control no permitido.");
+    CHECK(normalize_title("a\x7F" "b").error ==
+          "El título tiene un carácter de control no permitido.");
+    CHECK(normalize_title("a\xC2\x85" "b").error == // U+0085, C1.
+          "El título tiene un carácter de control no permitido.");
+    CHECK(normalize_title("a\xC3").error == "El título no es UTF-8 válido.");
+}
+
+TEST_CASE("ConversationStore: rename cambia el título sin tocar updated_at ni el orden",
+          "[almacen][titulo]") {
+    const ScopedTempDir temp;
+    const ConversationStore store{temp.string()};
+    REQUIRE_FALSE(store.save(sample("20261001-100000-000001", "2026-10-01T10:00:00-06:00")).has_value());
+    REQUIRE_FALSE(store.save(sample("20261003-090000-000003", "2026-10-03T09:00:00-06:00")).has_value());
+
+    REQUIRE_FALSE(store.rename("20261001-100000-000001", "  La  vieja ").has_value());
+
+    const LoadResult loaded = store.load("20261001-100000-000001");
+    REQUIRE(loaded.conversation.has_value());
+    CHECK(loaded.conversation->title == "La vieja");
+    CHECK(loaded.conversation->updated_at == "2026-10-01T10:00:00-06:00");
+    CHECK(loaded.conversation->messages.size() == 4);
+    const std::vector<ConversationSummary> list = store.list();
+    REQUIRE(list.size() == 2);
+    CHECK(list[0].id == "20261003-090000-000003"); // La renombrada no sube.
+    CHECK(list[1].title == "La vieja");
+    CHECK_FALSE(has_tmp_files(temp.path()));
+}
+
+TEST_CASE("ConversationStore: rename con título inválido, ilegible o inexistente no escribe",
+          "[almacen][titulo]") {
+    const ScopedTempDir temp;
+    const ConversationStore store{temp.string()};
+    REQUIRE_FALSE(store.save(sample("20261001-100000-000001", "2026-10-01T10:00:00-06:00")).has_value());
+    const fs::path saved = temp.path() / "20261001-100000-000001.json";
+    const std::string before = read_file(saved);
+
+    CHECK(store.rename("20261001-100000-000001", "  ") == "Escribe un título.");
+    CHECK(store.rename("20261001-100000-000001", std::string(61, 'x')) ==
+          "El título puede tener hasta 60 caracteres.");
+    CHECK(read_file(saved) == before);
+
+    const fs::path future = temp.path() / "20261002-110000-000099.json";
+    const std::string future_content =
+        R"({"version": 99, "id": "20261002-110000-000099", "title": "x"})";
+    write_file(future, future_content);
+    const std::optional<std::string> unreadable = store.rename("20261002-110000-000099", "Nuevo");
+    REQUIRE(unreadable.has_value());
+    CHECK_THAT(*unreadable, Catch::Matchers::StartsWith("La conversación es ilegible"));
+    CHECK(read_file(future) == future_content);
+
+    CHECK(store.rename("20261009-000000-000009", "Nuevo").has_value());
+    CHECK_FALSE(fs::exists(temp.path() / "20261009-000000-000009.json"));
+}

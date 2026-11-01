@@ -156,6 +156,8 @@ public:
     [[nodiscard]] const std::string& id() const { return id_; }
     [[nodiscard]] const std::string& created_at() const { return created_at_; }
     [[nodiscard]] const std::string& title() const { return title_; }
+    /// Renombrar: el siguiente guardado usa este título (ya normalizado).
+    void set_title(std::string title) { title_ = std::move(title); }
     /// true si hay al menos un par usuario/asistente terminado.
     [[nodiscard]] bool has_turns() const { return !turns_.empty(); }
     /// Modelo de la última respuesta guardada, o vacío.
