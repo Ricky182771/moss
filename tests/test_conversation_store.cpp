@@ -703,3 +703,22 @@ TEST_CASE("ConversationStore: un pensamiento de más de 256 KiB se recorta sin p
     // Justo en el tope: sin recorte.
     CHECK(loaded.conversation->messages[3].reasoning == exact);
 }
+
+TEST_CASE("ConversationStore: used_search marca las conversaciones con /buscar",
+          "[almacen][busqueda]") {
+    const ScopedTempDir temp;
+    const ConversationStore store{temp.string()};
+    StoredConversation with_search = sample("20261008-120000-abcdef", "2026-10-08T12:00:00-06:00");
+    chatbot::cli::StoredSearch search;
+    search.date = "2026-10-08";
+    search.response.query = "clima";
+    search.response.results = {{"Clima", "https://ejemplo.com/clima", "Soleado.", ""}};
+    with_search.messages[2].search = search; // En el segundo par, no en el primero.
+    REQUIRE_FALSE(store.save(with_search).has_value());
+    REQUIRE_FALSE(store.save(sample("20261001-100000-000001", "2026-10-01T10:00:00-06:00")).has_value());
+
+    const std::vector<ConversationSummary> list = store.list();
+    REQUIRE(list.size() == 2);
+    CHECK(list[0].used_search);
+    CHECK_FALSE(list[1].used_search);
+}

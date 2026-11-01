@@ -483,6 +483,9 @@ std::vector<ConversationSummary> ConversationStore::list() const {
                 summary.title = conversation.title;
                 summary.updated_at = conversation.updated_at;
                 summary.message_count = conversation.messages.size();
+                summary.used_search = std::any_of(
+                    conversation.messages.begin(), conversation.messages.end(),
+                    [](const StoredMessage& message) { return message.search.has_value(); });
                 for (auto message = conversation.messages.rbegin();
                      message != conversation.messages.rend(); ++message) {
                     if (message->role == Role::Assistant && !message->model.empty()) {

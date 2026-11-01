@@ -65,6 +65,7 @@ struct ConversationSummary {
     std::string last_model;
     bool readable = true;
     std::string error; ///< Motivo, si no se pudo leer.
+    bool used_search = false; ///< Algún mensaje del usuario se hizo con /buscar.
 };
 
 /// Resultado de cargar: la conversación o un mensaje de error en español.
