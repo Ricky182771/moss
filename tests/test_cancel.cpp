@@ -31,7 +31,7 @@ chatbot::HttpResponse sse_ok() {
         std::nullopt, false, ""};
 }
 
-bool accept_delta(std::string_view) { return true; }
+bool accept_delta(const chatbot::StreamDelta&) { return true; }
 
 } // namespace
 
@@ -218,7 +218,7 @@ TEST_CASE("complete_stream: cancelar después de recibir todo devuelve Cancelled
     // El usuario cancela justo cuando llegó el último texto.
     const chatbot::Result<chatbot::CompletionInfo> response = harness.client->complete_stream(
         sample_messages(),
-        [&token](std::string_view) {
+        [&token](const chatbot::StreamDelta&) {
             token.cancel();
             return true;
         },

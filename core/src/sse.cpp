@@ -193,7 +193,11 @@ Result<Event> decode_event(const std::string& raw) {
 }
 
 Result<std::optional<std::string>> decode_openai_chunk(const std::string& data,
-                                                       std::string* finish_reason) {
+                                                       std::string* finish_reason,
+                                                       std::string* reasoning) {
+    if (reasoning != nullptr) {
+        reasoning->clear();
+    }
     json document;
     try {
         document = json::parse(data);
@@ -241,6 +245,15 @@ Result<std::optional<std::string>> decode_openai_chunk(const std::string& data,
     if (!delta.is_object()) {
         return ChatError{ErrorKind::BadResponse, 0,
                          "\"choices[0].delta\" no es un objeto.", std::nullopt};
+    }
+    if (reasoning != nullptr) {
+        for (const char* key : {"reasoning_content", "reasoning"}) {
+            const auto it = delta.find(key);
+            if (it != delta.end() && it->is_string()) {
+                *reasoning = it->get<std::string>();
+                break;
+            }
+        }
     }
     if (!delta.contains("content")) {
         // Chunk sin texto (p. ej. el cierre con finish_reason): no aporta nada.

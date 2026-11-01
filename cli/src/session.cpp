@@ -229,7 +229,11 @@ SendResult Session::send(std::string_view text, std::optional<std::string> searc
     if (!messages.has_value()) {
         return SendResult::Empty;
     }
-    const auto on_delta = [this](std::string delta) { conversation_.append_delta(delta); };
+    const auto on_delta = [this](StreamDelta::Kind kind, std::string delta) {
+        if (kind == StreamDelta::Kind::Content) {
+            conversation_.append_delta(delta);
+        }
+    };
     const auto on_done = [this](Result<CompletionInfo> result, std::size_t dropped) {
         searching_ = false;
         last_dropped_ = dropped;

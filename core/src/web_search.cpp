@@ -54,22 +54,7 @@ std::string sanitize_metadata(std::string_view text) {
 
 /// Recorta UTF-8 válido a un máximo de bytes sin partir caracteres.
 std::string truncate_utf8(std::string_view text, std::size_t max_bytes) {
-    if (text.size() <= max_bytes) {
-        return std::string{text};
-    }
-
-    // Retroceder desde max_bytes hasta encontrar el inicio de un carácter UTF-8.
-    std::size_t pos = max_bytes;
-    while (pos > 0) {
-        const auto byte = static_cast<unsigned char>(text[pos]);
-        // Un byte de continuación UTF-8 tiene la forma 10xxxxxx.
-        if ((byte & 0xC0) != 0x80) {
-            break;
-        }
-        --pos;
-    }
-
-    return std::string{text.substr(0, pos)};
+    return std::string{utf8::prefix(text, max_bytes)};
 }
 
 /// Neutraliza la cadena de cierre dentro del contenido.

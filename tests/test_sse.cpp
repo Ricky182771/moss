@@ -288,3 +288,95 @@ TEST_CASE("decode_openai_chunk: sin código ni tipo se clasifica por error.messa
     CHECK(stream_error_kind(R"j({"error":{"message":"overloaded","code":400}})j") ==
           chatbot::ErrorKind::InvalidRequest);
 }
+
+// Pensamiento (M3): reasoning_content (NIM, DeepSeek) o reasoning (OpenRouter).
+
+TEST_CASE("decode_openai_chunk: reasoning_content va al pensamiento, sin texto", "[sse][pensamiento]") {
+    std::string reasoning = "viejo";
+    const chatbot::Result<std::optional<std::string>> delta = decode_openai_chunk(
+        R"({"choices":[{"delta":{"reasoning_content":"Veamos"}}]})", nullptr, &reasoning);
+    REQUIRE(delta.is_ok());
+    CHECK_FALSE(delta.value().has_value());
+    CHECK(reasoning == "Veamos");
+}
+
+TEST_CASE("decode_openai_chunk: reasoning (estilo OpenRouter) va al pensamiento",
+          "[sse][pensamiento]") {
+    std::string reasoning;
+    const chatbot::Result<std::optional<std::string>> delta = decode_openai_chunk(
+        R"({"choices":[{"delta":{"reasoning":"Hmm"}}]})", nullptr, &reasoning);
+    REQUIRE(delta.is_ok());
+    CHECK_FALSE(delta.value().has_value());
+    CHECK(reasoning == "Hmm");
+}
+
+TEST_CASE("decode_openai_chunk: con los dos campos gana reasoning_content", "[sse][pensamiento]") {
+    std::string reasoning;
+    const chatbot::Result<std::optional<std::string>> delta = decode_openai_chunk(
+        R"({"choices":[{"delta":{"reasoning":"B","reasoning_content":"A"}}]})", nullptr,
+        &reasoning);
+    REQUIRE(delta.is_ok());
+    CHECK(reasoning == "A");
+}
+
+TEST_CASE("decode_openai_chunk: pensamiento y texto en el mismo chunk", "[sse][pensamiento]") {
+    std::string reasoning;
+    std::string finish;
+    const chatbot::Result<std::optional<std::string>> delta = decode_openai_chunk(
+        R"({"choices":[{"delta":{"reasoning_content":"pienso","content":"digo"},"finish_reason":"stop"}]})",
+        &finish, &reasoning);
+    REQUIRE(delta.is_ok());
+    REQUIRE(delta.value().has_value());
+    CHECK(*delta.value() == "digo");
+    CHECK(reasoning == "pienso");
+    CHECK(finish == "stop");
+}
+
+TEST_CASE("decode_openai_chunk: pensamiento null u otro tipo se ignora sin error",
+          "[sse][pensamiento]") {
+    std::string reasoning = "viejo";
+    SECTION("null") {
+        const auto delta = decode_openai_chunk(
+            R"({"choices":[{"delta":{"reasoning_content":null,"content":"x"}}]})", nullptr,
+            &reasoning);
+        REQUIRE(delta.is_ok());
+        CHECK(*delta.value() == "x");
+        CHECK(reasoning.empty());
+    }
+    SECTION("número u objeto") {
+        const auto delta = decode_openai_chunk(
+            R"({"choices":[{"delta":{"reasoning_content":5,"reasoning":{"a":1},"content":"x"}}]})",
+            nullptr, &reasoning);
+        REQUIRE(delta.is_ok());
+        CHECK(*delta.value() == "x");
+        CHECK(reasoning.empty());
+    }
+    SECTION("reasoning_content de otro tipo: cuenta reasoning") {
+        const auto delta = decode_openai_chunk(
+            R"({"choices":[{"delta":{"reasoning_content":[1],"reasoning":"r"}}]})", nullptr,
+            &reasoning);
+        REQUIRE(delta.is_ok());
+        CHECK(reasoning == "r");
+    }
+}
+
+TEST_CASE("decode_openai_chunk: extra_content con thought_signature se ignora",
+          "[sse][pensamiento]") {
+    std::string reasoning = "viejo";
+    const auto delta = decode_openai_chunk(
+        R"({"choices":[{"delta":{"content":"Hola","extra_content":{"google":{"thought_signature":"c2ln"}}}}]})",
+        nullptr, &reasoning);
+    REQUIRE(delta.is_ok());
+    CHECK(*delta.value() == "Hola");
+    CHECK(reasoning.empty());
+}
+
+TEST_CASE("decode_openai_chunk: el chunk de cierre deja el pensamiento vacío",
+          "[sse][pensamiento]") {
+    std::string reasoning = "viejo";
+    const auto delta = decode_openai_chunk(
+        R"({"choices":[{"delta":{},"finish_reason":"stop"}]})", nullptr, &reasoning);
+    REQUIRE(delta.is_ok());
+    CHECK_FALSE(delta.value().has_value());
+    CHECK(reasoning.empty());
+}

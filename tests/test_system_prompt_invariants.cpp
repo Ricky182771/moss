@@ -94,7 +94,11 @@ struct Session {
         outcome.history = *messages;
         const std::size_t before = model->requests.size();
         bool done = false;
-        const auto on_delta = [this](std::string delta) { conversation.append_delta(delta); };
+        const auto on_delta = [this](chatbot::StreamDelta::Kind kind, std::string delta) {
+            if (kind == chatbot::StreamDelta::Kind::Content) {
+                conversation.append_delta(delta);
+            }
+        };
         const auto on_done = [this, &outcome, &done](chatbot::Result<chatbot::CompletionInfo> result,
                                                      std::size_t dropped) {
             outcome.dropped = dropped;

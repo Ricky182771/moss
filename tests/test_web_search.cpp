@@ -439,3 +439,16 @@ TEST_CASE("is_web_url acepta solo http:// y https://", "[web_search]") {
         CHECK_FALSE(is_web_url(url));
     }
 }
+
+TEST_CASE("utf8::prefix corta sin partir caracteres", "[utf8]") {
+    const std::string text = "añ€😀"; // 1 + 2 + 3 + 4 bytes.
+    CHECK(utf8::prefix(text, 100) == text);
+    CHECK(utf8::prefix(text, 0).empty());
+    CHECK(utf8::prefix(text, 1) == "a");
+    CHECK(utf8::prefix(text, 2) == "a"); // A mitad de la ñ.
+    CHECK(utf8::prefix(text, 3) == "añ");
+    CHECK(utf8::prefix(text, 5) == "añ"); // A mitad del €.
+    CHECK(utf8::prefix(text, 6) == "añ€");
+    CHECK(utf8::prefix(text, 9) == "añ€"); // A mitad del emoji.
+    CHECK(utf8::prefix(text, 10) == text);
+}

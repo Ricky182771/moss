@@ -26,7 +26,8 @@ public:
     /// screen.PostEvent(Event::Custom); en las pruebas, una cola que vacía la
     /// prueba. Se llama desde el hilo de trabajo: debe ser segura entre hilos.
     using Post = std::function<void(Task)>;
-    using OnDelta = std::function<void(std::string)>;
+    /// Texto o pensamiento, con su tipo (StreamDelta::Kind).
+    using OnDelta = std::function<void(StreamDelta::Kind, std::string)>;
     using OnDone = std::function<void(Result<CompletionInfo>, std::size_t dropped)>;
     /// Resultados de una búsqueda que sí pasan al modelo: ya recortados con
     /// trim_search_response, y el bloque de format_search_context que quedó

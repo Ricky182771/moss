@@ -46,7 +46,7 @@ ordered sent_body(const std::string& provider, const ModelParams& params) {
         200, "data: {\"choices\":[{\"delta\":{\"content\":\"x\"}}]}\n\ndata: [DONE]\n\n",
         std::nullopt, false, ""});
     (void)harness.client->complete_stream(chatbot_test::sample_messages(),
-                                          [](std::string_view) { return true; });
+                                          [](const chatbot::StreamDelta&) { return true; });
     REQUIRE(harness.transport->requests.size() == 1);
     return ordered::parse(harness.transport->requests.front().body);
 }
@@ -303,7 +303,7 @@ TEST_CASE("Vista previa: el cuerpo exacto sin messages ni key", "[ajustes][vista
     harness.transport->responses.push_back(chatbot::HttpResponse{
         200, "data: [DONE]\n\n", std::nullopt, false, ""});
     (void)harness.client->complete_stream(chatbot_test::sample_messages(),
-                                          [](std::string_view) { return true; });
+                                          [](const chatbot::StreamDelta&) { return true; });
     ordered sent = ordered::parse(harness.transport->requests.front().body);
     sent["messages"] = "[…2 mensajes…]";
     CHECK(sent.dump(2) == chatbot::request_preview("z-ai/glm5", "nvidia", params, 2));

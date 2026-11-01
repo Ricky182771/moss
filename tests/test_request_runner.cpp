@@ -66,7 +66,7 @@ struct RunnerHarness {
     bool start(std::vector<Message> history = chatbot_test::sample_messages()) {
         return runner->start(
             std::move(history),
-            [this](std::string delta) {
+            [this](chatbot::StreamDelta::Kind, std::string delta) {
                 outcome.off_thread_callback |= std::this_thread::get_id() != ui_thread;
                 outcome.deltas.push_back(std::move(delta));
             },
@@ -417,7 +417,7 @@ bool start_search(RunnerHarness& harness, std::shared_ptr<chatbot::SearchProvide
             search.context = std::move(context);
             ++search.calls;
         },
-        [&harness](std::string delta) {
+        [&harness](chatbot::StreamDelta::Kind, std::string delta) {
             harness.outcome.off_thread_callback |=
                 std::this_thread::get_id() != harness.ui_thread;
             harness.outcome.deltas.push_back(std::move(delta));
@@ -709,7 +709,7 @@ TEST_CASE("RequestRunner: reintento por contexto tras /buscar conserva sistema y
             search.context = std::move(context);
             ++search.calls;
         },
-        [&harness](std::string delta) { harness.outcome.deltas.push_back(std::move(delta)); },
+        [&harness](chatbot::StreamDelta::Kind, std::string delta) { harness.outcome.deltas.push_back(std::move(delta)); },
         [&harness](chatbot::Result<chatbot::CompletionInfo> result, std::size_t dropped) {
             harness.outcome.result = std::move(result);
             harness.outcome.dropped = dropped;
@@ -837,8 +837,8 @@ TEST_CASE("complete_trimmed: un reintento cancelado o que ya entregó texto da s
     chatbot::CancelToken cancel;
     fake->responses.push_back(error_400("primero"));
     std::vector<std::string> deltas;
-    const auto collect = [&deltas](std::string_view delta) {
-        deltas.emplace_back(delta);
+    const auto collect = [&deltas](const chatbot::StreamDelta& delta) {
+        deltas.emplace_back(delta.text);
         return true;
     };
 
@@ -889,4 +889,55 @@ TEST_CASE("RequestRunner: una llave corta de extra dentro de otra palabra no apa
     REQUIRE(harness.outcome.result->is_ok());
     CHECK(fake->requests.size() == 2);
     CHECK(harness.outcome.dropped == 2);
+}
+
+TEST_CASE("complete_trimmed: sin reintento por contexto si ya llegó pensamiento",
+          "[contexto][pensamiento]") {
+    auto transport = std::make_unique<chatbot_test::FakeTransport>();
+    chatbot_test::FakeTransport* fake = transport.get();
+    chatbot::ChatClient client{chatbot_test::test_config(), std::move(transport),
+                               std::make_unique<chatbot_test::FakeSleeper>()};
+    // El servidor piensa y después rechaza por contexto dentro del flujo.
+    fake->responses.push_back(HttpResponse{
+        200,
+        "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"pienso\"}}]}\n\n"
+        "data: {\"error\":{\"code\":400,\"message\":\"maximum context length exceeded\"}}\n\n",
+        std::nullopt, false, ""});
+    fake->responses.push_back(HttpResponse{200, sse_flow({"ok"}), std::nullopt, false, ""});
+    std::vector<chatbot::StreamDelta::Kind> kinds;
+    const chatbot::TrimmedCompletion done = chatbot::complete_trimmed(
+        client, history_with_old_turn(), 1000, [&](const chatbot::StreamDelta& delta) {
+            kinds.push_back(delta.kind);
+            return true;
+        });
+    REQUIRE(done.result.is_error());
+    CHECK(done.result.error().kind == ErrorKind::InvalidRequest);
+    CHECK(fake->requests.size() == 1);
+    CHECK(kinds == std::vector{chatbot::StreamDelta::Kind::Reasoning});
+}
+
+TEST_CASE("RequestRunner: el pensamiento llega al hilo de la interfaz con su tipo",
+          "[runner][hilos][pensamiento]") {
+    auto transport = std::make_unique<chatbot_test::FakeTransport>();
+    transport->responses.push_back(HttpResponse{
+        200,
+        "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"pienso\"}}]}\n\n" +
+            sse_flow({"Hola"}),
+        std::nullopt, false, ""});
+    RunnerHarness harness(std::move(transport), std::make_unique<chatbot_test::FakeSleeper>());
+    std::vector<std::pair<chatbot::StreamDelta::Kind, std::string>> got;
+    REQUIRE(harness.runner->start(
+        chatbot_test::sample_messages(),
+        [&](chatbot::StreamDelta::Kind kind, std::string delta) {
+            got.emplace_back(kind, std::move(delta));
+        },
+        [&](chatbot::Result<chatbot::CompletionInfo> result, std::size_t) {
+            harness.outcome.result = std::move(result);
+            ++harness.outcome.done_calls;
+        }));
+    REQUIRE(harness.wait_done());
+    REQUIRE(harness.outcome.result->is_ok());
+    CHECK(got == std::vector<std::pair<chatbot::StreamDelta::Kind, std::string>>{
+                     {chatbot::StreamDelta::Kind::Reasoning, "pienso"},
+                     {chatbot::StreamDelta::Kind::Content, "Hola"}});
 }

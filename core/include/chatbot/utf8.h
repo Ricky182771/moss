@@ -23,6 +23,10 @@ inline constexpr std::string_view kReplacement = "\xEF\xBF\xBD";
 /// true si todo el texto es UTF-8 válido.
 [[nodiscard]] bool is_valid(std::string_view text);
 
+/// Los primeros max_bytes de text como mucho, sin partir un carácter
+/// (retrocede hasta el inicio del que no cabe).
+[[nodiscard]] std::string_view prefix(std::string_view text, std::size_t max_bytes);
+
 } // namespace chatbot::utf8
 
 #endif // CHATBOT_UTF8_H

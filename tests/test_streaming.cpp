@@ -1,9 +1,11 @@
+#include "chatbot/cancel_token.h"
 #include "chatbot/chat_client.h"
 #include "fake_transport.hpp"
 
 #include <nlohmann/json.hpp>
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 
 #include <catch2/matchers/catch_matchers_string.hpp>
 
@@ -37,7 +39,7 @@ TEST_CASE("complete_stream: pide stream:true al servidor", "[streaming]") {
         chatbot::HttpResponse{200, sse_flow(), std::nullopt, false, ""});
 
     const chatbot::Result<chatbot::CompletionInfo> response =
-        harness.client->complete_stream(sample_messages(), [](std::string_view) {
+        harness.client->complete_stream(sample_messages(), [](const chatbot::StreamDelta&) {
             return true;
         });
 
@@ -54,8 +56,8 @@ TEST_CASE("complete_stream: entrega los deltas en orden con trozos partidos", "[
 
     std::vector<std::string> deltas;
     const chatbot::Result<chatbot::CompletionInfo> response = harness.client->complete_stream(
-        sample_messages(), [&](std::string_view delta) {
-            deltas.emplace_back(delta);
+        sample_messages(), [&](const chatbot::StreamDelta& delta) {
+            deltas.emplace_back(delta.text);
             return true;
         });
 
@@ -78,8 +80,8 @@ TEST_CASE("complete_stream: flujo sin [DONE] al final se tolera", "[streaming]")
 
     std::string joined;
     const chatbot::Result<chatbot::CompletionInfo> result = harness.client->complete_stream(
-        sample_messages(), [&](std::string_view delta) {
-            joined += delta;
+        sample_messages(), [&](const chatbot::StreamDelta& delta) {
+            joined += delta.text;
             return true;
         });
 
@@ -96,8 +98,8 @@ TEST_CASE("complete_stream: reintenta si falla antes del primer delta", "[stream
 
     std::vector<std::string> deltas;
     const chatbot::Result<chatbot::CompletionInfo> response = harness.client->complete_stream(
-        sample_messages(), [&](std::string_view delta) {
-            deltas.emplace_back(delta);
+        sample_messages(), [&](const chatbot::StreamDelta& delta) {
+            deltas.emplace_back(delta.text);
             return true;
         });
 
@@ -123,8 +125,8 @@ TEST_CASE("complete_stream: no reintenta si ya se entregó contenido", "[streami
 
     std::vector<std::string> deltas;
     const chatbot::Result<chatbot::CompletionInfo> response = harness.client->complete_stream(
-        sample_messages(), [&](std::string_view delta) {
-            deltas.emplace_back(delta);
+        sample_messages(), [&](const chatbot::StreamDelta& delta) {
+            deltas.emplace_back(delta.text);
             return true;
         });
 
@@ -141,7 +143,7 @@ TEST_CASE("complete_stream: cancelación desde el callback devuelve Cancelled", 
         chatbot::HttpResponse{200, sse_flow("parcial"), std::nullopt, false, ""});
 
     const chatbot::Result<chatbot::CompletionInfo> response = harness.client->complete_stream(
-        sample_messages(), [](std::string_view) {
+        sample_messages(), [](const chatbot::StreamDelta&) {
             return false; // Cancela al primer delta.
         });
 
@@ -159,8 +161,8 @@ TEST_CASE("complete_stream: reintenta Server (500) antes del primer delta", "[st
 
     std::vector<std::string> deltas;
     const chatbot::Result<chatbot::CompletionInfo> response = harness.client->complete_stream(
-        sample_messages(), [&](std::string_view delta) {
-            deltas.emplace_back(delta);
+        sample_messages(), [&](const chatbot::StreamDelta& delta) {
+            deltas.emplace_back(delta.text);
             return true;
         });
 
@@ -175,7 +177,7 @@ TEST_CASE("complete_stream: error Config no llama al transporte", "[streaming]")
     auto harness = make_client(config);
 
     const chatbot::Result<chatbot::CompletionInfo> response = harness.client->complete_stream(
-        sample_messages(), [](std::string_view) {
+        sample_messages(), [](const chatbot::StreamDelta&) {
             return true;
         });
 
@@ -192,7 +194,7 @@ TEST_CASE("complete_stream: BadResponse de un chunk no se reintenta", "[streamin
     harness.transport->responses.push_back(bad_chunk);
 
     const chatbot::Result<chatbot::CompletionInfo> response = harness.client->complete_stream(
-        sample_messages(), [](std::string_view) {
+        sample_messages(), [](const chatbot::StreamDelta&) {
             return true;
         });
 
@@ -212,7 +214,7 @@ TEST_CASE("complete_stream: UTF-8 inválido no lanza y se sustituye por U+FFFD",
 
     std::optional<chatbot::Result<chatbot::CompletionInfo>> response;
     REQUIRE_NOTHROW(response.emplace(harness.client->complete_stream(
-        messages, [](std::string_view) { return true; })));
+        messages, [](const chatbot::StreamDelta&) { return true; })));
     REQUIRE(response->is_ok());
     REQUIRE(harness.transport->requests.size() == 1);
 
@@ -228,7 +230,7 @@ TEST_CASE("complete_stream: callback que lanza devuelve Cancelled sin reintentar
 
     std::optional<chatbot::Result<chatbot::CompletionInfo>> response;
     REQUIRE_NOTHROW(response.emplace(harness.client->complete_stream(
-        sample_messages(), [](std::string_view) -> bool {
+        sample_messages(), [](const chatbot::StreamDelta&) -> bool {
             throw std::runtime_error("fallo en la interfaz");
         })));
 
@@ -252,8 +254,8 @@ TEST_CASE("complete_stream: primer chunk con content null se ignora", "[streamin
 
     std::string joined;
     const chatbot::Result<chatbot::CompletionInfo> response = harness.client->complete_stream(
-        sample_messages(), [&](std::string_view delta) {
-            joined += delta;
+        sample_messages(), [&](const chatbot::StreamDelta& delta) {
+            joined += delta.text;
             return true;
         });
 
@@ -274,8 +276,8 @@ TEST_CASE("complete_stream: chunk final con choices vacío y usage se ignora",
 
     std::string joined;
     const chatbot::Result<chatbot::CompletionInfo> response = harness.client->complete_stream(
-        sample_messages(), [&](std::string_view delta) {
-            joined += delta;
+        sample_messages(), [&](const chatbot::StreamDelta& delta) {
+            joined += delta.text;
             return true;
         });
 
@@ -291,7 +293,7 @@ TEST_CASE("complete_stream: error dentro del flujo con estado 200 conserva el me
         ""});
 
     const chatbot::Result<chatbot::CompletionInfo> response = harness.client->complete_stream(
-        sample_messages(), [](std::string_view) { return true; });
+        sample_messages(), [](const chatbot::StreamDelta&) { return true; });
 
     REQUIRE(response.is_error());
     CHECK(response.error().kind == chatbot::ErrorKind::BadResponse);
@@ -310,8 +312,8 @@ std::pair<chatbot::Result<chatbot::CompletionInfo>, std::string> stream_body(con
         chatbot::HttpResponse{200, body, std::nullopt, false, ""});
     std::string joined;
     chatbot::Result<chatbot::CompletionInfo> result = harness.client->complete_stream(
-        sample_messages(), [&](std::string_view delta) {
-            joined += delta;
+        sample_messages(), [&](const chatbot::StreamDelta& delta) {
+            joined += delta.text;
             return true;
         });
     return {std::move(result), joined};
@@ -371,8 +373,8 @@ TEST_CASE("Error de flujo con código 500 se reintenta como Server", "[streaming
         chatbot::HttpResponse{200, sse_flow(), std::nullopt, false, ""});
 
     std::string joined;
-    const auto response = harness.client->complete_stream(sample_messages(), [&](std::string_view d) {
-        joined += d;
+    const auto response = harness.client->complete_stream(sample_messages(), [&](const chatbot::StreamDelta& d) {
+        joined += d.text;
         return true;
     });
     REQUIRE(response.is_ok());
@@ -388,7 +390,7 @@ TEST_CASE("Error de flujo con código 429 es RateLimited", "[streaming][error-fl
         stream_error_response(R"j({"error":{"message":"demasiadas","code":429}})j"));
 
     const auto response = harness.client->complete_stream(
-        sample_messages(), [](std::string_view) { return true; });
+        sample_messages(), [](const chatbot::StreamDelta&) { return true; });
     REQUIRE(response.is_error());
     CHECK(response.error().kind == chatbot::ErrorKind::RateLimited);
     CHECK(harness.transport->requests.size() == 4); // 1 + 3 reintentos.
@@ -403,7 +405,7 @@ TEST_CASE("Error de flujo overloaded_error sin código se reintenta como Server"
         chatbot::HttpResponse{200, sse_flow(), std::nullopt, false, ""});
 
     const auto response = harness.client->complete_stream(
-        sample_messages(), [](std::string_view) { return true; });
+        sample_messages(), [](const chatbot::StreamDelta&) { return true; });
     REQUIRE(response.is_ok());
     CHECK(harness.transport->requests.size() == 2);
 }
@@ -415,7 +417,7 @@ TEST_CASE("Error de flujo sin código ni tipo reconocible no se reintenta",
         stream_error_response(R"j({"error":{"message":"algo raro","type":"invalid_thing"}})j"));
 
     const auto response = harness.client->complete_stream(
-        sample_messages(), [](std::string_view) { return true; });
+        sample_messages(), [](const chatbot::StreamDelta&) { return true; });
     REQUIRE(response.is_error());
     CHECK(response.error().kind == chatbot::ErrorKind::BadResponse);
     CHECK(response.error().message == "algo raro");
@@ -434,8 +436,8 @@ TEST_CASE("Error de servidor después de un delta no se reintenta", "[streaming]
         chatbot::HttpResponse{200, sse_flow(), std::nullopt, false, ""});
 
     std::string joined;
-    const auto response = harness.client->complete_stream(sample_messages(), [&](std::string_view d) {
-        joined += d;
+    const auto response = harness.client->complete_stream(sample_messages(), [&](const chatbot::StreamDelta& d) {
+        joined += d.text;
         return true;
     });
     REQUIRE(response.is_error());
@@ -452,7 +454,7 @@ std::string finish_reason_of(const std::string& body) {
     harness.transport->responses.push_back(
         chatbot::HttpResponse{200, body, std::nullopt, false, ""});
     const chatbot::Result<chatbot::CompletionInfo> result = harness.client->complete_stream(
-        sample_messages(), [](std::string_view) { return true; });
+        sample_messages(), [](const chatbot::StreamDelta&) { return true; });
     REQUIRE(result.is_ok());
     return result.value().finish_reason;
 }
@@ -493,8 +495,8 @@ TEST_CASE("Error de flujo solo con 'Service temporarily overloaded' se reintenta
         chatbot::HttpResponse{200, sse_flow(), std::nullopt, false, ""});
 
     std::string joined;
-    const auto response = harness.client->complete_stream(sample_messages(), [&](std::string_view d) {
-        joined += d;
+    const auto response = harness.client->complete_stream(sample_messages(), [&](const chatbot::StreamDelta& d) {
+        joined += d.text;
         return true;
     });
     REQUIRE(response.is_ok());
@@ -509,8 +511,132 @@ TEST_CASE("Error de flujo con un mensaje cualquiera sigue siendo BadResponse",
         stream_error_response(R"j({"error":{"message":"algo distinto"}})j"));
 
     const auto response = harness.client->complete_stream(
-        sample_messages(), [](std::string_view) { return true; });
+        sample_messages(), [](const chatbot::StreamDelta&) { return true; });
     REQUIRE(response.is_error());
     CHECK(response.error().kind == chatbot::ErrorKind::BadResponse);
     CHECK(harness.transport->requests.size() == 1);
+}
+
+// Pensamiento (M3): delta.reasoning_content / delta.reasoning llegan aparte
+// del texto, con su tipo, en el orden del flujo.
+
+namespace {
+
+using Kind = chatbot::StreamDelta::Kind;
+
+/// Un delta recibido, con su tipo.
+struct Seen {
+    Kind kind;
+    std::string text;
+    bool operator==(const Seen&) const = default;
+};
+
+std::string reasoning_chunk(const std::string& field, const std::string& text) {
+    return "data: {\"choices\":[{\"delta\":{\"" + field + "\":\"" + text + "\"}}]}\n\n";
+}
+
+} // namespace
+
+TEST_CASE("complete_stream: entrega pensamiento y texto con su tipo y en orden",
+          "[streaming][pensamiento]") {
+    const std::string field = GENERATE(std::string{"reasoning_content"}, std::string{"reasoning"});
+    auto harness = make_client();
+    std::string flow = "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\"}}]}\n\n";
+    flow += reasoning_chunk(field, "uno ");
+    flow += reasoning_chunk(field, "dos");
+    // Los dos en un chunk: primero el pensamiento.
+    flow += "data: {\"choices\":[{\"delta\":{\"" + field + "\":\" tres\",\"content\":\"Hola\"}}]}\n\n";
+    flow += "data: {\"choices\":[{\"delta\":{\"content\":\" mundo\"}}]}\n\n";
+    flow += "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n";
+    harness.transport->responses.push_back(chatbot::HttpResponse{200, flow, std::nullopt, false, ""});
+    harness.transport->chunk_size = 7;
+
+    std::vector<Seen> seen;
+    const auto response = harness.client->complete_stream(
+        sample_messages(), [&](const chatbot::StreamDelta& delta) {
+            seen.push_back(Seen{delta.kind, std::string{delta.text}});
+            return true;
+        });
+
+    REQUIRE(response.is_ok());
+    CHECK(response.value().finish_reason == "stop");
+    CHECK(seen == std::vector<Seen>{{Kind::Reasoning, "uno "},
+                                    {Kind::Reasoning, "dos"},
+                                    {Kind::Reasoning, " tres"},
+                                    {Kind::Content, "Hola"},
+                                    {Kind::Content, " mundo"}});
+}
+
+TEST_CASE("complete_stream: sin pensamiento todos los deltas son de texto",
+          "[streaming][pensamiento]") {
+    auto harness = make_client();
+    harness.transport->responses.push_back(
+        chatbot::HttpResponse{200, sse_flow("Hola"), std::nullopt, false, ""});
+    std::vector<Seen> seen;
+    const auto response = harness.client->complete_stream(
+        sample_messages(), [&](const chatbot::StreamDelta& delta) {
+            seen.push_back(Seen{delta.kind, std::string{delta.text}});
+            return true;
+        });
+    REQUIRE(response.is_ok());
+    CHECK(seen == std::vector<Seen>{{Kind::Content, "Hola"}});
+}
+
+TEST_CASE("complete_stream: no reintenta después de un delta de pensamiento",
+          "[streaming][pensamiento]") {
+    auto harness = make_client();
+    harness.transport->responses.push_back(chatbot::HttpResponse{
+        200,
+        reasoning_chunk("reasoning_content", "pienso") +
+            "data: {\"error\":{\"code\":503,\"message\":\"saturado\"}}\n\n",
+        std::nullopt, false, ""});
+    harness.transport->responses.push_back(
+        chatbot::HttpResponse{200, sse_flow(), std::nullopt, false, ""});
+
+    std::vector<Seen> seen;
+    const auto response = harness.client->complete_stream(
+        sample_messages(), [&](const chatbot::StreamDelta& delta) {
+            seen.push_back(Seen{delta.kind, std::string{delta.text}});
+            return true;
+        });
+
+    REQUIRE(response.is_error());
+    CHECK(response.error().kind == chatbot::ErrorKind::Server);
+    CHECK(harness.transport->requests.size() == 1);
+    CHECK(harness.sleeper->sleeps.empty());
+    CHECK(seen == std::vector<Seen>{{Kind::Reasoning, "pienso"}});
+}
+
+TEST_CASE("complete_stream: cancelar durante el pensamiento", "[streaming][pensamiento]") {
+    auto harness = make_client();
+    harness.transport->responses.push_back(chatbot::HttpResponse{
+        200, reasoning_chunk("reasoning_content", "pienso") + sse_flow("texto"), std::nullopt,
+        false, ""});
+    std::vector<Seen> seen;
+
+    SECTION("el callback devuelve false") {
+        const auto response = harness.client->complete_stream(
+            sample_messages(), [&](const chatbot::StreamDelta& delta) {
+                seen.push_back(Seen{delta.kind, std::string{delta.text}});
+                return false;
+            });
+        REQUIRE(response.is_error());
+        CHECK(response.error().kind == chatbot::ErrorKind::Cancelled);
+    }
+    SECTION("con el token") {
+        chatbot::CancelToken token;
+        const auto response = harness.client->complete_stream(
+            sample_messages(),
+            [&](const chatbot::StreamDelta& delta) {
+                seen.push_back(Seen{delta.kind, std::string{delta.text}});
+                token.cancel();
+                return true;
+            },
+            &token);
+        REQUIRE(response.is_error());
+        CHECK(response.error().kind == chatbot::ErrorKind::Cancelled);
+    }
+    CHECK(harness.transport->requests.size() == 1);
+    REQUIRE_FALSE(seen.empty());
+    CHECK(seen.front() == Seen{Kind::Reasoning, "pienso"});
 }

@@ -415,7 +415,7 @@ TEST_CASE("base_url debe usar https://", "[config][https]") {
         REQUIRE(response.is_error());
         CHECK(response.error().kind == chatbot::ErrorKind::Config);
         const chatbot::Result<chatbot::CompletionInfo> streamed = harness.client->complete_stream(
-            chatbot_test::sample_messages(), [](std::string_view) { return true; });
+            chatbot_test::sample_messages(), [](const chatbot::StreamDelta&) { return true; });
         REQUIRE(streamed.is_error());
         CHECK(streamed.error().kind == chatbot::ErrorKind::Config);
         CHECK(harness.transport->requests.empty());

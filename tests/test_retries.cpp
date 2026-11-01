@@ -169,7 +169,7 @@ TEST_CASE("Fallo de red no reintentable: 1 sola petición en complete_stream",
         false, ""});
 
     const chatbot::Result<chatbot::CompletionInfo> response = harness.client->complete_stream(
-        sample_messages(), [](std::string_view) { return true; });
+        sample_messages(), [](const chatbot::StreamDelta&) { return true; });
     REQUIRE(response.is_error());
     CHECK(response.error().kind == chatbot::ErrorKind::Network);
     CHECK(harness.transport->requests.size() == 1);
@@ -223,7 +223,7 @@ TEST_CASE("503 con Retry-After en streaming: se respeta la espera", "[reintentos
         false, ""});
 
     const chatbot::Result<chatbot::CompletionInfo> response = harness.client->complete_stream(
-        sample_messages(), [](std::string_view) { return true; });
+        sample_messages(), [](const chatbot::StreamDelta&) { return true; });
     REQUIRE(response.is_ok());
     REQUIRE(harness.sleeper->sleeps.size() == 1);
     CHECK(harness.sleeper->sleeps[0] == std::chrono::milliseconds{7000});

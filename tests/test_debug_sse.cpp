@@ -48,7 +48,7 @@ std::size_t count(const std::string& text, std::string_view needle) {
 const std::string kSseBody =
     "data: {\"choices\":[{\"delta\":{\"content\":\"Hola\"}}]}\n\ndata: [DONE]\n\n";
 
-bool accept(std::string_view) { return true; }
+bool accept(const chatbot::StreamDelta&) { return true; }
 
 } // namespace
 
@@ -123,8 +123,8 @@ TEST_CASE("CHAT_DEBUG_SSE: una ruta inválida no produce error", "[depuracion]")
 
     std::string joined;
     const chatbot::Result<chatbot::CompletionInfo> result = harness.client->complete_stream(
-        sample_messages(), [&](std::string_view delta) {
-            joined += delta;
+        sample_messages(), [&](const chatbot::StreamDelta& delta) {
+            joined += delta.text;
             return true;
         });
     CHECK(result.is_ok());
