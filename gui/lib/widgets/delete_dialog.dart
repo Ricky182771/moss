@@ -162,9 +162,11 @@ class _ConfirmDialogState extends State<_ConfirmDialog> {
                             ),
                     ),
                     const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
+                    // Con el texto grande, los botones bajan a otra fila.
+                    Wrap(
+                      alignment: WrapAlignment.end,
                       spacing: 8,
+                      runSpacing: 8,
                       children: [
                         Pressable(
                           focusNode: _cancel,

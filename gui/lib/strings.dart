@@ -95,6 +95,24 @@ class Strings {
       'el modelo en uso.';
   static const searchLead =
       'Para que el modelo pueda consultar internet antes de responder.';
+  static const theme = 'Tema';
+  static const themeSystem = 'Sistema';
+  static const themeSystemNote = 'Sigue a Windows o Linux';
+  static const themeDark = 'Moss oscuro';
+  static const themeDarkNote = 'Fondo casi negro';
+  static const themeLight = 'Moss claro';
+  static const themeLightNote = 'Fondo hueso';
+  static const reading = 'Lectura';
+  static const textSize = 'Tamaño del texto';
+  static const textSmall = 'Chico';
+  static const textNormal = 'Normal';
+  static const textLarge = 'Grande';
+  static const reduceMotion = 'Reducir animaciones';
+  static const reduceMotionNote =
+      'Quita el desvanecido de los mensajes y deja fijo el cursor de la '
+      'respuesta.';
+  static const highContrast = 'Más contraste';
+  static const highContrastNote = 'Bordes y textos tenues más marcados.';
   static const changedOutside =
       'Esto se cambió fuera de aquí mientras lo editabas. Cancelar trae lo '
       'guardado; Guardar lo reemplaza con lo tuyo.';

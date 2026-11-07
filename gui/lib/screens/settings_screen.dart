@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../state/app_state.dart';
+import '../state/colors_section.dart';
 import '../state/settings_state.dart';
 import '../strings.dart';
 import '../theme/colors.dart';
 import '../theme/motion.dart';
 import '../theme/theme.dart';
+import '../widgets/colors_panel.dart';
 import '../widgets/controls.dart';
 import '../widgets/delete_dialog.dart';
 import '../widgets/logo.dart';
@@ -30,7 +32,9 @@ class SettingsPanel {
 
 /// Las secciones y sus paneles. Para agregar una: un valor en [SettingsPage],
 /// su [SettingsSection] aquí y su [SettingsPanel] en [_panel].
-Map<SettingsPage, SettingsSection> _sections(AppState app) => {};
+Map<SettingsPage, SettingsSection> _sections(AppState app) => {
+  SettingsPage.colors: ColorsSection(app),
+};
 
 SettingsPanel _panel(SettingsPage page, SettingsSection? section) =>
     switch (page) {
@@ -39,10 +43,11 @@ SettingsPanel _panel(SettingsPage page, SettingsSection? section) =>
         title: Strings.providerTitle,
         lead: Strings.providerLead,
       ),
-      SettingsPage.colors => const SettingsPanel(
+      SettingsPage.colors => SettingsPanel(
         menu: Strings.colorsTitle,
         title: Strings.colorsTitle,
         lead: Strings.colorsLead,
+        body: (_) => ColorsPanel(section! as ColorsSection),
       ),
       SettingsPage.model => const SettingsPanel(
         menu: Strings.modelTitle,
@@ -104,6 +109,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         action: () async => null,
       );
       if (!yes || !mounted) return;
+      // Ahora y no al desmontarse: la vista previa de Colores regresa a lo
+      // guardado mientras se desvanece.
+      _state.discard();
     }
     widget.app.settingsOpen.value = null;
   }

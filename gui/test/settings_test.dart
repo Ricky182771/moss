@@ -74,6 +74,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text(Strings.save));
     await tester.pumpAndSettle();
-    expect(server.methods.where((m) => m.startsWith('settings.')), isEmpty);
+    expect(
+      server.methods.where((m) => m.endsWith('.set') || m.endsWith('.save')),
+      isEmpty,
+    );
   });
 }
