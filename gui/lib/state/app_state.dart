@@ -1,379 +1,265 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 import '../models/conversation.dart';
+import '../models/events.dart';
 import '../models/summary.dart';
-import '../rpc/moss_rpc.dart';
+import '../rpc/client.dart';
 import '../rpc/errors.dart';
+import '../strings.dart';
+import 'apply.dart';
 
-/// Estado de la aplicación según PROTOCOL.md §5
-/// Mantiene el snapshot de la conversación sincronizado con los eventos
+/// Un aviso corto. Cada uno es otro objeto, así el mismo texto se repite.
+class Toast {
+  final String text;
+  Toast(this.text);
+}
+
+/// Estado de la app sobre `moss-rpc`: la lista de chats y la conversación
+/// abierta, copiada de los eventos (PROTOCOL.md §5).
 class AppState extends ChangeNotifier {
-  final MossRpc _rpc;
-  StreamSubscription<RpcEvent>? _eventSubscription;
+  RpcClient _rpc;
 
-  // Estado de la app
-  AppStatus? _status;
-  ConversationSnapshot? _conversation;
-  List<ConversationSummary> _summaries = [];
+  /// Arranca otro `moss-rpc` cuando el que había se cayó.
+  final Future<RpcClient> Function()? reconnect;
 
-  // Estado de UI
-  bool _isSending = false;
-  ChatError? _lastError;
-
-  AppState(this._rpc) {
-    _eventSubscription = _rpc.events.listen(_handleEvent);
+  AppState(this._rpc, {this.reconnect}) {
+    _attach();
   }
 
-  // Getters
+  ConversationSnapshot? conversation;
+  List<ConversationSummary> summaries = const [];
 
-  AppStatus? get status => _status;
-  ConversationSnapshot? get conversation => _conversation;
-  List<ConversationSummary> get summaries => List.unmodifiable(_summaries);
-  bool get isSending => _isSending;
-  ChatError? get lastError => _lastError;
+  /// `moss-rpc` se cayó a media sesión.
+  bool disconnected = false;
 
-  bool get isReady => _status?.ready ?? false;
-  bool get isBusy => _status?.busy ?? false;
-  String? get problem => _status?.problem;
+  /// Error de JSON-RPC que va junto a la caja (Busy, vacío, sin configurar).
+  final inputError = ValueNotifier<String?>(null);
+  final toast = ValueNotifier<Toast?>(null);
 
-  // Inicialización
+  /// Texto que vuelve a la caja tras un error o una cancelación.
+  final restoreText = ValueNotifier<String?>(null);
 
-  Future<void> loadInitialState() async {
+  /// Eventos que llegan mientras se espera un `conversation.get`.
+  List<ConversationEvent>? _pending;
+
+  /// Hay una búsqueda o una respuesta en curso.
+  bool get busy => (conversation?.phase ?? Phase.idle) != Phase.idle;
+
+  void _attach() {
+    final rpc = _rpc;
+    rpc.onEvents(RpcEvent.methods, (m, p) => _onEvent(RpcEvent.parse(m, p)));
+    rpc.done.then((_) {
+      if (identical(rpc, _rpc) && !_closing) {
+        disconnected = true;
+        notifyListeners();
+      }
+    });
+  }
+
+  /// Carga la conversación abierta ([handle], de `initialize`) y la lista.
+  Future<void> load(String handle) async {
+    conversation = ConversationSnapshot.fromJson(
+      await _rpc.request('conversation.get', {'conversation': handle}),
+    );
+    await _refreshList();
+    notifyListeners();
+  }
+
+  Future<void> _refreshList() async {
+    final r = await _rpc.request('conversations.list');
+    summaries = [
+      for (final i in r['items'] as List)
+        ConversationSummary.fromJson(i as Map<String, dynamic>),
+    ];
+  }
+
+  // Acciones ----------------------------------------------------------------
+
+  /// Envía lo de la caja. Devuelve si hay que vaciarla.
+  Future<bool> submit(String text) async {
+    final c = conversation;
+    if (c == null) return false;
+    inputError.value = null;
     try {
-      _status = await _rpc.getStatus();
-      _conversation = await _rpc.getConversation(_status!.conversation);
-      _summaries = await _rpc.listConversations();
-      notifyListeners();
-    } catch (e) {
-      if (e is RpcError) {
-        _lastError = ChatError(
-          kind: 'network',
-          httpStatus: 0,
-          message: e.displayMessage,
+      if (!text.startsWith('/')) {
+        await _rpc.request('chat.send', {
+          'conversation': c.conversation,
+          'text': text,
+        });
+        return true;
+      }
+      final r = await _rpc.request('commands.run', {
+        'conversation': c.conversation,
+        'text': text,
+      });
+      switch (r['kind']) {
+        case 'copy':
+          await Clipboard.setData(ClipboardData(text: r['text'] as String));
+        case 'status':
+          toast.value = Toast(r['message'] as String);
+        case 'model_picker':
+          toast.value = Toast(Strings.modelPickerHint);
+        // message, search, save, export y model: lo demás llega en eventos.
+      }
+      return r['clear'] == true;
+    } on RpcError catch (e) {
+      _showError(e, fromInput: true);
+    } on StateError {
+      // El canal se cerró: `done` ya marcó `disconnected`.
+    }
+    return false;
+  }
+
+  Future<void> cancel() async {
+    final c = conversation;
+    if (c == null || !busy) return;
+    await _call(
+      () => _rpc.request('chat.cancel', {'conversation': c.conversation}),
+    );
+  }
+
+  Future<void> newChat() => _replace(() => _rpc.request('conversation.new'));
+
+  Future<void> open(String id) {
+    if (id == conversation?.id) return Future.value();
+    return _replace(() => _rpc.request('conversation.open', {'id': id}));
+  }
+
+  Future<void> export() async {
+    final c = conversation;
+    if (c == null) return;
+    await _call(() async {
+      final r = await _rpc.request('conversation.export', {
+        'conversation': c.conversation,
+      });
+      toast.value = Toast(r['message'] as String);
+    });
+  }
+
+  /// Arranca otro `moss-rpc` y vuelve a abrir la conversación, si tenía id.
+  Future<void> retry() async {
+    final make = reconnect;
+    if (make == null) return;
+    final id = conversation?.id;
+    RpcClient? rpc;
+    try {
+      rpc = await make();
+      final init = await rpc.initialize();
+      _rpc = rpc;
+      _attach();
+      disconnected = false;
+      if (id != null) {
+        conversation = ConversationSnapshot.fromJson(
+          await _rpc.request('conversation.open', {'id': id}),
         );
+        await _refreshList();
+        notifyListeners();
+      } else {
+        await load(init['conversation'] as String);
       }
-      notifyListeners();
-      rethrow;
-    }
-  }
-
-  // Métodos de conversación
-
-  Future<void> newConversation() async {
-    try {
-      _conversation = await _rpc.newConversation();
-      notifyListeners();
     } catch (e) {
-      _handleError(e);
-      rethrow;
+      if (!identical(rpc, _rpc)) await rpc?.close(); // Que no quede huérfano.
+      toast.value = Toast(switch (e) {
+        RpcError() => e.displayMessage,
+        RpcStartError(:final detail) => detail ?? Strings.rpcCannotStart,
+        _ => Strings.rpcCannotStart,
+      });
     }
   }
 
-  Future<void> openConversation(String id) async {
+  bool _closing = false;
+
+  Future<void> close() {
+    _closing = true;
+    return _rpc.close();
+  }
+
+  Future<void> _replace(Future<Map<String, dynamic>> Function() call) =>
+      _call(() async {
+        conversation = ConversationSnapshot.fromJson(await call());
+        inputError.value = null;
+        notifyListeners();
+      });
+
+  Future<void> _call(Future<void> Function() f) async {
     try {
-      _conversation = await _rpc.openConversation(id);
+      await f();
+    } on RpcError catch (e) {
+      _showError(e);
+    } on StateError {
+      // El canal se cerró: `done` ya marcó `disconnected`.
+    }
+  }
+
+  /// Lo escrito en la caja (vacío, sin configurar, sin key) y Busy van junto
+  /// a la caja; lo demás (Exportar, abrir), como aviso corto.
+  void _showError(RpcError e, {bool fromInput = false}) {
+    if (e.code == RpcError.busy || (fromInput && e.belongsToInput)) {
+      inputError.value = e.displayMessage;
+    } else {
+      toast.value = Toast(e.displayMessage);
+    }
+  }
+
+  // Eventos -----------------------------------------------------------------
+
+  void _onEvent(RpcEvent e) {
+    switch (e) {
+      case ConversationsChanged():
+        _refreshList().then((_) => notifyListeners(), onError: (_) {});
+      case ConversationEvent():
+        if (e is ChatFinished && e.conversation == conversation?.conversation) {
+          if (e.restoreText case final t?) restoreText.value = t;
+        }
+        _applyOrResync(e);
+    }
+  }
+
+  void _applyOrResync(ConversationEvent e) {
+    final c = conversation;
+    if (c == null) return;
+    if (_pending case final pending?) {
+      pending.add(e);
+      return;
+    }
+    final next = applyEvent(c, e);
+    if (next == null) {
+      _resync(c.conversation);
+    } else if (!identical(next, c)) {
+      conversation = next;
       notifyListeners();
-    } catch (e) {
-      _handleError(e);
-      rethrow;
     }
   }
 
-  Future<void> deleteConversation(String id) async {
+  /// Hueco de `rev`: `conversation.get` y luego lo que llegó mientras.
+  Future<void> _resync(String handle) async {
+    final pending = _pending = [];
     try {
-      final replaced = await _rpc.deleteConversation(id);
-      if (replaced != null) {
-        _conversation = replaced;
+      var s = ConversationSnapshot.fromJson(
+        await _rpc.request('conversation.get', {'conversation': handle}),
+      );
+      for (final e in pending) {
+        s = applyEvent(s, e) ?? s;
       }
-      // conversations.changed llegará después
-      notifyListeners();
-    } catch (e) {
-      _handleError(e);
-      rethrow;
+      if (s.conversation == conversation?.conversation) {
+        conversation = s;
+        notifyListeners();
+      }
+    } on Object {
+      // Otra conversación la reemplazó o el canal se cerró.
+    } finally {
+      _pending = null;
     }
-  }
-
-  Future<void> renameConversation(String id, String title) async {
-    try {
-      await _rpc.renameConversation(id, title);
-      // conversation.renamed y conversations.changed llegarán después
-    } catch (e) {
-      _handleError(e);
-      rethrow;
-    }
-  }
-
-  Future<ExportResult> exportConversation({String? id}) async {
-    try {
-      return await _rpc.exportConversation(
-        handle: id == null ? _conversation?.conversation : null,
-        id: id,
-      );
-    } catch (e) {
-      _handleError(e);
-      rethrow;
-    }
-  }
-
-  // Chat
-
-  Future<void> sendMessage(String text, {String? search}) async {
-    if (_conversation == null) return;
-
-    _isSending = true;
-    _lastError = null;
-    notifyListeners();
-
-    try {
-      await _rpc.sendMessage(
-        handle: _conversation!.conversation,
-        text: text,
-        search: search,
-      );
-      // Los eventos entry_added, phase, etc. llegarán después
-    } catch (e) {
-      _isSending = false;
-      _handleError(e);
-      rethrow;
-    }
-  }
-
-  Future<void> cancelMessage() async {
-    if (_conversation == null) return;
-
-    try {
-      await _rpc.cancelChat(_conversation!.conversation);
-      // entry_updated y chat.finished llegarán después
-    } catch (e) {
-      _handleError(e);
-      rethrow;
-    }
-  }
-
-  // Manejo de eventos según §5 y §7
-
-  void _handleEvent(RpcEvent event) {
-    switch (event) {
-      case ConversationEntryAddedEvent():
-        _handleEntryAdded(event);
-      case ConversationEntryDeltaEvent():
-        _handleEntryDelta(event);
-      case ConversationEntryUpdatedEvent():
-        _handleEntryUpdated(event);
-      case ConversationPhaseEvent():
-        _handlePhase(event);
-      case ConversationReasoningDeltaEvent():
-        _handleReasoningDelta(event);
-      case ConversationSavedEvent():
-        _handleSaved(event);
-      case ConversationRenamedEvent():
-        _handleRenamed(event);
-      case ConversationClosedEvent():
-        _handleClosed(event);
-      case ChatFinishedEvent():
-        _handleChatFinished(event);
-      case ConversationsChangedEvent():
-        _handleConversationsChanged();
-      case SettingsChangedEvent():
-        _handleSettingsChanged(event);
-    }
-  }
-
-  void _handleEntryAdded(ConversationEntryAddedEvent event) {
-    if (_conversation?.conversation != event.conversation) return;
-
-    // Verificar que no nos saltamos eventos
-    if (event.rev != _conversation!.rev + 1) {
-      _resyncConversation();
-      return;
-    }
-
-    _conversation = _conversation!.copyWith(
-      rev: event.rev,
-      entries: [..._conversation!.entries, event.entry],
-    );
-    notifyListeners();
-  }
-
-  void _handleEntryDelta(ConversationEntryDeltaEvent event) {
-    if (_conversation?.conversation != event.conversation) return;
-
-    if (event.rev != _conversation!.rev + 1) {
-      _resyncConversation();
-      return;
-    }
-
-    final entries = List<Entry>.from(_conversation!.entries);
-    if (event.index < entries.length) {
-      entries[event.index] = entries[event.index].copyWith(
-        text: entries[event.index].text + event.delta,
-      );
-    }
-
-    _conversation = _conversation!.copyWith(rev: event.rev, entries: entries);
-    notifyListeners();
-  }
-
-  void _handleEntryUpdated(ConversationEntryUpdatedEvent event) {
-    if (_conversation?.conversation != event.conversation) return;
-
-    if (event.rev != _conversation!.rev + 1) {
-      _resyncConversation();
-      return;
-    }
-
-    final entries = List<Entry>.from(_conversation!.entries);
-    if (event.index < entries.length) {
-      entries[event.index] = entries[event.index].copyWith(
-        inProgress: event.inProgress ?? entries[event.index].inProgress,
-        incomplete: event.incomplete ?? entries[event.index].incomplete,
-        cancelled: event.cancelled ?? entries[event.index].cancelled,
-        note: event.note ?? entries[event.index].note,
-      );
-    }
-
-    _conversation = _conversation!.copyWith(rev: event.rev, entries: entries);
-    notifyListeners();
-  }
-
-  void _handlePhase(ConversationPhaseEvent event) {
-    if (_conversation?.conversation != event.conversation) return;
-
-    if (event.rev != _conversation!.rev + 1) {
-      _resyncConversation();
-      return;
-    }
-
-    _conversation = _conversation!.copyWith(rev: event.rev, phase: event.phase);
-    notifyListeners();
-  }
-
-  void _handleReasoningDelta(ConversationReasoningDeltaEvent event) {
-    if (_conversation?.conversation != event.conversation) return;
-
-    if (event.rev != _conversation!.rev + 1) {
-      _resyncConversation();
-      return;
-    }
-
-    final entries = List<Entry>.from(_conversation!.entries);
-    if (event.index < entries.length) {
-      entries[event.index] = entries[event.index].copyWith(
-        reasoning: entries[event.index].reasoning + event.delta,
-      );
-    }
-
-    _conversation = _conversation!.copyWith(rev: event.rev, entries: entries);
-    notifyListeners();
-  }
-
-  void _handleSaved(ConversationSavedEvent event) {
-    if (_conversation?.conversation != event.conversation) return;
-
-    if (event.rev != _conversation!.rev + 1) {
-      _resyncConversation();
-      return;
-    }
-
-    _conversation = _conversation!.copyWith(
-      rev: event.rev,
-      id: event.id,
-      title: event.title,
-    );
-    notifyListeners();
-  }
-
-  void _handleRenamed(ConversationRenamedEvent event) {
-    if (_conversation?.conversation != event.conversation) return;
-
-    if (event.rev != _conversation!.rev + 1) {
-      _resyncConversation();
-      return;
-    }
-
-    _conversation = _conversation!.copyWith(rev: event.rev, title: event.title);
-    notifyListeners();
-  }
-
-  void _handleClosed(ConversationClosedEvent event) {
-    // La conversación fue cerrada (deleted, replaced, shutdown)
-    // No hacemos nada aquí: los métodos ya actualizaron el estado
-  }
-
-  void _handleChatFinished(ChatFinishedEvent event) {
-    if (_conversation?.conversation != event.conversation) return;
-
-    _isSending = false;
-    _lastError = event.error;
-    notifyListeners();
-  }
-
-  void _handleConversationsChanged() {
-    // Recargar la lista de conversaciones
-    _rpc
-        .listConversations()
-        .then((summaries) {
-          _summaries = summaries;
-          notifyListeners();
-        })
-        .catchError((e) {
-          // Error al recargar, no hacemos nada
-        });
-  }
-
-  void _handleSettingsChanged(SettingsChangedEvent event) {
-    // Recargar el estado de la app
-    _rpc
-        .getStatus()
-        .then((status) {
-          _status = status;
-          notifyListeners();
-        })
-        .catchError((e) {
-          // Error al recargar, no hacemos nada
-        });
-  }
-
-  // Resincronización cuando nos saltamos un evento
-
-  void _resyncConversation() {
-    if (_conversation == null) return;
-
-    _rpc
-        .getConversation(_conversation!.conversation)
-        .then((snapshot) {
-          _conversation = snapshot;
-          notifyListeners();
-        })
-        .catchError((e) {
-          // Error al resincronizar
-          _handleError(e);
-        });
-  }
-
-  // Manejo de errores
-
-  void _handleError(Object error) {
-    if (error is RpcError) {
-      _lastError = ChatError(
-        kind: 'network',
-        httpStatus: 0,
-        message: error.displayMessage,
-      );
-      notifyListeners();
-    }
-  }
-
-  void clearError() {
-    _lastError = null;
-    notifyListeners();
   }
 
   @override
   void dispose() {
-    _eventSubscription?.cancel();
+    inputError.dispose();
+    toast.dispose();
+    restoreText.dispose();
     super.dispose();
   }
 }

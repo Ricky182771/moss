@@ -1,60 +1,47 @@
-/// Modelos de datos según PROTOCOL.md §5
+/// Modelo de la conversación de PROTOCOL.md §5.
 library;
 
-/// Tipo de entrada en la conversación
-enum EntryKind {
-  user,
-  assistant,
-  error,
-  notice,
-  sources;
+enum EntryKind { user, assistant, error, notice, sources }
 
-  factory EntryKind.fromString(String value) {
-    return EntryKind.values.firstWhere(
-      (e) => e.name == value,
-      orElse: () => EntryKind.assistant, // Degrada a assistant si no reconoce
-    );
-  }
-}
-
-/// Fuente de búsqueda web
+/// Fuente de una búsqueda web.
 class Source {
   final int n;
   final String title;
   final String url;
   final String? publishedDate;
 
-  Source({
+  const Source({
     required this.n,
     required this.title,
     required this.url,
     this.publishedDate,
   });
 
-  factory Source.fromJson(Map<String, dynamic> json) {
-    return Source(
-      n: json['n'] as int,
-      title: json['title'] as String,
-      url: json['url'] as String,
-      publishedDate: json['published_date'] as String?,
-    );
-  }
+  factory Source.fromJson(Map<String, dynamic> json) => Source(
+    n: json['n'] as int,
+    title: json['title'] as String,
+    url: json['url'] as String,
+    publishedDate: json['published_date'] as String?,
+  );
 }
 
-/// Entrada de la conversación
 class Entry {
   final EntryKind kind;
+
+  /// Markdown crudo.
   final String text;
   final bool inProgress;
   final bool incomplete;
   final bool cancelled;
   final String note;
+
+  /// Pensamiento del modelo (markdown crudo); "" si no hay.
   final String reasoning;
   final List<Source> sources;
 
-  Entry({
+  const Entry({
     required this.kind,
-    required this.text,
+    this.text = '',
     this.inProgress = false,
     this.incomplete = false,
     this.cancelled = false,
@@ -63,117 +50,89 @@ class Entry {
     this.sources = const [],
   });
 
-  factory Entry.fromJson(Map<String, dynamic> json) {
-    return Entry(
-      kind: EntryKind.fromString(json['kind'] as String),
-      text: json['text'] as String,
-      inProgress: json['in_progress'] as bool? ?? false,
-      incomplete: json['incomplete'] as bool? ?? false,
-      cancelled: json['cancelled'] as bool? ?? false,
-      note: json['note'] as String? ?? '',
-      reasoning: json['reasoning'] as String? ?? '',
-      sources:
-          (json['sources'] as List<dynamic>?)
-              ?.map((s) => Source.fromJson(s as Map<String, dynamic>))
-              .toList() ??
-          [],
-    );
-  }
+  factory Entry.fromJson(Map<String, dynamic> json) => Entry(
+    // Un tipo que esta versión no conoce se muestra como aviso.
+    kind: EntryKind.values.asNameMap()[json['kind']] ?? EntryKind.notice,
+    text: json['text'] as String? ?? '',
+    inProgress: json['in_progress'] as bool? ?? false,
+    incomplete: json['incomplete'] as bool? ?? false,
+    cancelled: json['cancelled'] as bool? ?? false,
+    note: json['note'] as String? ?? '',
+    reasoning: json['reasoning'] as String? ?? '',
+    sources: [
+      for (final s in json['sources'] as List? ?? const [])
+        Source.fromJson(s as Map<String, dynamic>),
+    ],
+  );
 
-  Entry copyWith({
-    EntryKind? kind,
-    String? text,
-    bool? inProgress,
-    bool? incomplete,
-    bool? cancelled,
-    String? note,
-    String? reasoning,
-    List<Source>? sources,
-  }) {
-    return Entry(
-      kind: kind ?? this.kind,
-      text: text ?? this.text,
-      inProgress: inProgress ?? this.inProgress,
-      incomplete: incomplete ?? this.incomplete,
-      cancelled: cancelled ?? this.cancelled,
-      note: note ?? this.note,
-      reasoning: reasoning ?? this.reasoning,
-      sources: sources ?? this.sources,
-    );
-  }
+  Entry copyWith({String? text, String? reasoning}) => Entry(
+    kind: kind,
+    text: text ?? this.text,
+    inProgress: inProgress,
+    incomplete: incomplete,
+    cancelled: cancelled,
+    note: note,
+    reasoning: reasoning ?? this.reasoning,
+    sources: sources,
+  );
 }
 
-/// Fase de la conversación
 enum Phase {
   idle,
   searching,
   thinking,
   streaming;
 
-  factory Phase.fromString(String value) {
-    return Phase.values.firstWhere(
-      (e) => e.name == value,
-      orElse: () => Phase.idle, // Degrada a idle si no reconoce
-    );
-  }
+  static Phase parse(Object? value) => Phase.values.asNameMap()[value] ?? idle;
 }
 
-/// Snapshot de la conversación
 class ConversationSnapshot {
+  /// Handle que asigna el servidor ("c1").
   final String conversation;
   final int rev;
+
+  /// null hasta el primer par guardado.
   final String? id;
+
+  /// "" hasta el primer par guardado.
   final String title;
-  final String createdAt;
-  final String lastModel;
   final Phase phase;
   final List<Entry> entries;
 
-  ConversationSnapshot({
+  const ConversationSnapshot({
     required this.conversation,
     required this.rev,
     this.id,
-    required this.title,
-    required this.createdAt,
-    required this.lastModel,
-    required this.phase,
-    required this.entries,
+    this.title = '',
+    this.phase = Phase.idle,
+    this.entries = const [],
   });
 
-  factory ConversationSnapshot.fromJson(Map<String, dynamic> json) {
-    return ConversationSnapshot(
-      conversation: json['conversation'] as String,
-      rev: json['rev'] as int,
-      id: json['id'] as String?,
-      title: json['title'] as String,
-      createdAt: json['created_at'] as String,
-      lastModel: json['last_model'] as String,
-      phase: Phase.fromString(json['phase'] as String),
-      entries: (json['entries'] as List<dynamic>)
-          .map((e) => Entry.fromJson(e as Map<String, dynamic>))
-          .toList(),
-    );
-  }
+  factory ConversationSnapshot.fromJson(Map<String, dynamic> json) =>
+      ConversationSnapshot(
+        conversation: json['conversation'] as String,
+        rev: json['rev'] as int,
+        id: json['id'] as String?,
+        title: json['title'] as String? ?? '',
+        phase: Phase.parse(json['phase']),
+        entries: [
+          for (final e in json['entries'] as List)
+            Entry.fromJson(e as Map<String, dynamic>),
+        ],
+      );
 
   ConversationSnapshot copyWith({
-    String? conversation,
-    int? rev,
+    required int rev,
     String? id,
     String? title,
-    String? createdAt,
-    String? lastModel,
     Phase? phase,
     List<Entry>? entries,
-  }) {
-    return ConversationSnapshot(
-      conversation: conversation ?? this.conversation,
-      rev: rev ?? this.rev,
-      id: id ?? this.id,
-      title: title ?? this.title,
-      createdAt: createdAt ?? this.createdAt,
-      lastModel: lastModel ?? this.lastModel,
-      phase: phase ?? this.phase,
-      entries: entries ?? this.entries,
-    );
-  }
+  }) => ConversationSnapshot(
+    conversation: conversation,
+    rev: rev,
+    id: id ?? this.id,
+    title: title ?? this.title,
+    phase: phase ?? this.phase,
+    entries: entries ?? this.entries,
+  );
 }

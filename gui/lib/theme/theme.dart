@@ -2,116 +2,182 @@ import 'package:flutter/material.dart';
 
 import 'colors.dart';
 
-/// Construye el ThemeData de Moss a partir de los tokens de color
+const _geist = 'Geist';
+const _mono = 'Geist Mono';
+
+/// Estilos de texto con los tamaños de las maquetas. Ninguna otra parte de la
+/// app escribe un tamaño de letra.
+class MossText extends ThemeExtension<MossText> {
+  /// Respuesta del modelo: 15/1.65.
+  final TextStyle answer;
+
+  /// Globo del usuario: 15/1.55.
+  final TextStyle bubble;
+
+  /// Caja del mensaje: 15/1.5.
+  final TextStyle input;
+
+  /// Botones de la barra y del encabezado: 14/500.
+  final TextStyle nav;
+
+  /// Fila de la lista de chats: 14.
+  final TextStyle row;
+
+  /// Grupo de la lista: 12/500, mayúsculas con 0.06em.
+  final TextStyle group;
+
+  /// Atajo junto a un botón (Ctrl+N): Geist Mono 12.
+  final TextStyle kbd;
+
+  /// `moss_` del logotipo: Geist Mono 20/500.
+  final TextStyle logotype;
+
+  /// Título del encabezado: 17/600.
+  final TextStyle title;
+
+  /// "¿En qué te ayudo?": 30/600.
+  final TextStyle heading;
+
+  /// Bloque de código: Geist Mono 13.5/1.6.
+  final TextStyle code;
+
+  /// Código en línea: Geist Mono 13.
+  final TextStyle inlineCode;
+
+  /// Lenguaje del bloque de código: Geist Mono 12.
+  final TextStyle codeLabel;
+
+  /// Botón chico (Copiar del bloque): 13.
+  final TextStyle smallButton;
+
+  /// Línea "Pensamiento · N palabras": 13.
+  final TextStyle thoughtSummary;
+
+  /// Texto del pensamiento: 14/1.6.
+  final TextStyle thought;
+
+  /// Ayuda bajo la caja y avisos: 12.
+  final TextStyle help;
+
+  /// Etiqueta de un botón de ícono: 12/500.
+  final TextStyle tooltip;
+
+  /// Aviso corto: 14.
+  final TextStyle toast;
+
+  const MossText({
+    required this.answer,
+    required this.bubble,
+    required this.input,
+    required this.nav,
+    required this.row,
+    required this.group,
+    required this.kbd,
+    required this.logotype,
+    required this.title,
+    required this.heading,
+    required this.code,
+    required this.inlineCode,
+    required this.codeLabel,
+    required this.smallButton,
+    required this.thoughtSummary,
+    required this.thought,
+    required this.help,
+    required this.tooltip,
+    required this.toast,
+  });
+
+  factory MossText.of(MossColors c) {
+    TextStyle geist(double size, {double? height, FontWeight? weight}) =>
+        TextStyle(
+          fontFamily: _geist,
+          fontSize: size,
+          height: height,
+          fontWeight: weight ?? FontWeight.w400,
+          color: c.text,
+        );
+    TextStyle mono(double size, {double? height, FontWeight? weight}) =>
+        geist(size, height: height, weight: weight).copyWith(fontFamily: _mono);
+
+    return MossText(
+      answer: geist(15, height: 1.65),
+      bubble: geist(15, height: 1.55),
+      input: geist(15, height: 1.5),
+      nav: geist(14, weight: FontWeight.w500),
+      row: geist(14),
+      group: geist(
+        12,
+        weight: FontWeight.w500,
+      ).copyWith(letterSpacing: 12 * 0.06, color: c.textMuted),
+      kbd: mono(12).copyWith(color: c.textMuted),
+      logotype: mono(
+        20,
+        weight: FontWeight.w500,
+      ).copyWith(letterSpacing: 20 * -0.02),
+      title: geist(17, weight: FontWeight.w600),
+      heading: geist(
+        30,
+        weight: FontWeight.w600,
+      ).copyWith(letterSpacing: 30 * -0.02),
+      code: mono(13.5, height: 1.6),
+      inlineCode: mono(13).copyWith(color: c.code),
+      codeLabel: mono(12).copyWith(color: c.textMuted),
+      smallButton: geist(13).copyWith(color: c.textMuted),
+      thoughtSummary: geist(13).copyWith(color: c.textMuted),
+      thought: geist(14, height: 1.6).copyWith(color: c.textMuted),
+      help: geist(12).copyWith(color: c.textMuted),
+      tooltip: geist(12, weight: FontWeight.w500).copyWith(color: c.background),
+      toast: geist(14).copyWith(color: c.background),
+    );
+  }
+
+  @override
+  MossText copyWith() => this;
+
+  @override
+  MossText lerp(ThemeExtension<MossText>? other, double t) =>
+      other is MossText && t >= 0.5 ? other : this;
+}
+
+extension MossTextExtension on BuildContext {
+  MossText get styles => Theme.of(this).extension<MossText>()!;
+}
+
+/// `ThemeData` armado a partir de los tokens.
 class MossTheme {
-  static ThemeData dark() {
-    return _buildTheme(MossColors.dark, Brightness.dark);
-  }
+  static ThemeData dark() => _build(MossColors.dark, Brightness.dark);
+  static ThemeData light() => _build(MossColors.light, Brightness.light);
 
-  static ThemeData light() {
-    return _buildTheme(MossColors.light, Brightness.light);
-  }
-
-  static ThemeData _buildTheme(MossColors colors, Brightness brightness) {
-    const geist = 'Geist';
-    const geistMono = 'Geist Mono';
-
+  static ThemeData _build(MossColors c, Brightness brightness) {
+    final text = MossText.of(c);
     return ThemeData(
       brightness: brightness,
-      extensions: [colors],
-      scaffoldBackgroundColor: colors.background,
-
-      // Fuentes
-      fontFamily: geist,
-
-      // Colores primarios
+      fontFamily: _geist,
+      extensions: [c, text],
+      scaffoldBackgroundColor: c.background,
       colorScheme: ColorScheme(
         brightness: brightness,
-        primary: colors.accent,
-        onPrimary: colors.textOnAccent,
-        secondary: colors.accent,
-        onSecondary: colors.textOnAccent,
-        error: colors.error,
-        onError: brightness == Brightness.dark
-            ? const Color(0xFF0F1411)
-            : const Color(0xFFFFFFFF),
-        surface: colors.field,
-        onSurface: colors.text,
+        primary: c.accent,
+        onPrimary: c.textOnAccent,
+        secondary: c.accent,
+        onSecondary: c.textOnAccent,
+        error: c.error,
+        onError: c.background,
+        surface: c.background,
+        onSurface: c.text,
       ),
-
-      // Estilos de texto según DISENO.md
-      textTheme: TextTheme(
-        // Respuesta del modelo: 15/1.65
-        bodyLarge: TextStyle(
-          fontFamily: geist,
-          fontSize: 15,
-          height: 1.65,
-          color: colors.text,
-        ),
-        // Globo del usuario: 15/1.55
-        bodyMedium: TextStyle(
-          fontFamily: geist,
-          fontSize: 15,
-          height: 1.55,
-          color: colors.text,
-        ),
-        // Barra lateral: 14
-        labelLarge: TextStyle(
-          fontFamily: geist,
-          fontSize: 14,
-          fontWeight: FontWeight.w500,
-          color: colors.text,
-        ),
-        // Grupos (mayúsculas, espaciado 0.06em): 12
-        labelMedium: TextStyle(
-          fontFamily: geist,
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
-          letterSpacing: 0.06 * 12, // 0.06em
-          color: colors.textMuted,
-        ),
-        // Ayuda: 12
-        labelSmall: TextStyle(
-          fontFamily: geist,
-          fontSize: 12,
-          color: colors.textMuted,
-        ),
-        // Título del encabezado: 17/600
-        titleMedium: TextStyle(
-          fontFamily: geist,
-          fontSize: 17,
-          fontWeight: FontWeight.w600,
-          color: colors.text,
-        ),
-        // Pensamiento resumen: 13
-        titleSmall: TextStyle(
-          fontFamily: geist,
-          fontSize: 13,
-          color: colors.textMuted,
-        ),
-        // Pensamiento texto: 14/1.6
-        bodySmall: TextStyle(
-          fontFamily: geist,
-          fontSize: 14,
-          height: 1.6,
-          color: colors.textMuted,
-        ),
-        // Código: 13.5 Geist Mono
-        displaySmall: TextStyle(
-          fontFamily: geistMono,
-          fontSize: 13.5,
-          height: 1.6,
-          color: colors.text,
-        ),
+      textTheme: TextTheme(bodyMedium: text.answer),
+      textSelectionTheme: TextSelectionThemeData(
+        cursorColor: c.accent,
+        selectionColor: c.accent.withValues(alpha: 0.35),
       ),
-
-      // Transiciones instantáneas para el cambio de tema
-      pageTransitionsTheme: const PageTransitionsTheme(
-        builders: {
-          TargetPlatform.linux: FadeUpwardsPageTransitionsBuilder(),
-          TargetPlatform.windows: FadeUpwardsPageTransitionsBuilder(),
-        },
+      scrollbarTheme: ScrollbarThemeData(
+        thumbColor: WidgetStatePropertyAll(c.border),
       ),
+      focusColor: c.accentSoft,
+      hoverColor: c.accentSoft,
+      splashFactory: NoSplash.splashFactory,
+      highlightColor: Colors.transparent,
     );
   }
 }

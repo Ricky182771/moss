@@ -66,9 +66,12 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
       flutter_controller_->engine()->ReloadSystemFonts();
       break;
     case WM_GETMINMAXINFO: {
+      // El mínimo es en píxeles lógicos; Windows lo pide en físicos.
+      const UINT dpi = GetDpiForWindow(hwnd);  // 0 si hwnd no es válido.
+      const double scale = (dpi != 0 ? dpi : 96) / 96.0;
       auto* info = reinterpret_cast<MINMAXINFO*>(lparam);
-      info->ptMinTrackSize.x = 720;
-      info->ptMinTrackSize.y = 520;
+      info->ptMinTrackSize.x = static_cast<LONG>(720 * scale);
+      info->ptMinTrackSize.y = static_cast<LONG>(520 * scale);
       break;
     }
   }

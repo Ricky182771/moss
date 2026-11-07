@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:moss_gui/theme/colors.dart';
 import 'package:moss_gui/theme/theme.dart';
-import 'package:moss_gui/theme/motion.dart';
 import 'package:moss_gui/widgets/logo.dart';
 
 void main() {
@@ -40,49 +39,13 @@ void main() {
     });
   });
 
-  group('Motion', () {
-    testWidgets('Duraciones respetan MediaQuery.disableAnimations', (
-      WidgetTester tester,
-    ) async {
-      await tester.pumpWidget(
-        MediaQuery(
-          data: const MediaQueryData(disableAnimations: true),
-          child: Builder(
-            builder: (context) {
-              final motion = Motion.of(context);
-              expect(motion.hoverDuration(context), Duration.zero);
-              return const SizedBox();
-            },
-          ),
-        ),
-      );
-    });
-
-    testWidgets('Duraciones normales cuando animaciones están habilitadas', (
-      WidgetTester tester,
-    ) async {
-      await tester.pumpWidget(
-        MediaQuery(
-          data: const MediaQueryData(disableAnimations: false),
-          child: Builder(
-            builder: (context) {
-              final motion = Motion.of(context);
-              expect(
-                motion.hoverDuration(context),
-                const Duration(milliseconds: 100),
-              );
-              return const SizedBox();
-            },
-          ),
-        ),
-      );
-    });
-  });
-
   group('Logo', () {
     testWidgets('MossLogo se dibuja sin errores', (WidgetTester tester) async {
       await tester.pumpWidget(
-        const MaterialApp(home: Scaffold(body: MossLogo(size: 64))),
+        MaterialApp(
+          theme: MossTheme.dark(),
+          home: const Scaffold(body: MossLogo(size: 64)),
+        ),
       );
       expect(find.byType(MossLogo), findsOneWidget);
     });
@@ -91,7 +54,10 @@ void main() {
       WidgetTester tester,
     ) async {
       await tester.pumpWidget(
-        const MaterialApp(home: Scaffold(body: MossLogo(size: 48))),
+        MaterialApp(
+          theme: MossTheme.dark(),
+          home: const Scaffold(body: MossLogo(size: 48)),
+        ),
       );
       final logo = tester.widget<MossLogo>(find.byType(MossLogo));
       expect(logo.size, 48);

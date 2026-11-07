@@ -1,79 +1,47 @@
-/// Textos de la interfaz en español
+/// Todos los textos propios de la GUI. Los que vienen de `moss-rpc` se
+/// muestran tal cual.
 class Strings {
+  static const appName = 'moss';
+
   // Barra lateral
-  static const String newChat = 'Nuevo chat';
-  static const String searchChats = 'Buscar chats';
-  static const String settings = 'Configuración';
+  static const newChat = 'Nuevo chat';
+  static const newChatKey = 'Ctrl+N';
+  static const chats = 'Chats';
+  static const withWebSearch = 'Con búsqueda web';
 
   // Encabezado
-  static const String hideSidebar = 'Ocultar barra lateral';
-  static const String showSidebar = 'Mostrar barra lateral';
-  static const String export = 'Exportar';
+  static const hideSidebar = 'Ocultar barra lateral (Ctrl+B)';
+  static const showSidebar = 'Mostrar barra lateral (Ctrl+B)';
+  static const export = 'Exportar';
 
-  // Menú de conversación
-  static const String rename = 'Renombrar';
-  static const String delete = 'Borrar…';
-  static const String moreOptions = 'Más opciones';
-  static const String moreOptionsOf = 'Más opciones de';
+  // Chat
+  static const emptyPrompt = '¿En qué te ayudo?';
+  static const searching = 'Buscando en la web…';
+  static const thinking = 'Pensando…';
+  static String thoughtSummary(String count, bool one) =>
+      'Pensamiento · $count ${one ? 'palabra' : 'palabras'}';
+  static const cancelled = '(cancelada)';
+  static const incomplete = '(respuesta incompleta)';
+  static const sources = 'Fuentes';
+  static const copy = 'Copiar';
+  static const copied = 'Copiado ✓';
 
-  // Chat vacío
-  static const String emptyChatPrompt = '¿En qué te ayudo?';
-  static const String goToSettings = 'Ir a Configuración';
-  static const String providerNotConfigured = 'Falta configurar el proveedor';
-  static const String providerNotConfiguredDetail =
-      'Agrega la URL base, la API key y el modelo para empezar a platicar.';
+  // Caja del mensaje
+  static const message = 'Mensaje';
+  static const messageHint = 'Escribe tu mensaje';
+  static const send = 'Enviar';
+  static const stop = 'Detener';
+  static const help = 'Enter envía · Shift+Enter nueva línea · / comandos';
+  static const modelPickerHint = 'Escribe /model <proveedor> <modelo>.';
 
-  // Caja de mensaje
-  static const String message = 'Mensaje';
-  static const String typeMessage = 'Escribe tu mensaje';
-  static const String placeholderMessage = '¿En qué te ayudo?';
-  static const String send = 'Enviar';
-  static const String buttonSend = 'Enviar';
-  static const String stop = 'Detener';
-  static const String buttonStop = 'Detener';
-  static const String options = 'Opciones';
-  static const String help =
-      'Enter envía · Shift+Enter nueva línea · / comandos';
-
-  // Fases
-  static const String searching = 'Buscando en la web…';
-  static const String phaseSearching = 'Buscando en la web…';
-  static const String thinking = 'Pensando…';
-  static const String phaseThinking = 'Pensando…';
-
-  // Chat vacío
-  static const String emptyConversation = '¿En qué te ayudo?';
-
-  // Pensamiento
-  static const String thought = 'Pensamiento';
-  static const String words = 'palabras';
-
-  // Código
-  static const String copy = 'Copiar';
-  static const String copied = 'Copiado ✓';
-
-  // Atajos
-  static const String ctrlN = 'Ctrl+N';
-  static const String ctrlK = 'Ctrl+K';
-  static const String ctrlB = 'Ctrl+B';
-  static const String f2 = 'F2';
-  static const String esc = 'Esc';
-
-  // Errores
-  static const String rpcNotFound = 'No se encontró moss-rpc';
-  static const String rpcNotFoundDetail =
-      'moss-rpc es de otra versión de Moss o no está instalado.';
-  static const String rpcSearchedAt = 'Se buscó en:';
-  static const String rpcVersionMismatch =
-      'moss-rpc es de otra versión de Moss';
-  static const String rpcVersionMismatchDetail =
-      'Actualiza la aplicación para que coincidan las versiones.';
-  static const String retry = 'Reintentar';
-
-  // Avisos
-  static const String exportedTo = 'Conversación exportada a';
-  static const String copiedBlock = 'Copiado';
-
-  // Accesibilidad
-  static const String withWebSearch = 'Con búsqueda web';
+  // moss-rpc
+  static const rpcNotFound = 'No se encontró moss-rpc';
+  static const rpcCannotStart = 'moss-rpc no arrancó';
+  static const rpcOtherVersion = 'moss-rpc es de otra versión de Moss';
+  static const rpcOtherVersionDetail =
+      'Instala la app y moss-rpc de la misma versión.';
+  static const rpcSearchedAt = 'Se buscó en';
+  static const rpcStderr = 'Últimas líneas de moss-rpc';
+  static const rpcDisconnected = 'moss-rpc se cerró.';
+  static const retry = 'Reintentar';
 }

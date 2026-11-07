@@ -1,77 +1,58 @@
 import 'package:flutter/material.dart';
 
-/// Logo de Moss: "m" con cursor de bloque
+import '../theme/colors.dart';
+
+/// Logo de Moss: la "m" con el cursor de bloque, del SVG de DISENO.md
+/// (64×64, trazo 7, puntas redondas).
 class MossLogo extends StatelessWidget {
   final double size;
-  final Color? color;
 
-  const MossLogo({super.key, this.size = 28, this.color});
+  const MossLogo({super.key, this.size = 28});
 
   @override
   Widget build(BuildContext context) {
-    final logoColor = color ?? const Color(0xFF8DBF5F);
-    return CustomPaint(
-      size: Size(size, size),
-      painter: _MossLogoPainter(logoColor),
+    return ExcludeSemantics(
+      child: CustomPaint(
+        size: Size.square(size),
+        painter: _LogoPainter(context.colors.accent),
+      ),
     );
   }
 }
 
-class _MossLogoPainter extends CustomPainter {
+class _LogoPainter extends CustomPainter {
   final Color color;
 
-  _MossLogoPainter(this.color);
+  _LogoPainter(this.color);
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
+    canvas.scale(size.width / 64);
+    final stroke = Paint()
       ..color = color
       ..style = PaintingStyle.stroke
-      ..strokeWidth = size.width * (7.0 / 64.0)
+      ..strokeWidth = 7
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
-
-    final scale = size.width / 64.0;
-
-    // Primera "m": M8 48V30a9 9 0 0 1 18 0v18
-    final path1 = Path()
-      ..moveTo(8 * scale, 48 * scale)
-      ..lineTo(8 * scale, 30 * scale)
-      ..arcToPoint(
-        Offset(26 * scale, 30 * scale),
-        radius: Radius.circular(9 * scale),
-        clockwise: false,
-      )
-      ..lineTo(26 * scale, 48 * scale);
-
-    // Segunda "m": M26 30a9 9 0 0 1 18 0v18
-    final path2 = Path()
-      ..moveTo(26 * scale, 30 * scale)
-      ..arcToPoint(
-        Offset(44 * scale, 30 * scale),
-        radius: Radius.circular(9 * scale),
-        clockwise: false,
-      )
-      ..lineTo(44 * scale, 48 * scale);
-
-    canvas.drawPath(path1, paint);
-    canvas.drawPath(path2, paint);
-
-    // Cursor: rect x=49 y=39 width=10 height=10 rx=1.5
-    final rectPaint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
-
-    final rect = RRect.fromRectAndRadius(
-      Rect.fromLTWH(49 * scale, 39 * scale, 10 * scale, 10 * scale),
-      Radius.circular(1.5 * scale),
+    // M8 48V30a9 9 0 0 1 18 0v18M26 30a9 9 0 0 1 18 0v18 (sweep 1 = horario).
+    final m = Path()
+      ..moveTo(8, 48)
+      ..lineTo(8, 30)
+      ..arcToPoint(const Offset(26, 30), radius: const Radius.circular(9))
+      ..lineTo(26, 48)
+      ..moveTo(26, 30)
+      ..arcToPoint(const Offset(44, 30), radius: const Radius.circular(9))
+      ..lineTo(44, 48);
+    canvas.drawPath(m, stroke);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        const Rect.fromLTWH(49, 39, 10, 10),
+        const Radius.circular(1.5),
+      ),
+      Paint()..color = color,
     );
-
-    canvas.drawRRect(rect, rectPaint);
   }
 
   @override
-  bool shouldRepaint(_MossLogoPainter oldDelegate) {
-    return oldDelegate.color != color;
-  }
+  bool shouldRepaint(_LogoPainter old) => old.color != color;
 }

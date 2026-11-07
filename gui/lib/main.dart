@@ -1,18 +1,22 @@
+import 'dart:io';
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
-import 'theme/theme.dart';
-import 'screens/chat_screen.dart';
-import 'state/app_state.dart';
 import 'rpc/client.dart';
-import 'rpc/moss_rpc.dart';
+import 'screens/chat_screen.dart';
+import 'screens/error_screen.dart';
+import 'state/app_state.dart';
+import 'strings.dart';
+import 'theme/theme.dart';
 
-void main() {
-  runApp(const MossApp());
+void main(List<String> args) {
+  runApp(MossApp(args: args));
 }
 
 class MossApp extends StatelessWidget {
-  const MossApp({super.key});
+  final List<String> args;
+  const MossApp({super.key, this.args = const []});
 
   @override
   Widget build(BuildContext context) {
@@ -21,89 +25,93 @@ class MossApp extends StatelessWidget {
       theme: MossTheme.light(),
       darkTheme: MossTheme.dark(),
       themeMode: ThemeMode.system,
-      home: const SplashScreen(),
+      // DISENO.md: el cambio de tema es instantáneo.
+      themeAnimationDuration: Duration.zero,
       debugShowCheckedModeBanner: false,
+      home: Boot(args: args),
     );
   }
 }
 
-/// Pantalla de carga que inicializa el cliente RPC
-class SplashScreen extends StatefulWidget {
-  const SplashScreen({super.key});
+/// Busca y arranca `moss-rpc`; muestra el chat o la pantalla de error.
+class Boot extends StatefulWidget {
+  final List<String> args;
+  const Boot({super.key, required this.args});
 
   @override
-  State<SplashScreen> createState() => _SplashScreenState();
+  State<Boot> createState() => _BootState();
 }
 
-class _SplashScreenState extends State<SplashScreen> {
-  String? _error;
+class _BootState extends State<Boot> {
+  final _stderr = StderrBuffer();
+  late final RpcLocation _location = locateRpc(
+    widget.args,
+    Platform.resolvedExecutable,
+    windows: Platform.isWindows,
+    exists: (p) => File(p).existsSync(),
+  );
+  AppState? _app;
+  RpcErrorScreen? _error;
+  late final AppLifecycleListener _lifecycle;
 
   @override
   void initState() {
     super.initState();
-    _initialize();
+    // Al cerrar la ventana: shutdown, exit y kill a los 3 s.
+    _lifecycle = AppLifecycleListener(
+      onExitRequested: () async {
+        await _app?.close();
+        return AppExitResponse.exit;
+      },
+    );
+    _start();
   }
 
-  Future<void> _initialize() async {
+  Future<void> _start() async {
+    if (!_location.found) return _fail(Strings.rpcNotFound);
+    RpcClient? client;
     try {
-      // TODO: Buscar moss-rpc (--rpc junto al ejecutable, no en PATH)
-      // Por ahora usamos un path de ejemplo
-      final client = RpcClient('moss-rpc');
-      final rpc = MossRpc(client);
-
-      await client.start(clientName: 'moss-gui', clientVersion: '0.1.0');
-
-      final appState = AppState(rpc);
-      await appState.loadInitialState();
-
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (_) => ChangeNotifierProvider.value(
-              value: appState,
-              child: const ChatScreen(),
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = e.toString();
-        });
-      }
+      client = await RpcClient.spawn(_location.path, _stderr);
+      final init = await client.initialize();
+      final app = AppState(
+        client,
+        reconnect: () => RpcClient.spawn(_location.path, _stderr),
+      );
+      await app.load(init['conversation'] as String);
+      if (mounted) setState(() => _app = app);
+    } on RpcStartError catch (e) {
+      await client?.close(); // Que no quede huérfano.
+      e.otherVersion
+          ? _fail(Strings.rpcOtherVersion, Strings.rpcOtherVersionDetail)
+          : _fail(Strings.rpcCannotStart, e.detail);
+    } on Object catch (e) {
+      await client?.close();
+      _fail(Strings.rpcCannotStart, '$e');
     }
+  }
+
+  void _fail(String title, [String? detail]) {
+    if (!mounted) return;
+    setState(
+      () => _error = RpcErrorScreen(
+        title: title,
+        detail: detail,
+        path: _location.path,
+        stderr: _stderr.lines,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _lifecycle.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_error != null) {
-      return Scaffold(
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.error_outline, size: 64, color: Colors.red),
-                const SizedBox(height: 24),
-                Text(
-                  'Error al inicializar',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  _error!,
-                  style: Theme.of(context).textTheme.bodyMedium,
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    if (_error case final error?) return error;
+    if (_app case final app?) return ChatScreen(app);
+    return Material(color: Theme.of(context).scaffoldBackgroundColor);
   }
 }

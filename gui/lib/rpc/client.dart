@@ -5,263 +5,174 @@ import 'dart:io';
 import 'package:json_rpc_2/json_rpc_2.dart' as rpc;
 import 'package:stream_channel/stream_channel.dart';
 
+import '../theme/motion.dart';
 import 'errors.dart';
 
-/// Cliente RPC para moss-rpc según PROTOCOL.md
+/// La versión de `pubspec.yaml` (una prueba vigila que coincidan).
+const kClientVersion = '0.1.0';
+const kProtocolVersion = 1;
+
+/// Dónde se buscó `moss-rpc` y si está.
+class RpcLocation {
+  final String path;
+  final bool found;
+  const RpcLocation(this.path, {required this.found});
+}
+
+/// `--rpc=<ruta>` o, si no, junto al ejecutable de la app. Nunca en el `PATH`.
+RpcLocation locateRpc(
+  List<String> args,
+  String resolvedExecutable, {
+  required bool windows,
+  required bool Function(String path) exists,
+}) {
+  final flag = args.where((a) => a.startsWith('--rpc=')).lastOrNull;
+  final String path;
+  if (flag != null) {
+    path = flag.substring('--rpc='.length);
+  } else {
+    final sep = windows ? r'\' : '/';
+    final dir = resolvedExecutable.substring(
+      0,
+      resolvedExecutable.lastIndexOf(sep) + 1,
+    );
+    path = '$dir${windows ? 'moss-rpc.exe' : 'moss-rpc'}';
+  }
+  return RpcLocation(path, found: exists(path));
+}
+
+/// Las últimas ~200 líneas de stderr de `moss-rpc`.
+class StderrBuffer {
+  static const max = 200;
+  final lines = <String>[];
+
+  void add(String line) {
+    lines.add(line);
+    if (lines.length > max) lines.removeAt(0);
+  }
+}
+
+/// `moss-rpc` no sirve: no arrancó o es de otra versión.
+class RpcStartError implements Exception {
+  final bool otherVersion;
+
+  /// `data.message` de `StartupFailed`, o la excepción al arrancar.
+  final String? detail;
+  const RpcStartError({this.otherVersion = false, this.detail});
+}
+
+/// JSON-RPC sobre las líneas de un canal. En producción, el de un proceso hijo
+/// ([spawn]); en las pruebas, uno en memoria con un proceso falso.
 class RpcClient {
-  Process? _process;
-  rpc.Peer? _peer;
-  final String executablePath;
-  final List<String> _stderrLines = [];
-  static const int _maxStderrLines = 200;
+  final rpc.Peer _peer;
+  final Future<int> _exitCode;
+  final void Function() _kill;
 
-  RpcClient(this.executablePath);
+  RpcClient(
+    StreamChannel<String> channel, {
+    required this._exitCode,
+    required this._kill,
+  }) : _peer = rpc.Peer(channel);
 
-  /// Búfer de stderr (últimas ~200 líneas)
-  List<String> get stderrLines => List.unmodifiable(_stderrLines);
-
-  /// Arranca moss-rpc y realiza initialize
-  Future<InitializeResult> start({
-    required String clientName,
-    required String clientVersion,
-  }) async {
-    // Arrancar el proceso
+  static Future<RpcClient> spawn(String path, StderrBuffer stderr) async {
+    final Process proc;
     try {
-      _process = await Process.start(
-        executablePath,
-        [],
-        mode: ProcessStartMode.normal,
-      );
-    } catch (e) {
-      throw RpcError(code: -1, message: 'No se pudo arrancar moss-rpc: $e');
+      proc = await Process.start(path, const []);
+    } on ProcessException catch (e) {
+      throw RpcStartError(detail: e.message);
     }
-
-    // Capturar stderr
-    _process!.stderr
+    // Si moss-rpc muere, escribir en el pipe falla; lo avisa `done`.
+    proc.stdin.done.ignore();
+    proc.stderr
         .transform(utf8.decoder)
         .transform(const LineSplitter())
-        .listen((line) {
-          _stderrLines.add(line);
-          if (_stderrLines.length > _maxStderrLines) {
-            _stderrLines.removeAt(0);
-          }
-        });
-
-    // Crear el peer sobre stdin/stdout
-    final stdoutStream = _process!.stdout
+        .listen(stderr.add);
+    final out = StreamController<String>();
+    // Siempre '\n', también en Windows.
+    out.stream.listen(
+      (line) => proc.stdin.add(utf8.encode('$line\n')),
+      onDone: () => proc.stdin.close().ignore(),
+    );
+    final lines = proc.stdout
         .transform(utf8.decoder)
         .transform(const LineSplitter());
-
-    final stdinSink = StreamController<String>();
-    stdinSink.stream.listen(
-      (line) {
-        _process!.stdin.add(utf8.encode('$line\n'));
-      },
-      onError: (error) {
-        // Error al escribir en stdin: cerrar el sink
-        stdinSink.close();
-      },
+    return RpcClient(
+      StreamChannel(lines, out.sink),
+      exitCode: proc.exitCode,
+      kill: proc.kill,
     );
+  }
 
-    final channel = StreamChannel(stdoutStream, stdinSink.sink);
+  /// Se completa cuando el canal se cierra (el proceso salió o se cayó).
+  Future<void> get done => _peer.done;
+  bool get isClosed => _peer.isClosed;
 
-    _peer = rpc.Peer(channel);
-    _peer!.listen();
+  /// Registra los eventos que conoce y, para los demás, un fallback que los
+  /// ignora. Antes de [initialize].
+  void onEvents(
+    Iterable<String> methods,
+    void Function(String method, Map<String, dynamic> params) handler,
+  ) {
+    for (final m in methods) {
+      _peer.registerMethod(
+        m,
+        (rpc.Parameters p) => handler(m, p.asMap.cast<String, dynamic>()),
+      );
+    }
+    _peer.registerFallback((_) {});
+  }
 
-    // initialize
+  /// `initialize`; lanza [RpcStartError] si no sirve. Devuelve el resultado.
+  Future<Map<String, dynamic>> initialize() async {
+    unawaited(_peer.listen());
     try {
-      final result = await _peer!.sendRequest('initialize', {
-        'protocol_version': 1,
-        'client': {'name': clientName, 'version': clientVersion},
+      final r = await request('initialize', {
+        'protocol_version': kProtocolVersion,
+        'client': {'name': 'moss-gui', 'version': kClientVersion},
       });
+      if (r['protocol_version'] != kProtocolVersion) {
+        throw const RpcStartError(otherVersion: true);
+      }
+      return r;
+    } on RpcError catch (e) {
+      if (e.code == RpcError.protocolMismatch) {
+        throw const RpcStartError(otherVersion: true);
+      }
+      throw RpcStartError(detail: e.displayMessage);
+    } on StateError {
+      throw const RpcStartError(); // Se cerró antes de responder.
+    }
+  }
 
-      return InitializeResult.fromJson(result as Map<String, dynamic>);
+  Future<Map<String, dynamic>> request(
+    String method, [
+    Map<String, dynamic> params = const {},
+  ]) async {
+    try {
+      final r = await _peer.sendRequest(method, params);
+      return (r as Map).cast<String, dynamic>();
     } on rpc.RpcException catch (e) {
       throw RpcError(
         code: e.code,
         message: e.message,
-        data: e.data as Map<String, dynamic>?,
+        data: (e.data as Map?)?.cast<String, dynamic>(),
       );
     }
   }
 
-  /// Cierra el cliente (shutdown, exit, kill si no responde)
+  /// `shutdown`, `exit` y `kill` si no sale en 3 s. Nunca queda huérfano.
   Future<void> close() async {
-    if (_peer == null || _process == null) {
-      return;
-    }
-
+    final killer = Timer(Motion.rpcExit, _kill);
     try {
-      // shutdown
-      await _peer!
-          .sendRequest('shutdown', {})
-          .timeout(const Duration(seconds: 3), onTimeout: () => null);
-
-      // exit (notificación)
-      _peer!.sendNotification('exit');
-
-      // Esperar a que termine o matarlo
-      await _process!.exitCode.timeout(
-        const Duration(seconds: 3),
-        onTimeout: () {
-          _process!.kill();
-          return -1;
-        },
-      );
-
-      await _peer!.close();
-    } catch (e) {
-      // Si falla el cierre graceful, matar el proceso
-      _process!.kill();
+      if (!_peer.isClosed) {
+        await _peer.sendRequest('shutdown', const {});
+        _peer.sendNotification('exit');
+      }
+    } catch (_) {
+      // Ya se cerró o se cayó: solo queda esperar a que salga.
     }
-
-    _peer = null;
-    _process = null;
-  }
-
-  /// Envía una petición y devuelve el resultado
-  Future<dynamic> sendRequest(String method, [dynamic params]) async {
-    if (_peer == null) {
-      throw RpcError(
-        code: RpcError.notInitialized,
-        message: 'Cliente no inicializado',
-      );
-    }
-
-    try {
-      return await _peer!.sendRequest(method, params ?? {});
-    } on rpc.RpcException catch (e) {
-      throw RpcError(
-        code: e.code,
-        message: e.message,
-        data: e.data as Map<String, dynamic>?,
-      );
-    }
-  }
-
-  /// Envía una notificación (sin esperar respuesta)
-  void sendNotification(String method, [dynamic params]) {
-    if (_peer == null) {
-      throw RpcError(
-        code: RpcError.notInitialized,
-        message: 'Cliente no inicializado',
-      );
-    }
-
-    _peer!.sendNotification(method, params ?? {});
-  }
-
-  /// Registra un manejador de eventos
-  void registerMethod(String method, void Function(rpc.Parameters) callback) {
-    if (_peer == null) {
-      throw RpcError(
-        code: RpcError.notInitialized,
-        message: 'Cliente no inicializado',
-      );
-    }
-
-    _peer!.registerMethod(method, callback);
-  }
-
-  /// Registra un manejador para eventos desconocidos
-  void registerFallback(void Function(rpc.Parameters) callback) {
-    if (_peer == null) {
-      throw RpcError(
-        code: RpcError.notInitialized,
-        message: 'Cliente no inicializado',
-      );
-    }
-
-    _peer!.registerFallback(callback);
-  }
-}
-
-/// Resultado de initialize según PROTOCOL.md §3
-class InitializeResult {
-  final int protocolVersion;
-  final ServerInfo server;
-  final String platform;
-  final bool portable;
-  final String conversation;
-  final Paths paths;
-  final bool ready;
-  final String? problem;
-  final List<String> warnings;
-  final Capabilities capabilities;
-
-  InitializeResult({
-    required this.protocolVersion,
-    required this.server,
-    required this.platform,
-    required this.portable,
-    required this.conversation,
-    required this.paths,
-    required this.ready,
-    this.problem,
-    required this.warnings,
-    required this.capabilities,
-  });
-
-  factory InitializeResult.fromJson(Map<String, dynamic> json) {
-    return InitializeResult(
-      protocolVersion: json['protocol_version'] as int,
-      server: ServerInfo.fromJson(json['server'] as Map<String, dynamic>),
-      platform: json['platform'] as String,
-      portable: json['portable'] as bool,
-      conversation: json['conversation'] as String,
-      paths: Paths.fromJson(json['paths'] as Map<String, dynamic>),
-      ready: json['ready'] as bool,
-      problem: json['problem'] as String?,
-      warnings: (json['warnings'] as List<dynamic>).cast<String>(),
-      capabilities: Capabilities.fromJson(
-        json['capabilities'] as Map<String, dynamic>,
-      ),
-    );
-  }
-}
-
-class ServerInfo {
-  final String name;
-  final String version;
-
-  ServerInfo({required this.name, required this.version});
-
-  factory ServerInfo.fromJson(Map<String, dynamic> json) {
-    return ServerInfo(
-      name: json['name'] as String,
-      version: json['version'] as String,
-    );
-  }
-}
-
-class Paths {
-  final String config;
-  final String conversations;
-  final String? downloads;
-
-  Paths({required this.config, required this.conversations, this.downloads});
-
-  factory Paths.fromJson(Map<String, dynamic> json) {
-    return Paths(
-      config: json['config'] as String,
-      conversations: json['conversations'] as String,
-      downloads: json['downloads'] as String?,
-    );
-  }
-}
-
-class Capabilities {
-  final bool search;
-  final List<String> addons;
-  final String? service;
-
-  Capabilities({required this.search, required this.addons, this.service});
-
-  factory Capabilities.fromJson(Map<String, dynamic> json) {
-    return Capabilities(
-      search: json['search'] as bool,
-      addons: (json['addons'] as List<dynamic>).cast<String>(),
-      service: json['service'] as String?,
-    );
+    await _exitCode;
+    killer.cancel();
+    await _peer.close();
   }
 }
