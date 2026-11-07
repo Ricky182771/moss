@@ -480,22 +480,27 @@ class SecretField extends StatefulWidget {
 
 class _SecretFieldState extends State<SecretField> {
   final _focus = FocusNode();
+  final _eye = FocusNode();
   bool _reveal = false;
 
   @override
   void initState() {
     super.initState();
     _focus.addListener(_blur);
+    _eye.addListener(_blur);
   }
 
-  /// Al salir del campo (el botón de ver no se lleva el foco) se tapa.
+  /// Al salir del campo (y de su botón de ver) se tapa.
   void _blur() {
-    if (!_focus.hasFocus && _reveal) setState(() => _reveal = false);
+    if (!_focus.hasFocus && !_eye.hasFocus && _reveal) {
+      setState(() => _reveal = false);
+    }
   }
 
   @override
   void dispose() {
     _focus.dispose();
+    _eye.dispose();
     super.dispose();
   }
 
@@ -504,16 +509,13 @@ class _SecretFieldState extends State<SecretField> {
     final c = context.colors;
     final s = context.styles;
     final enabled = widget.enabled && widget.lockedBy == null;
-    final eye = ExcludeFocus(
+    final eye = Padding(
+      padding: const EdgeInsets.only(right: 2),
       child: IconAction(
-        size: 36,
+        size: 40,
+        focusNode: _eye,
         label: _reveal ? Strings.hideKey : Strings.showKey,
-        onPressed: enabled
-            ? () {
-                setState(() => _reveal = !_reveal);
-                _focus.requestFocus();
-              }
-            : null,
+        onPressed: enabled ? () => setState(() => _reveal = !_reveal) : null,
         icon: Icon(
           _reveal ? Icons.visibility_off_rounded : Icons.visibility_rounded,
           size: 18,

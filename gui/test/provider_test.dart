@@ -97,10 +97,66 @@ void main() {
     await tester.pump();
     expect(tester.widget<EditableText>(_keyField).obscureText, isFalse);
 
-    await tester.tap(find.text(Strings.providerTitle));
-    FocusManager.instance.primaryFocus?.unfocus();
+    // Tab lleva al botón de ver: se sigue viendo. Otro Tab sale: se tapa.
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+    expect(tester.widget<EditableText>(_keyField).obscureText, isFalse);
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
     await tester.pump();
     expect(tester.widget<EditableText>(_keyField).obscureText, isTrue);
+  });
+
+  testWidgets('la key a la vista no se copia ni se corta', (tester) async {
+    final copied = <Object?>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'Clipboard.setData') copied.add(call.arguments);
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+    await startApp(tester);
+    await _open(tester);
+    await tester.enterText(_keyField, _key);
+    await tester.tap(find.bySemanticsLabel(Strings.showKey));
+    await tester.pump();
+    await tester.tap(_keyField);
+    await tester.pump();
+    for (final k in [LogicalKeyboardKey.keyA, LogicalKeyboardKey.keyC]) {
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(k);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+    }
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyX);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+    expect(copied, isEmpty);
+    expect(tester.widget<EditableText>(_keyField).controller.text, _key);
+  });
+
+  testWidgets('el check va con retraso al escribir, no por tecla', (
+    tester,
+  ) async {
+    final (_, server) = await startApp(tester);
+    await _open(tester);
+    int checks() =>
+        server.methods.where((m) => m == 'settings.provider.check').length;
+    final before = checks();
+    await tester.enterText(_field(Strings.modelByHand), 'a');
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.enterText(_field(Strings.modelByHand), 'ab');
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(checks(), before);
+    await tester.pump(const Duration(milliseconds: 450));
+    expect(checks(), before + 1);
   });
 
   testWidgets('guardar una key: va en el borrador y luego no queda en el '
@@ -269,6 +325,39 @@ void main() {
     await tester.pump();
     await tester.pump();
     expect(server.methods, contains(r'$/cancel'));
+  });
+
+  testWidgets('otro proveedor que no puede pedir modelos: \$/cancel y sin '
+      'la lista anterior', (tester) async {
+    var canRequest = true;
+    final (_, server) = await startApp(
+      tester,
+      handlers: {
+        'models.list': (_) => noReply,
+        'settings.provider.check': (_) =>
+            providerCheck(canRequestModels: canRequest),
+      },
+    );
+    await tester.sendKeyEvent(LogicalKeyboardKey.f2);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    final pending = server.requests.lastWhere(
+      (r) => r['method'] == 'models.list',
+    )['id'];
+    canRequest = false;
+    await tester.tap(_row('Google Gemini'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(
+      server.requests.where((r) => r['method'] == r'$/cancel').last['params'],
+      {'id': pending},
+    );
+    expect(find.text(Strings.loadingModels), findsNothing);
+    expect(
+      server.methods.where((m) => m == 'models.list').length,
+      1,
+      reason: 'sin can_request_models no se piden',
+    );
   });
 
   testWidgets('modelos con error: su mensaje y escribir a mano', (

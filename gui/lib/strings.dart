@@ -149,6 +149,11 @@ class Strings {
   static const searchEnvHelp =
       'Si la variable CHAT_SEARCH_API_KEY está definida, se usa esa y aquí no '
       'se puede cambiar.';
+  static const modelsFailed = 'No se pudieron pedir los modelos.';
+  static const envBaseUrl = 'CHAT_BASE_URL';
+  static const envModel = 'CHAT_MODEL';
+  static const envApiKey = 'CHAT_API_KEY';
+  static const envSearchKey = 'CHAT_SEARCH_API_KEY';
   static const notANumber = 'Escribe un número.';
   static const showKey = 'Ver lo que escribes';
   static const hideKey = 'Ocultar lo que escribes';

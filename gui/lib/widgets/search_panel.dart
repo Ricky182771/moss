@@ -60,7 +60,7 @@ class SearchPanel extends StatelessWidget {
             SecretField(
               label: Strings.newApiKey,
               controller: section.apiKey,
-              lockedBy: section.locked ? 'CHAT_SEARCH_API_KEY' : null,
+              lockedBy: section.locked ? Strings.envSearchKey : null,
               help: Strings.searchEnvHelp,
               error: section.error,
               onChanged: (_) => section.edited(),

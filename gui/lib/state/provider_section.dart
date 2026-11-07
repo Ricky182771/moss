@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 
 import '../rpc/errors.dart';
+import '../strings.dart';
 import '../theme/motion.dart';
 import 'settings_state.dart';
 
@@ -144,7 +145,21 @@ class ProviderSection extends SettingsSection {
     _reset();
   }
 
+  /// Otro proveedor: la lista del anterior se cancela y se olvida.
+  void _clearModels() {
+    if (_pendingModels case final id?) rpc.cancel(id);
+    _pendingModels = null;
+    _generation++;
+    _slow?.cancel();
+    models = null;
+    modelsError = null;
+    _modelsFor = null;
+    loadingVisible = false;
+    canRequestModels = false;
+  }
+
   void _reset() {
+    if (provider != saved.provider) _clearModels();
     provider = saved.provider;
     name.text = saved.name;
     baseUrl.text = saved.baseUrl;
@@ -181,6 +196,7 @@ class ProviderSection extends SettingsSection {
       return;
     }
     final p = row(id);
+    _clearModels();
     provider = id;
     name.text = p?.name ?? '';
     baseUrl.text = p?.baseUrl ?? '';
@@ -191,6 +207,7 @@ class ProviderSection extends SettingsSection {
   }
 
   void addEndpoint() {
+    _clearModels();
     provider = newEndpoint;
     name.clear();
     baseUrl.clear();
@@ -286,8 +303,8 @@ class ProviderSection extends SettingsSection {
     } on RpcError catch (e) {
       if (e.code == RpcError.cancelled) return;
       failure = e.displayMessage;
-    } on Object catch (e) {
-      failure = '$e';
+    } on Object {
+      failure = Strings.modelsFailed; // Canal cerrado o respuesta rara.
     }
     if (generation != _generation || disposed) return;
     models = list;
@@ -331,7 +348,11 @@ class ProviderSection extends SettingsSection {
     try {
       await owner!.quietly(() async {
         await rpc.request('settings.endpoint.delete', {'id': id});
-        await refreshList();
+        try {
+          await refreshList();
+        } on RpcError {
+          // Ya se borró; `quietly` vuelve a pedir la sección después.
+        }
       });
       return null;
     } on RpcError catch (e) {

@@ -49,7 +49,6 @@ class _ProviderPanelState extends State<ProviderPanel> {
   @override
   Widget build(BuildContext context) {
     final s = context.styles;
-    final c = context.colors;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: 24,
@@ -61,20 +60,11 @@ class _ProviderPanelState extends State<ProviderPanel> {
           children: [
             _list(context),
             if (p.baseUrlLocked)
-              Text(Strings.lockedBy('CHAT_BASE_URL'), style: s.note),
+              Text(Strings.lockedBy(Strings.envBaseUrl), style: s.note),
           ],
         ),
         _chosen(context),
         _model(context),
-        if (p.error case final error?)
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            spacing: 8,
-            children: [
-              Icon(Icons.error_outline_rounded, size: 18, color: c.error),
-              Expanded(child: FieldMessage(error)),
-            ],
-          ),
       ],
     );
   }
@@ -175,7 +165,7 @@ class _ProviderPanelState extends State<ProviderPanel> {
     final row = p.row(p.provider);
     final isNew = p.provider == ProviderSection.newEndpoint;
     final inUse = p.provider == p.saved.provider;
-    final keyLock = p.keyLocked ? 'CHAT_API_KEY' : null;
+    final keyLock = p.keyLocked ? Strings.envApiKey : null;
     final status = inUse
         ? p.keyStatus
         : row?.keySaved ?? false
@@ -196,7 +186,7 @@ class _ProviderPanelState extends State<ProviderPanel> {
             label: Strings.baseUrl,
             controller: p.baseUrl,
             mono: true,
-            lockedBy: p.baseUrlLocked ? 'CHAT_BASE_URL' : null,
+            lockedBy: p.baseUrlLocked ? Strings.envBaseUrl : null,
             onChanged: (_) => p.edited(),
             help: p.hint ?? Strings.baseUrlHelp,
           ),
@@ -209,6 +199,9 @@ class _ProviderPanelState extends State<ProviderPanel> {
           onChanged: (_) => p.edited(),
         ),
         if (!p.isEndpoint && p.hint != null) Text(p.hint!, style: s.note),
+        // `check` da un solo error, sin decir de qué campo: va al final de
+        // lo que se edita, antes de Borrar.
+        FieldMessage(p.error),
         if (p.isEndpoint && !isNew && row != null)
           Container(
             padding: const EdgeInsets.only(top: 16),
@@ -364,7 +357,7 @@ class _ProviderPanelState extends State<ProviderPanel> {
           controller: p.model,
           mono: true,
           hint: Strings.typeModelName,
-          lockedBy: locked ? 'CHAT_MODEL' : null,
+          lockedBy: locked ? Strings.envModel : null,
           onChanged: (_) => p.edited(),
         ),
       ],
