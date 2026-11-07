@@ -80,7 +80,7 @@ Todos los pares de texto pasan 4.5:1.
 | Menú de Opciones y menú `⋯` | opacidad + escala 0.98 → 1 desde la esquina del botón | 140 ms (cierra en 100) |
 | Buscar chats (Ctrl+K) | el fondo se oscurece; la ventana aparece y sube 8 px | 180 ms |
 | Chat ↔ Configuración | fundido, sin deslizar | 160 ms |
-| Ocultar barra lateral (Ctrl+B) | el ancho | 200 ms |
+| Ocultar barra lateral (Ctrl+B) | el ancho | 200 ms (cierra en 160) |
 | Caja que crece a dos filas | la altura | 140 ms |
 | Tu mensaje al enviarlo | opacidad + sube 6 px | 160 ms |
 | **Texto del modelo llegando** | **cada palabra nueva aparece con opacidad 0 → 1** (ver abajo) | **120 ms** |

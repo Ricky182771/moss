@@ -20,6 +20,7 @@ class InputBox extends StatefulWidget {
 
 class _InputBoxState extends State<InputBox> {
   final _text = TextEditingController();
+  late final _busyOrText = Listenable.merge([widget.app, _text]);
   String _lastText = '';
 
   @override
@@ -133,7 +134,7 @@ class _InputBoxState extends State<InputBox> {
                     ),
                     // Solo cambia con la fase o al vaciarse la caja.
                     Select(
-                      listenable: Listenable.merge([app, _text]),
+                      listenable: _busyOrText,
                       select: () => (app.busy, _text.text.trim().isEmpty),
                       builder: (context, v) => v.$1
                           ? IconAction(

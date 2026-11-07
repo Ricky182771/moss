@@ -2,7 +2,8 @@ import 'package:flutter/widgets.dart';
 
 /// Como `ListenableBuilder`, pero reconstruye solo cuando cambia lo que
 /// devuelve [select] (con `==`). Así un trozo de respuesta no reconstruye la
-/// barra lateral ni la caja.
+/// barra lateral ni la caja. Lo elegido debe ser inmutable (o reemplazarse
+/// entero): una lista cambiada en su lugar es `==` a sí misma.
 class Select<T> extends StatefulWidget {
   final Listenable listenable;
   final T Function() select;
