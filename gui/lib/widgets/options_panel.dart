@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/settings.dart';
 import '../state/app_state.dart';
 import '../state/options_state.dart';
+import '../state/settings_state.dart';
 import '../strings.dart';
 import '../theme/colors.dart';
 import '../theme/motion.dart';
@@ -15,8 +16,8 @@ import 'popover.dart';
 const _rowExtent = 42.0;
 
 /// La ventana de Opciones (DISENO.md → Chat → Opciones): el modelo, con su
-/// proveedor, y el interruptor de la búsqueda web. El enlace a Configuración
-/// del modelo llega con Configuración (G3).
+/// proveedor, el interruptor de la búsqueda web y el enlace a Configuración
+/// del modelo.
 class OptionsPanel extends StatefulWidget {
   final AppState app;
 
@@ -262,6 +263,27 @@ class _OptionsPanelState extends State<OptionsPanel> {
             color: c.border,
           ),
           _searchSwitch(),
+          Pressable(
+            onPressed: () {
+              widget.onClose();
+              widget.app.openSettings(SettingsPage.model);
+            },
+            minHeight: 44,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Row(
+              spacing: 12,
+              children: [
+                Icon(Icons.tune_rounded, size: 18, color: c.textMuted),
+                Expanded(
+                  child: Text(
+                    Strings.modelTitle,
+                    style: s.nav.copyWith(color: c.accent),
+                  ),
+                ),
+                Icon(Icons.chevron_right_rounded, size: 18, color: c.textMuted),
+              ],
+            ),
+          ),
         ],
       );
     }
@@ -371,7 +393,10 @@ class _OptionsPanelState extends State<OptionsPanel> {
                 final p = _providers[i];
                 return _Row(
                   label: p.name,
-                  note: p.note,
+                  // Sin key no se elige aquí: la nota dice dónde agregarla.
+                  note: p.selectable || p.note.isEmpty
+                      ? p.note
+                      : Strings.addKeyIn(p.note),
                   selected: p.id == _state.shown,
                   highlighted: i == _highlight,
                   enabled: _enabled(i),
@@ -551,7 +576,15 @@ class _Row extends StatelessWidget {
                   style: enabled ? base : base.copyWith(color: c.textMuted),
                 ),
               ),
-              if (note.isNotEmpty) Text(note, style: s.help),
+              if (note.isNotEmpty)
+                Flexible(
+                  child: Text(
+                    note,
+                    style: s.help,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               if (selected)
                 Icon(Icons.check_rounded, size: 16, color: c.accent),
             ],
