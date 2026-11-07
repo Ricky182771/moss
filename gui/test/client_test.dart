@@ -99,6 +99,20 @@ void main() {
     expect(const RpcError(code: -1, message: 'x').displayMessage, 'x');
   });
 
+  testWidgets('initialize sin respuesta: kill a los 10 s', (tester) async {
+    final server = FakeServer(handlers: {'initialize': (_) => noReply});
+    Object? error;
+    server.client().initialize().catchError((Object e) {
+      error = e;
+      return <String, dynamic>{};
+    });
+    await tester.pump(const Duration(milliseconds: 9900));
+    expect((server.killed, error), (false, null));
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(server.killed, isTrue);
+    expect(error, isA<RpcStartError>().having((e) => e.timedOut, 't', true));
+  });
+
   test('cerrar: shutdown y exit, sin kill si sale', () async {
     final server = FakeServer();
     final client = server.client();

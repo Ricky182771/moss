@@ -81,9 +81,13 @@ class _BootState extends State<Boot> {
       if (mounted) setState(() => _app = app);
     } on RpcStartError catch (e) {
       await client?.close(); // Que no quede huérfano.
-      e.otherVersion
-          ? _fail(Strings.rpcOtherVersion, Strings.rpcOtherVersionDetail)
-          : _fail(Strings.rpcCannotStart, e.detail);
+      if (e.otherVersion) {
+        _fail(Strings.rpcOtherVersion, Strings.rpcOtherVersionDetail);
+      } else if (e.timedOut) {
+        _fail(Strings.rpcNotResponding);
+      } else {
+        _fail(Strings.rpcCannotStart, e.detail);
+      }
     } on Object catch (e) {
       await client?.close();
       _fail(Strings.rpcCannotStart, '$e');

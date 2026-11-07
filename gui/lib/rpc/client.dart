@@ -5,12 +5,19 @@ import 'dart:io';
 import 'package:json_rpc_2/json_rpc_2.dart' as rpc;
 import 'package:stream_channel/stream_channel.dart';
 
-import '../theme/motion.dart';
 import 'errors.dart';
 
 /// La versión de `pubspec.yaml` (una prueba vigila que coincidan).
 const kClientVersion = '0.1.0';
 const kProtocolVersion = 1;
+
+// Tiempos de espera del proceso, no animaciones: no van en motion.dart.
+
+/// `moss-rpc` arrancó pero no respondió `initialize`: se mata.
+const kInitializeTimeout = Duration(seconds: 10);
+
+/// PROTOCOL.md §3: `shutdown`, `exit` y `kill` si no sale en 3 s.
+const kExitTimeout = Duration(seconds: 3);
 
 /// Dónde se buscó `moss-rpc` y si está.
 class RpcLocation {
@@ -52,13 +59,20 @@ class StderrBuffer {
   }
 }
 
-/// `moss-rpc` no sirve: no arrancó o es de otra versión.
+/// `moss-rpc` no sirve: no arrancó, no respondió o es de otra versión.
 class RpcStartError implements Exception {
   final bool otherVersion;
 
+  /// No respondió `initialize` en [kInitializeTimeout]; ya se mató.
+  final bool timedOut;
+
   /// `data.message` de `StartupFailed`, o la excepción al arrancar.
   final String? detail;
-  const RpcStartError({this.otherVersion = false, this.detail});
+  const RpcStartError({
+    this.otherVersion = false,
+    this.timedOut = false,
+    this.detail,
+  });
 }
 
 /// JSON-RPC sobre las líneas de un canal. En producción, el de un proceso hijo
@@ -126,10 +140,17 @@ class RpcClient {
   Future<Map<String, dynamic>> initialize() async {
     unawaited(_peer.listen());
     try {
-      final r = await request('initialize', {
-        'protocol_version': kProtocolVersion,
-        'client': {'name': 'moss-gui', 'version': kClientVersion},
-      });
+      final r =
+          await request('initialize', {
+            'protocol_version': kProtocolVersion,
+            'client': {'name': 'moss-gui', 'version': kClientVersion},
+          }).timeout(
+            kInitializeTimeout,
+            onTimeout: () {
+              _kill();
+              throw const RpcStartError(timedOut: true);
+            },
+          );
       if (r['protocol_version'] != kProtocolVersion) {
         throw const RpcStartError(otherVersion: true);
       }
@@ -162,7 +183,7 @@ class RpcClient {
 
   /// `shutdown`, `exit` y `kill` si no sale en 3 s. Nunca queda huérfano.
   Future<void> close() async {
-    final killer = Timer(Motion.rpcExit, _kill);
+    final killer = Timer(kExitTimeout, _kill);
     try {
       if (!_peer.isClosed) {
         await _peer.sendRequest('shutdown', const {});

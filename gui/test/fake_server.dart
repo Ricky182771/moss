@@ -12,6 +12,9 @@ class FakeError implements Exception {
   const FakeError(this.code, this.message, [this.data]);
 }
 
+/// Resultado de un handler para no responder nunca (un `moss-rpc` colgado).
+const noReply = Object();
+
 /// `moss-rpc` falso sobre un canal en memoria, con un proceso falso.
 class FakeServer {
   final _channel = StreamChannelController<String>();
@@ -48,6 +51,7 @@ class FakeServer {
         final result = handler == null
             ? throw const FakeError(-32601, 'Method not found')
             : handler((msg['params'] as Map?)?.cast<String, dynamic>() ?? {});
+        if (identical(result, noReply)) return;
         _send({'id': msg['id'], 'result': result});
       } on FakeError catch (e) {
         _send({

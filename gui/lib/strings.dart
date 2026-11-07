@@ -37,6 +37,7 @@ class Strings {
   // moss-rpc
   static const rpcNotFound = 'No se encontró moss-rpc';
   static const rpcCannotStart = 'moss-rpc no arrancó';
+  static const rpcNotResponding = 'moss-rpc no respondió';
   static const rpcOtherVersion = 'moss-rpc es de otra versión de Moss';
   static const rpcOtherVersionDetail =
       'Instala la app y moss-rpc de la misma versión.';

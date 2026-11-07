@@ -164,6 +164,7 @@ class AppState extends ChangeNotifier {
       if (!identical(rpc, _rpc)) await rpc?.close(); // Que no quede huérfano.
       toast.value = Toast(switch (e) {
         RpcError() => e.displayMessage,
+        RpcStartError(timedOut: true) => Strings.rpcNotResponding,
         RpcStartError(:final detail) => detail ?? Strings.rpcCannotStart,
         _ => Strings.rpcCannotStart,
       });

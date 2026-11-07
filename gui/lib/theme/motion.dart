@@ -40,7 +40,4 @@ class Motion {
   static const Duration tooltipDelay = Duration(milliseconds: 400);
   static const Duration toastVisible = Duration(seconds: 4);
   static const Duration copiedVisible = Duration(seconds: 2);
-
-  /// PROTOCOL.md §3: `shutdown`, `exit` y `kill` si no sale en 3 s.
-  static const Duration rpcExit = Duration(seconds: 3);
 }
