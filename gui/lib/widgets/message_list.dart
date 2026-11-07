@@ -51,8 +51,12 @@ class _MessageListState extends State<MessageList> {
   final _views = <(Entry, Widget)>[];
 
   /// Las entradas desde aquí llegaron con la lista a la vista: tu mensaje
-  /// aparece al enviarlo; lo que ya estaba al abrir, no.
-  late int _firstNew = widget.conversation.entries.length;
+  /// aparece al enviarlo; lo que ya estaba al abrir, no. Un chat sin guardar
+  /// (sin `id`) se acaba de empezar: su primer mensaje también aparece.
+  late int _firstNew = _startOf(widget.conversation);
+
+  static int _startOf(ConversationSnapshot c) =>
+      c.id == null ? 0 : c.entries.length;
 
   Widget _view(int i, Entry e) {
     if (i < _views.length && identical(_views[i].$1, e)) return _views[i].$2;
@@ -85,7 +89,9 @@ class _MessageListState extends State<MessageList> {
     if (sentOrSwitched) _pinned = true;
     if (now.conversation != old.conversation.conversation) {
       _views.clear();
-      _firstNew = now.entries.length;
+      _firstNew = _startOf(now);
+    } else if (now.entries.length < _firstNew) {
+      _firstNew = now.entries.length; // Un resync la acortó.
     }
     if (_views.length > now.entries.length) {
       _views.removeRange(now.entries.length, _views.length);

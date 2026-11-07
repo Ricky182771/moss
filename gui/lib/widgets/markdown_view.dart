@@ -10,6 +10,7 @@ import '../strings.dart';
 import '../theme/colors.dart';
 import '../theme/motion.dart';
 import '../theme/theme.dart';
+import 'arriving_text.dart';
 import 'controls.dart';
 import 'indicators.dart';
 
@@ -222,46 +223,48 @@ class _CodeBlockState extends State<CodeBlock> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            padding: const EdgeInsets.fromLTRB(14, 4, 6, 4),
-            decoration: BoxDecoration(border: Border(bottom: line)),
-            child: Row(
-              children: [
-                Expanded(child: Text(widget.language, style: s.codeLabel)),
-                Pressable(
-                  onPressed: _copy,
-                  radius: 8,
-                  minHeight: 36,
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  child: Center(
-                    widthFactor: 1,
-                    child: AnimatedSwitcher(
-                      duration: Motion.of(context).copySwap,
-                      switchInCurve: Motion.enter,
-                      switchOutCurve: Motion.enter,
-                      child: _copied
-                          ? Text(
-                              Strings.copied,
-                              key: const ValueKey(true),
-                              style: s.smallButton,
-                            )
-                          : Row(
-                              key: const ValueKey(false),
-                              mainAxisSize: MainAxisSize.min,
-                              spacing: 6,
-                              children: [
-                                Icon(
-                                  Icons.content_copy_rounded,
-                                  size: 14,
-                                  color: c.textMuted,
-                                ),
-                                Text(Strings.copy, style: s.smallButton),
-                              ],
-                            ),
+          NotArriving(
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(14, 4, 6, 4),
+              decoration: BoxDecoration(border: Border(bottom: line)),
+              child: Row(
+                children: [
+                  Expanded(child: Text(widget.language, style: s.codeLabel)),
+                  Pressable(
+                    onPressed: _copy,
+                    radius: 8,
+                    minHeight: 36,
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    child: Center(
+                      widthFactor: 1,
+                      child: AnimatedSwitcher(
+                        duration: Motion.of(context).copySwap,
+                        switchInCurve: Motion.enter,
+                        switchOutCurve: Motion.enter,
+                        child: _copied
+                            ? Text(
+                                Strings.copied,
+                                key: const ValueKey(true),
+                                style: s.smallButton,
+                              )
+                            : Row(
+                                key: const ValueKey(false),
+                                mainAxisSize: MainAxisSize.min,
+                                spacing: 6,
+                                children: [
+                                  Icon(
+                                    Icons.content_copy_rounded,
+                                    size: 14,
+                                    color: c.textMuted,
+                                  ),
+                                  Text(Strings.copy, style: s.smallButton),
+                                ],
+                              ),
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
           SingleChildScrollView(

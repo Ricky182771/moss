@@ -21,7 +21,17 @@ class ArrivingText extends StatefulWidget {
   final String text;
   final Widget child;
 
-  const ArrivingText({super.key, required this.text, required this.child});
+  /// false cuando ya no llega nada (o con Reducir animaciones): el árbol es
+  /// el mismo, así el Markdown no se vuelve a montar al terminar y no se
+  /// pierden la selección ni el estado de los bloques de código.
+  final bool animate;
+
+  const ArrivingText({
+    super.key,
+    required this.text,
+    required this.child,
+    this.animate = true,
+  });
 
   /// Cuántos grupos se están animando en el [ArrivingText] de [element].
   @visibleForTesting
@@ -47,7 +57,9 @@ class _ArrivingTextState extends State<ArrivingText>
   void didUpdateWidget(ArrivingText old) {
     super.didUpdateWidget(old);
     final t = widget.text;
-    if (t.length > old.text.length && t.startsWith(old.text)) {
+    if (widget.animate &&
+        t.length > old.text.length &&
+        t.startsWith(old.text)) {
       _render?.arrived(countWords(t.substring(old.text.length)));
       if (!_ticker.isActive) _ticker.start();
     }
@@ -71,6 +83,7 @@ class _ArrivingTextState extends State<ArrivingText>
   @override
   Widget build(BuildContext context) => _Arriving(
     key: _key,
+    active: widget.animate,
     duration: Motion.of(context).word,
     background: context.colors.background,
     child: widget.child,
@@ -78,11 +91,13 @@ class _ArrivingTextState extends State<ArrivingText>
 }
 
 class _Arriving extends SingleChildRenderObjectWidget {
+  final bool active;
   final Duration duration;
   final Color background;
 
   const _Arriving({
     super.key,
+    required this.active,
     required this.duration,
     required this.background,
     required super.child,
@@ -90,10 +105,11 @@ class _Arriving extends SingleChildRenderObjectWidget {
 
   @override
   _RenderArriving createRenderObject(BuildContext context) =>
-      _RenderArriving(duration, background);
+      _RenderArriving(duration, background)..active = active;
 
   @override
   void updateRenderObject(BuildContext context, _RenderArriving r) => r
+    ..active = active
     ..duration = duration
     ..background = background;
 }
@@ -113,6 +129,18 @@ class _RenderArriving extends RenderProxyBox {
   Duration duration;
   Color background;
 
+  /// Apagado: solo pinta al hijo (y olvida lo que llevaba).
+  bool get active => _active;
+  bool _active = true;
+  set active(bool v) {
+    if (v == _active) return;
+    _active = v;
+    _known = null;
+    _pending = null;
+    _groups.clear();
+    markNeedsPaint();
+  }
+
   /// Cuánto texto había dibujado la última vez; null antes del primer
   /// dibujo (lo que ya estaba no se anima).
   int? _known;
@@ -131,14 +159,18 @@ class _RenderArriving extends RenderProxyBox {
     markNeedsPaint();
   }
 
-  /// Los párrafos dibujados, en orden, con dónde empieza cada uno.
-  List<(RenderParagraph, int)> _paragraphs() {
-    final out = <(RenderParagraph, int)>[];
+  /// Los párrafos dibujados, en orden, con dónde empieza cada uno y su
+  /// largo. Lo de [NotArriving] (la cabecera de un bloque de código) no
+  /// cuenta: "Copiar" → "Copiado ✓" no es texto que llegó.
+  List<(RenderParagraph, int, int)> _paragraphs() {
+    final out = <(RenderParagraph, int, int)>[];
     var at = 0;
     void visit(RenderObject o) {
+      if (o is _RenderNotArriving) return;
       if (o is RenderParagraph) {
-        out.add((o, at));
-        at += o.text.toPlainText(includePlaceholders: false).length;
+        final len = o.text.toPlainText(includePlaceholders: false).length;
+        out.add((o, at, len));
+        at += len;
         return;
       }
       o.visitChildren(visit);
@@ -154,6 +186,7 @@ class _RenderArriving extends RenderProxyBox {
   @override
   void paint(PaintingContext context, Offset offset) {
     super.paint(context, offset);
+    if (!_active) return;
     final now = SchedulerBinding.instance.currentFrameTimeStamp;
     final paragraphs = _paragraphs();
     final length = _length;
@@ -183,8 +216,7 @@ class _RenderArriving extends RenderProxyBox {
     for (final g in _groups) {
       final t = (now - g.at).inMicroseconds / duration.inMicroseconds;
       final cover = 1 - Motion.enter.transform(t.clamp(0, 1));
-      for (final (p, start) in paragraphs) {
-        final len = p.text.toPlainText(includePlaceholders: false).length;
+      for (final (p, start, len) in paragraphs) {
         final from = (g.start - start).clamp(0, len);
         final to = (g.end - start).clamp(0, len);
         if (from >= to) continue;
@@ -221,3 +253,13 @@ class _RenderArriving extends RenderProxyBox {
     return (background, null);
   }
 }
+
+/// Lo de adentro no es texto que llega (la cabecera de un bloque de código).
+class NotArriving extends SingleChildRenderObjectWidget {
+  const NotArriving({super.key, required super.child});
+
+  @override
+  RenderObject createRenderObject(BuildContext context) => _RenderNotArriving();
+}
+
+class _RenderNotArriving extends RenderProxyBox {}

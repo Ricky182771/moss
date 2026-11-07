@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:moss_gui/state/arriving.dart';
 import 'package:moss_gui/widgets/arriving_text.dart';
+import 'package:moss_gui/widgets/markdown_view.dart';
 
 import 'fake_server.dart';
 import 'harness.dart';
@@ -138,7 +139,7 @@ void main() {
         ],
       ),
     );
-    expect(find.byType(ArrivingText), findsNothing);
+    expect(_groups(tester), 0);
     expect(_has('Respuesta guardada sin espa'), findsOneWidget);
   });
 
@@ -151,7 +152,7 @@ void main() {
       disableAnimations: true,
     );
     await _delta(tester, server, 'mundo bon');
-    expect(find.byType(ArrivingText), findsNothing);
+    expect(_groups(tester), 0);
     expect(_has('mundo bon'), findsOneWidget);
   });
 
@@ -160,7 +161,11 @@ void main() {
   ) async {
     final (_, server) = await startApp(
       tester,
-      conversation: snapshot(rev: 0, entries: [entry('user', text: 'antes')]),
+      conversation: snapshot(
+        rev: 0,
+        id: 'x',
+        entries: [entry('user', text: 'antes')],
+      ),
     );
     double opacity(String text) => tester
         .widget<Opacity>(
@@ -182,5 +187,44 @@ void main() {
     expect(opacity('nuevo'), lessThan(1));
     await tester.pump(const Duration(milliseconds: 200));
     expect(opacity('nuevo'), 1);
+  });
+
+  testWidgets('el primer mensaje de un chat nuevo también aparece', (
+    tester,
+  ) async {
+    final (_, server) = await startApp(tester);
+    server.notify('conversation.entry_added', {
+      'conversation': 'c1',
+      'rev': 1,
+      'index': 0,
+      'entry': entry('user', text: 'primero'),
+    });
+    await tester.pump();
+    await tester.pump();
+    final opacity = tester.widget<Opacity>(
+      find.ancestor(of: find.text('primero'), matching: find.byType(Opacity)),
+    );
+    expect(opacity.opacity, lessThan(1));
+  });
+
+  testWidgets('al terminar, el Markdown no se vuelve a montar', (tester) async {
+    final (_, server) = await startApp(
+      tester,
+      conversation: _streaming(text: 'Hola mundo '),
+    );
+    final before = tester.element(find.byType(MarkdownView).last);
+    server.notify('conversation.entry_updated', {
+      'conversation': 'c1',
+      'rev': 3,
+      'index': 1,
+      'entry': entry('assistant', text: 'Hola mundo final'),
+    });
+    await tester.pump();
+    await tester.pump();
+    expect(_has('Hola mundo final'), findsOneWidget);
+    expect(
+      identical(tester.element(find.byType(MarkdownView).last), before),
+      isTrue,
+    );
   });
 }

@@ -114,9 +114,9 @@ Widget arriving(
   required bool live,
   required Widget Function(String text) build,
 }) {
-  if (!live || Motion.of(context).reduced) return build(text);
-  final shown = text.substring(0, shownLength(text));
-  return ArrivingText(text: shown, child: build(shown));
+  final animate = live && !Motion.of(context).reduced;
+  final shown = animate ? text.substring(0, shownLength(text)) : text;
+  return ArrivingText(text: shown, animate: animate, child: build(shown));
 }
 
 /// La "m" de avatar y, a su lado, lo del modelo.
