@@ -23,6 +23,12 @@ class MossText extends ThemeExtension<MossText> {
   /// Fila de la lista de chats: 14.
   final TextStyle row;
 
+  /// Fila del chat abierto: 14/500.
+  final TextStyle rowOpen;
+
+  /// Negrita del Markdown: solo el peso (600), sobre el estilo del párrafo.
+  final TextStyle strong;
+
   /// Grupo de la lista: 12/500, mayúsculas con 0.06em.
   final TextStyle group;
 
@@ -71,6 +77,8 @@ class MossText extends ThemeExtension<MossText> {
     required this.input,
     required this.nav,
     required this.row,
+    required this.rowOpen,
+    required this.strong,
     required this.group,
     required this.kbd,
     required this.logotype,
@@ -105,6 +113,8 @@ class MossText extends ThemeExtension<MossText> {
       input: geist(15, height: 1.5),
       nav: geist(14, weight: FontWeight.w500),
       row: geist(14),
+      rowOpen: geist(14, weight: FontWeight.w500),
+      strong: const TextStyle(fontWeight: FontWeight.w600),
       group: geist(
         12,
         weight: FontWeight.w500,

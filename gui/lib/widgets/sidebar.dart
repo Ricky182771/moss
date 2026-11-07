@@ -158,7 +158,7 @@ class _Row extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: open
-                  ? s.row.copyWith(fontWeight: FontWeight.w500)
+                  ? s.rowOpen
                   : item.readable
                   ? s.row
                   : s.row.copyWith(color: c.textMuted),

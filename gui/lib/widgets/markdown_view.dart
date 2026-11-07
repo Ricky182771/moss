@@ -51,7 +51,7 @@ class MarkdownView extends StatelessWidget {
     final s = context.styles;
     final c = context.colors;
     final base = thought ? s.thought : s.answer;
-    final bold = base.copyWith(fontWeight: FontWeight.w600);
+    final bold = base.merge(s.strong);
     final heading = s.title.copyWith(color: base.color);
     return _Body(
       blockSpacing: thought ? 8 : 14,
@@ -65,7 +65,7 @@ class MarkdownView extends StatelessWidget {
       styleSheet: MarkdownStyleSheet(
         p: base,
         a: base.copyWith(color: c.accent, decoration: TextDecoration.underline),
-        strong: const TextStyle(fontWeight: FontWeight.w600),
+        strong: s.strong,
         em: const TextStyle(fontStyle: FontStyle.italic),
         del: const TextStyle(decoration: TextDecoration.lineThrough),
         code: s.inlineCode.copyWith(backgroundColor: c.field),
