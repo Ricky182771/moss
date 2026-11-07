@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:moss_gui/strings.dart';
+import 'package:moss_gui/widgets/message_list.dart';
 import 'package:moss_gui/widgets/options_panel.dart';
 
 import 'fake_server.dart';
@@ -275,6 +276,32 @@ void main() {
     expect(app.searchOn.value, isFalse);
     expect(find.text(Strings.webSearch), findsNothing);
     expect(tester.getSize(find.byType(AnimatedSize)).height, oneRow);
+  });
+
+  testWidgets('la caja de dos filas no deja la respuesta tapada', (
+    tester,
+  ) async {
+    final (app, _) = await startApp(
+      tester,
+      conversation: longChat(phase: 'streaming', inProgress: true),
+    );
+    final pos = tester
+        .state<ScrollableState>(
+          find
+              .descendant(
+                of: find.byType(MessageList),
+                matching: find.byType(Scrollable),
+              )
+              .first,
+        )
+        .position;
+    expect(pos.maxScrollExtent, greaterThan(0));
+    expect(pos.pixels, pos.maxScrollExtent);
+    app.searchOn.value = true;
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pump();
+    expect(pos.pixels, pos.maxScrollExtent);
   });
 
   testWidgets('/model sin modelo abre Opciones en los proveedores', (

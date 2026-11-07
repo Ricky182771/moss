@@ -153,6 +153,25 @@ class _MessageListState extends State<MessageList> {
       _ => null,
     };
 
+    final list = _list(context, phase);
+    // Si la zona cambia de alto (la caja crece a dos filas), abajo se queda
+    // abajo.
+    return LayoutBuilder(
+      builder: (context, box) {
+        if (box.maxHeight != _height) {
+          _height = box.maxHeight;
+          _stickAfterFrame();
+        }
+        return list;
+      },
+    );
+  }
+
+  double? _height;
+
+  Widget _list(BuildContext context, Widget? phase) {
+    final conv = widget.conversation;
+    final entries = conv.entries;
     return ScrollAnchor(
       keepBelow: _keepBelow,
       child: NotificationListener<ScrollUpdateNotification>(
