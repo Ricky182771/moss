@@ -77,6 +77,9 @@ class MossText extends ThemeExtension<MossText> {
   /// Pastilla "Búsqueda web": 13/500 en el color de código.
   final TextStyle pill;
 
+  /// Botón verde lleno (Guardar): 14/600.
+  final TextStyle primaryButton;
+
   /// "Configuración" junto al logo: 18/600.
   final TextStyle brand;
 
@@ -128,6 +131,7 @@ class MossText extends ThemeExtension<MossText> {
     required this.toast,
     required this.model,
     required this.pill,
+    required this.primaryButton,
     required this.brand,
     required this.pageTitle,
     required this.lead,
@@ -184,6 +188,7 @@ class MossText extends ThemeExtension<MossText> {
       toast: geist(14).copyWith(color: c.background),
       model: mono(13),
       pill: geist(13, weight: FontWeight.w500).copyWith(color: c.code),
+      primaryButton: geist(14, weight: FontWeight.w600),
       brand: geist(18, weight: FontWeight.w600),
       pageTitle: geist(
         28,

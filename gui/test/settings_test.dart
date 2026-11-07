@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:moss_gui/screens/settings_screen.dart';
@@ -19,6 +20,24 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(SettingsScreen), findsNothing);
     expect(find.text(Strings.emptyPrompt), findsOneWidget);
+  });
+
+  testWidgets('al volver, el foco regresa a la caja del mensaje', (
+    tester,
+  ) async {
+    await startApp(tester);
+    final field = find.byType(EditableText);
+    await tester.tap(field);
+    await tester.pump();
+    expect(Focus.of(tester.element(field)).hasFocus, isTrue);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.f2);
+    await tester.pumpAndSettle();
+    expect(Focus.of(tester.element(field)).hasFocus, isFalse);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(Focus.of(tester.element(field)).hasFocus, isTrue);
   });
 
   testWidgets('la fila de la barra abre Configuración y Volver al chat sale', (

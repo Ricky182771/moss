@@ -147,6 +147,8 @@ class SettingsState extends ChangeNotifier {
 
   void _onEvent(String section) {
     // Los de nuestro guardado: al terminar se recargan las que no cambiaron.
+    // Uno de afuera justo durante el guardado no se distingue de los nuestros
+    // y no marca "cambió afuera".
     if (saving) return;
     for (final s in sections.values) {
       if (s.events.contains(section)) s.externalChange();
@@ -155,6 +157,7 @@ class SettingsState extends ChangeNotifier {
 
   /// Cancelar: todo regresa a lo guardado.
   void discard() {
+    if (saving) return;
     for (final s in sections.values) {
       s.discard();
     }
@@ -178,7 +181,14 @@ class SettingsState extends ChangeNotifier {
         for (final e in sections.entries)
           if (e.value.dirty) e,
       ];
-      final ok = await Future.wait([for (final e in changed) e.value.check()]);
+      final List<bool> ok;
+      try {
+        ok = await Future.wait([for (final e in changed) e.value.check()]);
+      } on RpcError catch (e) {
+        barError = e.displayMessage; // Busy, sin modelo, no se pudo leer…
+        return;
+      }
+      if (_disposed) return;
       for (final (i, e) in changed.indexed) {
         if (!ok[i]) {
           page = e.key;
@@ -188,11 +198,18 @@ class SettingsState extends ChangeNotifier {
       final steps = [
         for (final e in changed)
           for (final step in e.value.steps) (e.key, step),
-      ]..sort((a, b) => a.$2.order.compareTo(b.$2.order));
-      for (final (p, step) in steps) {
+      ];
+      // Estable: con el mismo orden, el de las secciones.
+      final order = [for (var i = 0; i < steps.length; i++) i]
+        ..sort((a, b) {
+          final c = steps[a].$2.order.compareTo(steps[b].$2.order);
+          return c != 0 ? c : a.compareTo(b);
+        });
+      for (final (p, step) in [for (final i in order) steps[i]]) {
         try {
           await step.run();
         } on RpcError catch (e) {
+          if (_disposed) return;
           page = p;
           if (!sections[p]!.showSaveError(e)) barError = e.displayMessage;
           return;
@@ -201,6 +218,7 @@ class SettingsState extends ChangeNotifier {
       // Los avisos llegan después de la respuesta (PROTOCOL.md §6.7): con la
       // respuesta de `app.status` ya llegaron.
       await app.refreshStatus();
+      if (_disposed) return;
       final c = app.conversation;
       if (c != null && c.conversation == handle && c.entries.length > before) {
         final notices = [

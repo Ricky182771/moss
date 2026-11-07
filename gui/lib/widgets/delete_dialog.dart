@@ -83,7 +83,7 @@ class _ConfirmDialogState extends State<_ConfirmDialog> {
   bool _busy = false;
 
   /// El foco empieza en cancelar: Enter no borra sin querer.
-  final _cancel = FocusNode(debugLabel: 'cancelar');
+  final _cancel = FocusNode();
 
   @override
   void initState() {

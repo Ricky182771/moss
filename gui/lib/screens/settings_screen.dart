@@ -94,6 +94,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   /// Volver al chat (y Esc): con cambios, "¿Descartar los cambios?".
   Future<void> _close() async {
+    if (_state.saving) return;
     if (_state.dirty) {
       final yes = await confirm(
         context,
@@ -242,7 +243,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final dirty = _state.sections[p]?.dirty ?? false;
     final name = _panel(p, null).menu;
     return Semantics(
-      label: dirty ? '$name, ${Strings.unsaved}' : name,
+      label: dirty ? Strings.withUnsaved(name) : name,
       excludeSemantics: true,
       selected: current,
       button: true,
@@ -381,7 +382,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
               Pressable(
-                onPressed: _state.dirty ? _state.discard : null,
+                onPressed: _state.dirty && !_state.saving
+                    ? _state.discard
+                    : null,
                 borderColor: c.border,
                 minHeight: 44,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -389,7 +392,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   widthFactor: 1,
                   child: Text(
                     Strings.cancel,
-                    style: _state.dirty
+                    style: _state.dirty && !_state.saving
                         ? s.row
                         : s.row.copyWith(color: c.textMuted),
                   ),
@@ -405,8 +408,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   widthFactor: 1,
                   child: Text(
                     Strings.save,
-                    style: s.nav.copyWith(
-                      fontWeight: FontWeight.w600,
+                    style: s.primaryButton.copyWith(
                       color: canSave ? c.textOnAccent : c.textMuted,
                     ),
                   ),

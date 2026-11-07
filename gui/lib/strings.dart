@@ -75,7 +75,8 @@ class Strings {
   static const backToChat = 'Volver al chat';
   static const escKey = 'Esc';
   static const settingsSections = 'Secciones de configuración';
-  static const unsaved = 'con cambios sin guardar';
+  static String withUnsaved(String section) =>
+      '$section, con cambios sin guardar';
   static const save = 'Guardar';
   static const saving = 'Guardando…';
   static const discardQuestion = '¿Descartar los cambios?';

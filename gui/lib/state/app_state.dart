@@ -317,7 +317,7 @@ class AppState extends ChangeNotifier {
       case ConversationsChanged():
         _refreshList().then((_) => notifyListeners(), onError: (_) {});
       case SettingsChanged(:final section):
-        _settingsEvents.add(section);
+        if (!_settingsEvents.isClosed) _settingsEvents.add(section);
         if (section == 'provider' || section == 'search') {
           refreshStatus().then((_) => notifyListeners(), onError: (_) {});
         }
