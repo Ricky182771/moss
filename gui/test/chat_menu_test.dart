@@ -120,6 +120,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.widgetWithText(TextField, 'Otro'), findsNothing);
     expect(server.methods, isNot(contains('conversation.rename')));
+    // El foco vuelve a la fila: su ⋯ se ve.
+    expect(_dots('Otro'), findsOneWidget);
 
     // El error del servidor, debajo del campo.
     await _rightClick(tester, 'Otro');

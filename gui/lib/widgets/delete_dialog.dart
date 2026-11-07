@@ -77,6 +77,7 @@ class _DeleteDialogState extends State<_DeleteDialog> {
         _busy = false;
         _error = error;
       });
+      _cancel.requestFocus(); // Borrar estuvo deshabilitado: perdió el foco.
     }
   }
 

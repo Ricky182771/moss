@@ -195,6 +195,10 @@ class _RowState extends State<_Row> {
   final _link = LayerLink();
   final _dots = FocusNode();
 
+  /// La fila misma: siempre está, así el foco puede volver a ella al
+  /// terminar Renombrar (el ⋯ solo se ve con el foco o el mouse).
+  final _rowFocus = FocusNode();
+
   // Renombrar
   TextEditingController? _rename;
   final _renameFocus = FocusNode();
@@ -216,6 +220,7 @@ class _RowState extends State<_Row> {
   @override
   void dispose() {
     _dots.dispose();
+    _rowFocus.dispose();
     _rename?.dispose();
     _renameFocus.dispose();
     super.dispose();
@@ -245,13 +250,19 @@ class _RowState extends State<_Row> {
     );
   }
 
-  void _endRename() {
+  /// [refocus]: con Enter o Esc el foco vuelve a la fila; al salir con un
+  /// clic se queda donde se hizo clic.
+  void _endRename({bool refocus = false}) {
     final old = _rename;
     setState(() {
       _rename = null;
       _renameError = null;
+      _focus = false; // El Focus que lo vigila se desmontó mientras.
     });
-    WidgetsBinding.instance.addPostFrameCallback((_) => old?.dispose());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      old?.dispose();
+      if (refocus && mounted) _rowFocus.requestFocus();
+    });
   }
 
   Future<void> _saveRename() async {
@@ -261,8 +272,7 @@ class _RowState extends State<_Row> {
     if (!mounted) return;
     _saving = false;
     if (error == null) {
-      _endRename();
-      _dots.requestFocus();
+      _endRename(refocus: true);
     } else {
       setState(() => _renameError = error);
       _renameFocus.requestFocus();
@@ -272,8 +282,7 @@ class _RowState extends State<_Row> {
   KeyEventResult _renameKeys(FocusNode _, KeyEvent e) {
     if (e is! KeyDownEvent) return KeyEventResult.ignored;
     if (e.logicalKey == LogicalKeyboardKey.escape) {
-      _endRename();
-      _dots.requestFocus();
+      _endRename(refocus: true);
       return KeyEventResult.handled;
     }
     if (e.logicalKey == LogicalKeyboardKey.enter ||
@@ -304,19 +313,23 @@ class _RowState extends State<_Row> {
             ),
             child: Focus(
               onKeyEvent: _renameKeys,
-              child: TextField(
-                controller: controller,
-                focusNode: _renameFocus,
-                enabled: !_saving,
-                style: s.row,
-                cursorColor: c.accent,
-                decoration: InputDecoration(
-                  isDense: true,
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                  labelText: null,
-                  hintText: Strings.chatTitle,
-                  hintStyle: s.row.copyWith(color: c.textMuted),
+              child: Semantics(
+                label: Strings.chatTitle,
+                textField: true,
+                child: TextField(
+                  controller: controller,
+                  focusNode: _renameFocus,
+                  // readOnly y no enabled: así conserva el foco al guardar.
+                  readOnly: _saving,
+                  style: s.row,
+                  cursorColor: c.accent,
+                  decoration: InputDecoration(
+                    isDense: true,
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                    hintText: Strings.chatTitle,
+                    hintStyle: s.row.copyWith(color: c.textMuted),
+                  ),
                 ),
               ),
             ),
@@ -335,6 +348,7 @@ class _RowState extends State<_Row> {
 
     final dots = item.readable && (widget.open || _hover || _focus || _menu);
     final row = Pressable(
+      focusNode: _rowFocus,
       // Los ilegibles no se abren.
       onPressed: item.readable ? widget.onOpen : null,
       selected: widget.open,
