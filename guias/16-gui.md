@@ -75,7 +75,7 @@ Los agrega el servidor al historial (`Session::report`, `PROTOCOL.md` §6.5) y l
 
 **Borradores.** `SettingsScreen` crea un `SettingsState` al abrirse y lo descarta al salir. Cada sección (`SettingsSection`) lee lo guardado con su `*.get` (`load`) y lleva su borrador (campos, `TextEditingController`); `dirty` lo compara con lo guardado y pone la marca en el menú. Cambiar de sección no pierde nada; Cancelar llama a `discard` en todas. Colores es especial: su borrador es `AppState.prefs`, que `PrefsApp` aplica al momento (vista previa en vivo); Cancelar y Descartar lo regresan a lo guardado antes de desmontar.
 
-**Checks.** Mientras se escribe, cada sección manda su `*.check` con un retraso (`kCheckDelay`, 400 ms después de la última tecla) y pone lo que regresa junto al campo (`field_errors`, `extra_error`, `error`, `hint`, la vista previa, los bytes). Nada de eso se calcula en Dart: lo único local es convertir lo escrito a número para mandarlo como número.
+**Checks.** Mientras se escribe, cada sección manda su `*.check` con un retraso (`kCheckDelay`, 400 ms después de la última tecla) y pone lo que regresa junto al campo (`field_errors`, `extra_error`, `error`, `hint`, la vista previa, los bytes). Nada de eso se calcula en Dart, salvo convertir lo escrito a número para mandarlo como número (y marcar lo que no se puede convertir; ver la deuda).
 
 **Guardar** (`SettingsState.save`):
 1. Los `check` de las secciones con cambios, en paralelo. Un error: no se guarda nada, el panel va a la primera sección que lo tiene y cada error se queda junto a su campo. Un error del propio `check` (Busy, no se pudo leer) va en la barra.
@@ -106,6 +106,7 @@ Una acción que no espera a Guardar (como Borrar endpoint) va dentro de `owner.q
 - `RpcClient` lleva la cuenta de los `id` porque `json_rpc_2` 3.x no deja elegirlos (lo vigila `test/client_test.dart`); la 4.x tiene `idGenerator`.
 - El mensaje que llega se re-parsea entero en cada trozo (ver "Texto del modelo llegando").
 - La explicación del razonamiento en Configuración del modelo (`Strings.reasoningHelp`) copia los textos de la TUI por `reasoning_style`, sin el caso de OpenRouter. Lo correcto es que `settings.model_params.get` mande el texto.
+- `ModelSection._parse` decide qué texto es un número (coma decimal, `−`, enteros según `limits.integer`) con los mensajes de la TUI; `Strings.topKNote` y `Strings.extraHelp` repiten reglas del núcleo. Lo correcto es que `settings.model_params.check` acepte el texto de cada campo y que `get` mande las notas.
 - `settings.provider.check` da un solo `error` sin decir de qué campo: va al final de la tarjeta del elegido. `key_status` es solo del proveedor guardado; para los demás, la GUI dice "key guardada" con `key_saved`.
 - `PrefsApp` aplana el `TextScaler` del sistema a lineal (en escritorio siempre lo es).
 - `title_search.dart` pliega solo los acentos del español y lenguas cercanas; `arriving.dart` detecta los bloques de código solo por las cercas al principio de línea. Las dos están marcadas con `shortcut:`.

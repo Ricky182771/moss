@@ -62,7 +62,8 @@ class ProviderDraft {
   int get hashCode => Object.hash(provider, name, baseUrl, model);
 }
 
-/// Retraso de los `check` al escribir: uno por pausa, no por tecla.
+/// Retraso de los `check` al escribir: uno por pausa, no por tecla. Es un
+/// tiempo de espera, no una animación: no va en `motion.dart`.
 const kCheckDelay = Duration(milliseconds: 400);
 
 /// Proveedor de IA: la lista, el elegido (nombre, URL, key) y su modelo.

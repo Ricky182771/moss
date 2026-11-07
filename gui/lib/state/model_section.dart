@@ -277,8 +277,12 @@ class ModelSection extends SettingsSection {
 
   /// Lo escrito en [key] como número: vacío es null (Predeterminado). Lo que
   /// no se puede mandar como número (o como entero, si `limits` dice que lo
-  /// es) se marca aquí, con los textos de la TUI; el rango lo revisa el
-  /// servidor. Acepta la coma decimal, como la TUI.
+  /// es) se marca aquí; el rango lo revisa el servidor.
+  ///
+  /// shortcut: el formato aceptado (coma decimal, `−`, sin exponente) y sus
+  /// mensajes copian `cli/src/model_params_form.cpp`; lo correcto es que
+  /// `settings.model_params.check` acepte el texto de cada campo y responda
+  /// su error, en un PR de protocolo.
   (num?, String?) _parse(String key) {
     final t = fields[key]!.text
         .trim()

@@ -191,6 +191,8 @@ class Strings {
           'aceptan.',
     _ => null,
   };
+  // shortcut: estas dos notas repiten reglas del núcleo (qué llaves pone
+  // Moss) y de los proveedores; deberían venir de `model_params.get`.
   static const topKNote =
       'Top K no es del estándar de OpenAI: no todos los proveedores lo '
       'aceptan.';
