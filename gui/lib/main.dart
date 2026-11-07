@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 
 import 'frame_stats.dart';
 import 'rpc/client.dart';
-import 'screens/chat_screen.dart';
+import 'screens/home_screen.dart';
 import 'screens/error_screen.dart';
 import 'state/app_state.dart';
 import 'strings.dart';
@@ -117,7 +117,7 @@ class _BootState extends State<Boot> {
   @override
   Widget build(BuildContext context) {
     if (_error case final error?) return error;
-    if (_app case final app?) return ChatScreen(app);
+    if (_app case final app?) return HomeScreen(app);
     return Material(color: Theme.of(context).scaffoldBackgroundColor);
   }
 }

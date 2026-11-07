@@ -69,6 +69,35 @@ class Strings {
   static const webSearch = 'Búsqueda web';
   static const removeWebSearch = 'Quitar la búsqueda web';
 
+  // Configuración
+  static const settings = 'Configuración';
+  static const settingsKey = 'F2';
+  static const backToChat = 'Volver al chat';
+  static const escKey = 'Esc';
+  static const settingsSections = 'Secciones de configuración';
+  static const unsaved = 'con cambios sin guardar';
+  static const save = 'Guardar';
+  static const saving = 'Guardando…';
+  static const discardQuestion = '¿Descartar los cambios?';
+  static const discard = 'Descartar';
+  static const keepEditing = 'Seguir editando';
+  static const providerMenu = 'Proveedor';
+  static const providerTitle = 'Proveedor de IA';
+  static const providerLead =
+      'A qué servidor se conecta Moss y con qué modelo platica.';
+  static const colorsTitle = 'Colores y accesibilidad';
+  static const colorsLead =
+      'Cómo se ve Moss. Los cambios se ven al momento y se quedan al guardar.';
+  static const modelTitle = 'Configuración del modelo';
+  static const modelLead =
+      'Las instrucciones valen para todos los modelos; los ajustes, solo para '
+      'el modelo en uso.';
+  static const searchLead =
+      'Para que el modelo pueda consultar internet antes de responder.';
+  static const changedOutside =
+      'Esto se cambió fuera de aquí mientras lo editabas. Cancelar trae lo '
+      'guardado; Guardar lo reemplaza con lo tuyo.';
+
   // moss-rpc
   static const rpcNotFound = 'No se encontró moss-rpc';
   static const rpcCannotStart = 'moss-rpc no arrancó';

@@ -13,9 +13,27 @@ Future<void> confirmDelete(
   BuildContext context, {
   required String title,
   required Future<String?> Function() delete,
-}) {
+}) => confirm(
+  context,
+  question: Strings.deleteQuestion(title),
+  detail: Strings.cannotUndo,
+  confirmLabel: Strings.confirmDelete,
+  action: delete,
+);
+
+/// Pregunta con [cancelLabel] y [confirmLabel] (en el color de error). El
+/// foco empieza en cancelar. [action] devuelve el error del servidor, que se
+/// queda en la ventana, o null para cerrarla. Devuelve si se confirmó.
+Future<bool> confirm(
+  BuildContext context, {
+  required String question,
+  String? detail,
+  String cancelLabel = Strings.cancel,
+  required String confirmLabel,
+  required Future<String?> Function() action,
+}) async {
   final motion = Motion.of(context);
-  return showGeneralDialog(
+  final done = await showGeneralDialog<bool>(
     context: context,
     barrierDismissible: true,
     barrierLabel: Strings.cancel,
@@ -31,25 +49,41 @@ Future<void> confirmDelete(
         ),
       );
     },
-    pageBuilder: (context, _, _) => _DeleteDialog(title: title, delete: delete),
+    pageBuilder: (context, _, _) => _ConfirmDialog(
+      question: question,
+      detail: detail,
+      cancelLabel: cancelLabel,
+      confirmLabel: confirmLabel,
+      action: action,
+    ),
   );
+  return done ?? false;
 }
 
-class _DeleteDialog extends StatefulWidget {
-  final String title;
-  final Future<String?> Function() delete;
-  const _DeleteDialog({required this.title, required this.delete});
+class _ConfirmDialog extends StatefulWidget {
+  final String question;
+  final String? detail;
+  final String cancelLabel;
+  final String confirmLabel;
+  final Future<String?> Function() action;
+  const _ConfirmDialog({
+    required this.question,
+    required this.detail,
+    required this.cancelLabel,
+    required this.confirmLabel,
+    required this.action,
+  });
 
   @override
-  State<_DeleteDialog> createState() => _DeleteDialogState();
+  State<_ConfirmDialog> createState() => _ConfirmDialogState();
 }
 
-class _DeleteDialogState extends State<_DeleteDialog> {
+class _ConfirmDialogState extends State<_ConfirmDialog> {
   String? _error;
   bool _busy = false;
 
-  /// El foco empieza en Cancelar: Enter no borra sin querer.
-  final _cancel = FocusNode(debugLabel: Strings.cancel);
+  /// El foco empieza en cancelar: Enter no borra sin querer.
+  final _cancel = FocusNode(debugLabel: 'cancelar');
 
   @override
   void initState() {
@@ -63,15 +97,15 @@ class _DeleteDialogState extends State<_DeleteDialog> {
     super.dispose();
   }
 
-  Future<void> _delete() async {
+  Future<void> _confirm() async {
     setState(() {
       _busy = true;
       _error = null;
     });
-    final error = await widget.delete();
+    final error = await widget.action();
     if (!mounted) return;
     if (error == null) {
-      Navigator.of(context).pop();
+      Navigator.of(context).pop(true);
     } else {
       setState(() {
         _busy = false;
@@ -85,7 +119,7 @@ class _DeleteDialogState extends State<_DeleteDialog> {
   Widget build(BuildContext context) {
     final c = context.colors;
     final s = context.styles;
-    final question = Strings.deleteQuestion(widget.title);
+    final question = widget.question;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -110,10 +144,8 @@ class _DeleteDialogState extends State<_DeleteDialog> {
                   spacing: 8,
                   children: [
                     Text(question, style: s.title),
-                    Text(
-                      Strings.cannotUndo,
-                      style: s.row.copyWith(color: c.textMuted),
-                    ),
+                    if (widget.detail case final detail?)
+                      Text(detail, style: s.row.copyWith(color: c.textMuted)),
                     AnimatedSwitcher(
                       duration: Motion.of(context).fieldError,
                       switchInCurve: Motion.enter,
@@ -141,11 +173,11 @@ class _DeleteDialogState extends State<_DeleteDialog> {
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           child: Center(
                             widthFactor: 1,
-                            child: Text(Strings.cancel, style: s.nav),
+                            child: Text(widget.cancelLabel, style: s.nav),
                           ),
                         ),
                         Pressable(
-                          onPressed: _busy ? null : _delete,
+                          onPressed: _busy ? null : _confirm,
                           minHeight: 40,
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           color: c.error,
@@ -153,7 +185,7 @@ class _DeleteDialogState extends State<_DeleteDialog> {
                           child: Center(
                             widthFactor: 1,
                             child: Text(
-                              Strings.confirmDelete,
+                              widget.confirmLabel,
                               style: s.nav.copyWith(color: c.background),
                             ),
                           ),

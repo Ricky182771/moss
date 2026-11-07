@@ -72,6 +72,11 @@ class _ChatScreenState extends State<ChatScreen> {
     ),
   );
 
+  void _settings() {
+    _closeOverlay();
+    app.openSettings();
+  }
+
   void _escape() {
     if (_narrow && _overlay) {
       _closeOverlay();
@@ -92,6 +97,7 @@ class _ChatScreenState extends State<ChatScreen> {
         const SingleActivator(LogicalKeyboardKey.keyB, control: true):
             _toggleSidebar,
         const SingleActivator(LogicalKeyboardKey.keyK, control: true): _search,
+        const SingleActivator(LogicalKeyboardKey.f2): _settings,
         const SingleActivator(LogicalKeyboardKey.escape): _escape,
       },
       child: Material(
@@ -113,6 +119,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   app.newChat();
                 },
                 onSearch: _search,
+                onSettings: _settings,
                 actions: _actions,
                 onOpen: (id) {
                   _closeOverlay();

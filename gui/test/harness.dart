@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:moss_gui/rpc/client.dart';
-import 'package:moss_gui/screens/chat_screen.dart';
+import 'package:moss_gui/screens/home_screen.dart';
 import 'package:moss_gui/state/app_state.dart';
 import 'package:moss_gui/theme/theme.dart';
 
@@ -44,7 +44,7 @@ Future<(AppState, FakeServer)> startApp(
         child: MaterialApp(
           theme: theme ?? MossTheme.dark(),
           debugShowCheckedModeBanner: false,
-          home: ChatScreen(app),
+          home: HomeScreen(app),
         ),
       ),
     ),
