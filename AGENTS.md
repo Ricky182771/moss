@@ -268,6 +268,6 @@ El agente principal no corre builds ni lee salidas largas directamente si `test-
 - Estado con `ChangeNotifier`/`ValueNotifier`, sin paquetes de estado. **Dependencias mínimas y justificadas en el PR:** `json_rpc_2`, `stream_channel`, `flutter_markdown_plus`, `markdown` y `url_launcher`. Cualquier otra se pregunta antes.
 - `moss-rpc` con `--rpc=<ruta>` o junto al ejecutable, nunca del `PATH`. `initialize` con tiempo límite; al cerrar, `shutdown`, `exit` y `kill` a los 3 s: nunca queda huérfano.
 - Botones de solo ícono con `Semantics` y etiqueta; foco visible. Markdown sin cargar imágenes; enlaces solo `http`/`https`. Ningún secreto en pantalla ni en registros.
-- Pruebas sin `moss-rpc` ni red (canal en memoria). Las capturas solo a mano. La prueba a mano usa `tools/fake-llm.py` y directorios en `/tmp`, nunca la configuración ni las keys del usuario.
+- Pruebas sin `moss-rpc` ni red (canal en memoria). Las capturas solo a mano. La prueba a mano se hace **solo con `tools/run-fake.sh`** (quita las `CHAT_*`, usa `tools/fake-llm.py` y `/tmp/moss-prueba`), nunca con la configuración ni las keys del usuario.
 
 Detalle: guias/16-gui.md

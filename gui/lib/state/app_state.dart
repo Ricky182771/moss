@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../models/conversation.dart';
 import '../models/events.dart';
+import '../models/settings.dart';
 import '../models/summary.dart';
 import '../rpc/client.dart';
 import '../rpc/errors.dart';
@@ -16,6 +17,17 @@ class Toast {
   final String text;
   Toast(this.text);
 }
+
+/// Pide abrir Opciones (`/model` sin modelo), en los modelos de [provider] o,
+/// con null, en la lista de proveedores. Cada uno es otro objeto.
+class OptionsRequest {
+  final String? provider;
+  OptionsRequest(this.provider);
+}
+
+/// Con la búsqueda activa, el texto va como lo muestra la TUI (PROTOCOL.md
+/// §6.3: `text` es lo que se ve y se guarda; `search`, la consulta).
+const _searchCommand = '/buscar';
 
 /// Estado de la app sobre `moss-rpc`: la lista de chats y la conversación
 /// abierta, copiada de los eventos (PROTOCOL.md §5).
@@ -34,6 +46,19 @@ class AppState extends ChangeNotifier {
 
   /// `moss-rpc` se cayó a media sesión.
   bool disconnected = false;
+
+  /// De `app.status`: si falta configurar, el `problem` va en el chat vacío.
+  bool ready = true;
+  String? problem;
+
+  /// El interruptor "Buscar en la web" de Opciones. Solo de esta sesión de la
+  /// GUI: no se guarda.
+  final searchOn = ValueNotifier<bool>(false);
+
+  final openOptions = ValueNotifier<OptionsRequest?>(null);
+
+  /// Para Opciones, que tiene su propio estado (`OptionsState`).
+  RpcClient get rpc => _rpc;
 
   /// Error de JSON-RPC que va junto a la caja (Busy, vacío, sin configurar).
   final inputError = ValueNotifier<String?>(null);
@@ -65,7 +90,22 @@ class AppState extends ChangeNotifier {
       await _rpc.request('conversation.get', {'conversation': handle}),
     );
     await _refreshList();
+    await _refreshStatus();
     notifyListeners();
+  }
+
+  Future<void> _refreshStatus() async {
+    try {
+      final r = await _rpc.request('app.status');
+      ready = r['ready'] as bool;
+      problem = r['problem'] as String?;
+      // Sin key ya no se puede buscar: se apaga la pastilla.
+      if (r['has_search_key'] == false) searchOn.value = false;
+    } on RpcError {
+      // Sin estado, el chat vacío no muestra el problema.
+    } on StateError {
+      // El canal se cerró: `done` ya marcó `disconnected`.
+    }
   }
 
   Future<void> _refreshList() async {
@@ -85,9 +125,11 @@ class AppState extends ChangeNotifier {
     inputError.value = null;
     try {
       if (!text.startsWith('/')) {
+        final search = searchOn.value;
         await _rpc.request('chat.send', {
           'conversation': c.conversation,
-          'text': text,
+          'text': search ? '$_searchCommand $text' : text,
+          if (search) 'search': text,
         });
         return true;
       }
@@ -101,7 +143,7 @@ class AppState extends ChangeNotifier {
         case 'status':
           toast.value = Toast(r['message'] as String);
         case 'model_picker':
-          toast.value = Toast(Strings.modelPickerHint);
+          openOptions.value = OptionsRequest(r['provider'] as String?);
         // message, search, save, export y model: lo demás llega en eventos.
       }
       return r['clear'] == true;
@@ -128,15 +170,65 @@ class AppState extends ChangeNotifier {
     return _replace(() => _rpc.request('conversation.open', {'id': id}));
   }
 
-  Future<void> export() async {
+  /// Exporta la abierta o, con [id], la guardada (menú `⋯`). Aviso corto.
+  Future<void> export({String? id}) async {
     final c = conversation;
-    if (c == null) return;
+    if (id == null && c == null) return;
     await _call(() async {
-      final r = await _rpc.request('conversation.export', {
-        'conversation': c.conversation,
-      });
+      final r = await _rpc.request(
+        'conversation.export',
+        id != null ? {'id': id} : {'conversation': c!.conversation},
+      );
       toast.value = Toast(r['message'] as String);
     });
+  }
+
+  /// `conversation.rename`. Devuelve el error del servidor (va debajo del
+  /// campo) o null; el título nuevo llega con `conversations.changed`.
+  Future<String?> rename(String id, String title) => _ask(
+    () => _rpc.request('conversation.rename', {'id': id, 'title': title}),
+  );
+
+  /// `conversation.delete`. Si era la abierta, se queda `replaced_by`.
+  /// Devuelve el error (Busy…) para la ventana de confirmación, o null.
+  Future<String?> delete(String id) => _ask(() async {
+    final r = await _rpc.request('conversation.delete', {'id': id});
+    if (r['replaced_by'] case final Map<String, dynamic> s) {
+      conversation = ConversationSnapshot.fromJson(s);
+      inputError.value = null;
+      notifyListeners();
+    }
+    return r;
+  });
+
+  /// `commands.list` para el menú de `/` (con su disponibilidad de ahora).
+  /// Si falla, lista vacía: el texto se manda como siempre.
+  Future<List<CommandInfo>> commands() async {
+    final c = conversation;
+    if (c == null) return const [];
+    try {
+      final r = await _rpc.request('commands.list', {
+        'conversation': c.conversation,
+      });
+      return [
+        for (final x in r['commands'] as List)
+          CommandInfo.fromJson(x as Map<String, dynamic>),
+      ];
+    } on Object {
+      return const [];
+    }
+  }
+
+  /// Una petición cuyo error se muestra junto a lo que la causó.
+  Future<String?> _ask(Future<Object?> Function() f) async {
+    try {
+      await f();
+      return null;
+    } on RpcError catch (e) {
+      return e.displayMessage;
+    } on StateError {
+      return null; // El canal se cerró: `done` ya marcó `disconnected`.
+    }
   }
 
   /// Arranca otro `moss-rpc` y vuelve a abrir la conversación, si tenía id.
@@ -156,6 +248,7 @@ class AppState extends ChangeNotifier {
           await _rpc.request('conversation.open', {'id': id}),
         );
         await _refreshList();
+        await _refreshStatus();
         notifyListeners();
       } else {
         await load(init['conversation'] as String);
@@ -211,6 +304,10 @@ class AppState extends ChangeNotifier {
     switch (e) {
       case ConversationsChanged():
         _refreshList().then((_) => notifyListeners(), onError: (_) {});
+      case SettingsChanged(section: 'provider' || 'search'):
+        _refreshStatus().then((_) => notifyListeners(), onError: (_) {});
+      case SettingsChanged():
+        break;
       case ConversationEvent():
         if (e is ChatFinished && e.conversation == conversation?.conversation) {
           if (e.restoreText case final t?) restoreText.value = t;
@@ -261,6 +358,8 @@ class AppState extends ChangeNotifier {
     inputError.dispose();
     toast.dispose();
     restoreText.dispose();
+    searchOn.dispose();
+    openOptions.dispose();
     super.dispose();
   }
 }

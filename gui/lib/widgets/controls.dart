@@ -20,6 +20,7 @@ class Pressable extends StatefulWidget {
   final EdgeInsetsGeometry padding;
   final double minHeight;
   final bool selected;
+  final FocusNode? focusNode;
 
   const Pressable({
     super.key,
@@ -32,6 +33,7 @@ class Pressable extends StatefulWidget {
     this.padding = EdgeInsets.zero,
     this.minHeight = 0,
     this.selected = false,
+    this.focusNode,
   });
 
   @override
@@ -54,6 +56,7 @@ class _PressableState extends State<Pressable> {
       label: widget.label,
       child: FocusableActionDetector(
         enabled: enabled,
+        focusNode: widget.focusNode,
         mouseCursor: enabled ? SystemMouseCursors.click : MouseCursor.defer,
         onShowHoverHighlight: (v) => setState(() => _hover = v),
         onShowFocusHighlight: (v) => setState(() => _focus = v),
@@ -67,6 +70,7 @@ class _PressableState extends State<Pressable> {
           behavior: HitTestBehavior.opaque,
           child: AnimatedContainer(
             duration: Motion.of(context).hover,
+            curve: Motion.enter,
             constraints: BoxConstraints(minHeight: widget.minHeight),
             padding: widget.padding,
             decoration: BoxDecoration(
@@ -119,17 +123,27 @@ class _HoverLabelState extends State<HoverLabel>
     });
   Timer? _timer;
 
+  /// Guardado aquí: el foco puede cambiar mientras el botón se desmonta, y
+  /// entonces ya no se puede leer el contexto.
+  Duration _duration = Duration.zero;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _duration = Motion.of(context).tooltip;
+  }
+
   void _show() {
     _timer?.cancel();
     if (!mounted) return;
     _portal.show();
-    _anim.duration = Motion.of(context).tooltip;
+    _anim.duration = _duration;
     _anim.forward();
   }
 
   void _hide() {
     _timer?.cancel();
-    _anim.duration = Motion.of(context).tooltip;
+    _anim.duration = _duration;
     _anim.reverse();
   }
 
@@ -163,7 +177,10 @@ class _HoverLabelState extends State<HoverLabel>
                   builder: (context, child) => Opacity(
                     opacity: Motion.enter.transform(_anim.value),
                     child: Transform.translate(
-                      offset: Offset(0, 4 * (1 - _anim.value)),
+                      offset: Offset(
+                        0,
+                        4 * (1 - Motion.enter.transform(_anim.value)),
+                      ),
                       child: child,
                     ),
                   ),
@@ -214,6 +231,12 @@ class IconAction extends StatelessWidget {
   final String label;
   final VoidCallback? onPressed;
   final bool labelBelow;
+  final FocusNode? focusNode;
+
+  /// Fondo fijo (el engranaje con Opciones abierta).
+  final Color? color;
+  final double size;
+  final double? radius;
 
   const IconAction({
     super.key,
@@ -221,6 +244,10 @@ class IconAction extends StatelessWidget {
     required this.label,
     required this.onPressed,
     this.labelBelow = false,
+    this.focusNode,
+    this.color,
+    this.size = 44,
+    this.radius,
   });
 
   @override
@@ -231,8 +258,11 @@ class IconAction extends StatelessWidget {
       child: Pressable(
         onPressed: onPressed,
         label: label,
+        focusNode: focusNode,
+        color: color,
+        radius: radius ?? (size < 44 ? size / 2 : 10),
         child: SizedBox.square(
-          dimension: 44,
+          dimension: size,
           child: Center(child: ExcludeSemantics(child: icon)),
         ),
       ),

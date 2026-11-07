@@ -23,6 +23,12 @@ class MossText extends ThemeExtension<MossText> {
   /// Fila de la lista de chats: 14.
   final TextStyle row;
 
+  /// Fila del chat abierto: 14/500.
+  final TextStyle rowOpen;
+
+  /// Negrita del Markdown: solo el peso (600), sobre el estilo del párrafo.
+  final TextStyle strong;
+
   /// Grupo de la lista: 12/500, mayúsculas con 0.06em.
   final TextStyle group;
 
@@ -65,12 +71,20 @@ class MossText extends ThemeExtension<MossText> {
   /// Aviso corto: 14.
   final TextStyle toast;
 
+  /// Modelo en la lista de Opciones: Geist Mono 13.
+  final TextStyle model;
+
+  /// Pastilla "Búsqueda web": 13/500 en el color de código.
+  final TextStyle pill;
+
   const MossText({
     required this.answer,
     required this.bubble,
     required this.input,
     required this.nav,
     required this.row,
+    required this.rowOpen,
+    required this.strong,
     required this.group,
     required this.kbd,
     required this.logotype,
@@ -85,6 +99,8 @@ class MossText extends ThemeExtension<MossText> {
     required this.help,
     required this.tooltip,
     required this.toast,
+    required this.model,
+    required this.pill,
   });
 
   factory MossText.of(MossColors c) {
@@ -105,6 +121,8 @@ class MossText extends ThemeExtension<MossText> {
       input: geist(15, height: 1.5),
       nav: geist(14, weight: FontWeight.w500),
       row: geist(14),
+      rowOpen: geist(14, weight: FontWeight.w500),
+      strong: const TextStyle(fontWeight: FontWeight.w600),
       group: geist(
         12,
         weight: FontWeight.w500,
@@ -128,6 +146,8 @@ class MossText extends ThemeExtension<MossText> {
       help: geist(12).copyWith(color: c.textMuted),
       tooltip: geist(12, weight: FontWeight.w500).copyWith(color: c.background),
       toast: geist(14).copyWith(color: c.background),
+      model: mono(13),
+      pill: geist(13, weight: FontWeight.w500).copyWith(color: c.code),
     );
   }
 

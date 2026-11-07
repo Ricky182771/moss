@@ -42,14 +42,17 @@ class _RepeatingState extends State<_Repeating>
   }
 
   @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-    animation: _c,
-    builder: (context, child) => Opacity(
-      // El cursor parpadea encendido/apagado; "Pensando…" va de 0.4 a 1.
-      opacity: widget.blink ? (_c.value < 0.5 ? 1 : 0) : 0.4 + 0.6 * _c.value,
-      child: child,
+  // Su propia capa: el parpadeo no vuelve a pintar la lista de mensajes.
+  Widget build(BuildContext context) => RepaintBoundary(
+    child: AnimatedBuilder(
+      animation: _c,
+      builder: (context, child) => Opacity(
+        // El cursor parpadea encendido/apagado; "Pensando…" va de 0.4 a 1.
+        opacity: widget.blink ? (_c.value < 0.5 ? 1 : 0) : 0.4 + 0.6 * _c.value,
+        child: child,
+      ),
+      child: widget.child,
     ),
-    child: widget.child,
   );
 }
 

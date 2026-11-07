@@ -134,4 +134,39 @@ void main() {
     await tester.pump(const Duration(milliseconds: 200));
     expect((server.killed, closed), (true, true));
   });
+
+  test('start da el id que ve el servidor; cancel manda \$/cancel', () async {
+    final server = FakeServer(handlers: {'models.list': (_) => noReply});
+    final client = server.client();
+    await client.initialize();
+    await client
+        .request('conversations.list')
+        .catchError((_) => <String, dynamic>{});
+    final (id, result) = client.start('models.list', {'draft': {}});
+    client.cancel(id);
+    await pumpEventQueue();
+    final sent = server.requests.lastWhere((r) => r['method'] == 'models.list');
+    expect(sent['id'], id);
+    final cancel = server.requests.last;
+    expect(cancel['method'], r'$/cancel');
+    expect(cancel['params'], {'id': id});
+    result.ignore();
+  });
+
+  test('una petición cancelada es RpcError -32800', () async {
+    final server = FakeServer(
+      handlers: {
+        'models.list': (_) => throw const FakeError(-32800, 'RequestCancelled'),
+      },
+    );
+    final client = server.client();
+    await client.initialize();
+    final (_, result) = client.start('models.list', {'draft': {}});
+    expect(
+      result,
+      throwsA(
+        isA<RpcError>().having((e) => e.code, 'code', RpcError.cancelled),
+      ),
+    );
+  });
 }

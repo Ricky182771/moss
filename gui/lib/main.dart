@@ -3,6 +3,7 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
+import 'frame_stats.dart';
 import 'rpc/client.dart';
 import 'screens/chat_screen.dart';
 import 'screens/error_screen.dart';
@@ -11,6 +12,7 @@ import 'strings.dart';
 import 'theme/theme.dart';
 
 void main(List<String> args) {
+  if (args.contains('--frame-stats')) startFrameStats();
   runApp(MossApp(args: args));
 }
 

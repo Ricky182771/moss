@@ -21,6 +21,9 @@ cd gui
 flutter run -d linux --dart-entrypoint-args=--rpc=$PWD/../build/dev/cli/moss-rpc
 ```
 
+Así usa tu configuración y tus keys reales. Para probar, usa
+`tools/run-fake.sh` (abajo).
+
 ## Servidor falso (sin gastar)
 
 `tools/fake-llm.py` (solo Python estándar) imita la API de OpenAI en
@@ -32,26 +35,52 @@ streaming, con una respuesta con Markdown y un bloque de código.
 - `--status 429`: responde siempre con ese error (con `Retry-After: 5`;
   `moss-rpc` reintenta 3 veces, así que el error tarda unos 15 s en verse).
 
-Las variables de abajo llevan la configuración, los chats y las descargas a
-`/tmp/moss-prueba`, para **no tocar tus chats ni tu configuración**
-(`CHAT_*` gana sobre `config.json`; `XDG_CONFIG_HOME` mueve `config.json` y
-`credentials.json`; `CHAT_DATA_DIR` los chats; `CHAT_DOWNLOAD_DIR`
-`/exportar` y `/guardar`):
+Para probar a mano, **usa siempre `tools/run-fake.sh`** (en la raíz del
+repo). Quita de tu entorno todas las `CHAT_*`, exporta las de prueba y lleva
+la configuración, los chats y las descargas a `/tmp/moss-prueba`, para **no
+tocar tus chats, tu configuración ni tus keys**. Se niega a arrancar si alguna
+de esas rutas no queda bajo `/tmp` o si `CHAT_BASE_URL` no es `127.0.0.1` o
+`localhost`. Arranca `fake-llm.py` si no está corriendo (y lo detiene al
+salir) y luego la GUI con `--rpc`:
 
 ```bash
-# Terminal 1
-python3 tools/fake-llm.py --reasoning
-
-# Terminal 2, en la raíz del repo
-mkdir -p /tmp/moss-prueba
-cd gui && \
-CHAT_BASE_URL=http://127.0.0.1:8765/v1 CHAT_API_KEY=prueba CHAT_MODEL=fake \
-CHAT_DATA_DIR=/tmp/moss-prueba/chats CHAT_DOWNLOAD_DIR=/tmp/moss-prueba/descargas \
-XDG_CONFIG_HOME=/tmp/moss-prueba/config \
-flutter run -d linux --dart-entrypoint-args=--rpc=$PWD/../build/dev/cli/moss-rpc
+tools/run-fake.sh --reasoning                  # flutter run (debug)
+tools/run-fake.sh --perfil --frame-stats       # el bundle de profile
 ```
 
-Al cerrar la ventana, `pgrep -a moss-rpc` no debe mostrar nada.
+- `--reasoning`, `--slow` y `--status N` van a `fake-llm.py` (si ya corría,
+  se ignoran con un aviso).
+- `--frame-stats` va a la GUI.
+- `--perfil` usa `build/linux/x64/profile/bundle/moss-gui`; compílalo antes
+  con `flutter build linux --profile`.
+
+Al cerrar la ventana revisa `pgrep -a moss-rpc`; si quedó alguno, el script
+lo muestra y sale con 1.
+
+## Medir cuadros (`--frame-stats`)
+
+Solo en debug o profile (en release se ignora). Escribe en stderr el
+renderizador (Impeller o Skia) y la frecuencia que reporta la pantalla, y
+luego una línea por cada segundo con cuadros: cuántos, `build` y `raster`
+(promedio y máximo) y el intervalo entre vsyncs (promedio, máximo y cuántos
+pasan de 1.5× lo esperado). Un hueco de más de 250 ms es la app quieta y no
+cuenta. Mide en `--profile`: debug es mucho más lento.
+
+```bash
+flutter run -d linux --profile \
+  -a --rpc=$PWD/../build/dev/cli/moss-rpc -a --frame-stats
+```
+
+Añade `--no-enable-impeller` para usar Skia y `GDK_BACKEND=x11` delante
+para XWayland.
+
+## Qué hace (G2)
+
+- **Opciones** (engranaje a la izquierda de la caja): modelo y proveedor, y el interruptor de la búsqueda web (solo de esta sesión). `/model` sin modelo también la abre.
+- **Buscar chats** (Ctrl+K): por título, sin distinguir mayúsculas ni acentos.
+- **Menú `⋯`** de cada chat (también clic derecho y Shift+F10): Renombrar, Exportar y Borrar.
+- **Menú de `/`**: al escribir `/` al principio de la caja.
+- El texto del modelo aparece por palabra mientras llega.
 
 ## Pruebas
 

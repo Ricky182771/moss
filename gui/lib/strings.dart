@@ -6,8 +6,21 @@ class Strings {
   // Barra lateral
   static const newChat = 'Nuevo chat';
   static const newChatKey = 'Ctrl+N';
+  static const searchChats = 'Buscar chats';
+  static const searchChatsKey = 'Ctrl+K';
+  static const searchChatsHint = 'Buscar por título';
+  static const noChatsFound = 'Ningún chat coincide';
   static const chats = 'Chats';
   static const withWebSearch = 'Con búsqueda web';
+  static String moreOptions(String title) => 'Más opciones de «$title»';
+  static const chatMenu = 'Opciones del chat';
+  static const rename = 'Renombrar';
+  static const chatTitle = 'Título del chat';
+  static const delete = 'Borrar…';
+  static String deleteQuestion(String title) => '¿Borrar «$title»?';
+  static const cannotUndo = 'No se puede deshacer.';
+  static const cancel = 'Cancelar';
+  static const confirmDelete = 'Borrar';
 
   // Encabezado
   static const hideSidebar = 'Ocultar barra lateral (Ctrl+B)';
@@ -32,7 +45,29 @@ class Strings {
   static const send = 'Enviar';
   static const stop = 'Detener';
   static const help = 'Enter envía · Shift+Enter nueva línea · / comandos';
-  static const modelPickerHint = 'Escribe /model <proveedor> <modelo>.';
+
+  // Menú de /
+  static const commands = 'Comandos';
+  static const noCommands =
+      'Sin comandos que coincidan · se enviará como mensaje';
+
+  // Opciones
+  static const options = 'Opciones';
+  static const modelSection = 'Modelo';
+  static const providers = 'Proveedores';
+  static String modelsOf(String provider) => 'Modelos de $provider';
+  static const filterModels = 'Filtrar modelos';
+  static const filterProviders = 'Filtrar proveedores';
+  static const loadingModels = 'Cargando modelos…';
+  static const noMatches = 'Sin coincidencias';
+  static const typeModel = 'Escribe el modelo y presiona Enter';
+  static String lockedBy(String variable) => 'Fijado por $variable';
+  static const searchWeb = 'Buscar en la web';
+  static const searchWebHint = 'Responde con fuentes citadas';
+  static const noSearchKey = 'Falta la key de búsqueda';
+  static const provider = 'Proveedor';
+  static const webSearch = 'Búsqueda web';
+  static const removeWebSearch = 'Quitar la búsqueda web';
 
   // moss-rpc
   static const rpcNotFound = 'No se encontró moss-rpc';

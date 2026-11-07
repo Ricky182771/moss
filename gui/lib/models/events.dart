@@ -18,10 +18,14 @@ sealed class RpcEvent {
     'conversation.renamed',
     'chat.finished',
     'conversations.changed',
+    'settings.changed',
   };
 
   static RpcEvent parse(String method, Map<String, dynamic> p) {
     if (method == 'conversations.changed') return const ConversationsChanged();
+    if (method == 'settings.changed') {
+      return SettingsChanged(p['section'] as String);
+    }
     final c = p['conversation'] as String;
     final rev = p['rev'] as int;
     return switch (method) {
@@ -70,6 +74,12 @@ sealed class RpcEvent {
 
 class ConversationsChanged extends RpcEvent {
   const ConversationsChanged();
+}
+
+/// `settings.changed`: `provider`, `search`, `system_prompt`, `gui`…
+class SettingsChanged extends RpcEvent {
+  final String section;
+  const SettingsChanged(this.section);
 }
 
 /// Evento de una conversación: lleva el `rev` que deja.

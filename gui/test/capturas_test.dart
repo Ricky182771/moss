@@ -122,6 +122,81 @@ final _thinking = snapshot(
   ],
 );
 
+/// Lo que piden Opciones, el menú de / y el menú ⋯.
+Map<String, Object? Function(Map<String, dynamic>)> _handlers({
+  bool loading = false,
+}) => {
+  'settings.provider.get': (_) => providerSettings(),
+  'commands.list': (_) => {
+    'commands': [
+      {
+        'name': '/buscar',
+        'arguments': '<consulta>',
+        'description': 'Busca en la web y responde con fuentes citadas',
+        'needs_argument': true,
+        'available': true,
+        'note': '',
+      },
+      {
+        'name': '/copiar',
+        'arguments': '[n]',
+        'description': 'Copia un bloque de código',
+        'needs_argument': false,
+        'available': true,
+        'note': '',
+      },
+      {
+        'name': '/guardar',
+        'arguments': '[n]',
+        'description': 'Guarda un bloque de código en Descargas',
+        'needs_argument': false,
+        'available': false,
+        'note': 'no hay bloques de código',
+      },
+      {
+        'name': '/exportar',
+        'arguments': '',
+        'description': 'Exporta la conversación a Markdown',
+        'needs_argument': false,
+        'available': true,
+        'note': '',
+      },
+      {
+        'name': '/model',
+        'arguments': '[proveedor] [modelo]',
+        'description': 'Cambia de modelo',
+        'needs_argument': false,
+        'available': true,
+        'note': '',
+      },
+    ],
+  },
+  'models.list': (_) => loading
+      ? noReply
+      : {
+          'models': [
+            'z-ai/glm5',
+            'moonshotai/kimi-k3',
+            'nvidia/nemotron-3-ultra',
+            'qwen/qwen3.5-coder',
+            'deepseek-ai/deepseek-v4',
+          ],
+        },
+};
+
+/// Deja pasar los cuadros de una ventana que se abre (y sus respuestas).
+Future<void> _settle(WidgetTester tester) async {
+  for (var i = 0; i < 5; i++) {
+    await tester.pump();
+  }
+  await tester.pump(const Duration(milliseconds: 400));
+}
+
+Future<void> _typeInBox(WidgetTester tester, String text) async {
+  await tester.enterText(find.byType(TextField).first, text);
+  await _settle(tester);
+}
+
 void main() {
   setUpAll(() async {
     Directory(_out).createSync(recursive: true);
@@ -186,6 +261,95 @@ void main() {
       );
       await tester.pump(const Duration(milliseconds: 100));
       await _shot(tester, 'angosta-$mode');
+    });
+
+    testWidgets('Opciones abierta ($mode)', (tester) async {
+      await startApp(
+        tester,
+        theme: theme,
+        key: _key,
+        summaries: _summaries,
+        handlers: _handlers(),
+      );
+      await tester.tap(find.bySemanticsLabel(Strings.options).first);
+      await _settle(tester);
+      await _shot(tester, 'opciones-$mode');
+    });
+
+    testWidgets('Opciones cargando ($mode)', (tester) async {
+      await startApp(
+        tester,
+        theme: theme,
+        key: _key,
+        summaries: _summaries,
+        handlers: _handlers(loading: true),
+      );
+      await tester.tap(find.bySemanticsLabel(Strings.options).first);
+      await _settle(tester);
+      await _shot(tester, 'opciones-cargando-$mode');
+    });
+
+    testWidgets('búsqueda web: pastilla y dos filas ($mode)', (tester) async {
+      final (app, _) = await startApp(
+        tester,
+        theme: theme,
+        key: _key,
+        conversation: _chat,
+        summaries: _summaries,
+      );
+      app.searchOn.value = true;
+      await _settle(tester);
+      await _shot(tester, 'pastilla-$mode');
+    });
+
+    testWidgets('Buscar chats ($mode)', (tester) async {
+      await startApp(
+        tester,
+        theme: theme,
+        key: _key,
+        conversation: _chat,
+        summaries: _summaries,
+      );
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await _settle(tester);
+      await tester.enterText(find.byType(TextField).last, 'c++');
+      await _settle(tester);
+      await _shot(tester, 'buscar-$mode');
+    });
+
+    for (final (step, name) in [(0, 'menu'), (1, 'renombrar'), (2, 'borrar')]) {
+      testWidgets('menú ⋯: $name ($mode)', (tester) async {
+        await startApp(
+          tester,
+          theme: theme,
+          key: _key,
+          conversation: _chat,
+          summaries: _summaries,
+        );
+        await tester.tap(
+          find.bySemanticsLabel(Strings.moreOptions('Selection sort en C++')),
+        );
+        await _settle(tester);
+        if (step == 1) await tester.tap(find.text(Strings.rename));
+        if (step == 2) await tester.tap(find.text(Strings.delete));
+        await _settle(tester);
+        await _shot(tester, '$name-$mode');
+      });
+    }
+
+    testWidgets('menú de / ($mode)', (tester) async {
+      await startApp(
+        tester,
+        theme: theme,
+        key: _key,
+        conversation: _chat,
+        summaries: _summaries,
+        handlers: _handlers(),
+      );
+      await _typeInBox(tester, '/');
+      await _shot(tester, 'comandos-$mode');
     });
 
     testWidgets('error de moss-rpc ($mode)', (tester) async {

@@ -3,10 +3,12 @@ import 'package:flutter/rendering.dart' show OverflowBoxFit;
 
 import '../models/conversation.dart';
 import '../state/apply.dart';
+import '../state/arriving.dart';
 import '../strings.dart';
 import '../theme/colors.dart';
 import '../theme/motion.dart';
 import '../theme/theme.dart';
+import 'arriving_text.dart';
 import 'controls.dart';
 import 'logo.dart';
 import 'markdown_view.dart';
@@ -52,9 +54,14 @@ class EntryView extends StatelessWidget {
           children: [
             if (entry.reasoning.isNotEmpty) ThoughtView(entry),
             if (entry.text.isNotEmpty || entry.reasoning.isEmpty)
-              MarkdownView(
+              arriving(
+                context,
                 entry.text,
-                streaming: entry.inProgress && entry.text.isNotEmpty,
+                live: entry.inProgress,
+                build: (text) => MarkdownView(
+                  text,
+                  streaming: entry.inProgress && text.isNotEmpty,
+                ),
               ),
             // Como la TUI: cancelada, incompleta o la nota de finish_reason.
             if (entry.cancelled)
@@ -96,6 +103,20 @@ class EntryView extends StatelessWidget {
       ),
     };
   }
+}
+
+/// El texto del modelo: completo, o, mientras llega ([live]), hasta la
+/// última palabra (o línea de código) completa y con lo nuevo apareciendo.
+/// Con Reducir animaciones, completo y sin animar.
+Widget arriving(
+  BuildContext context,
+  String text, {
+  required bool live,
+  required Widget Function(String text) build,
+}) {
+  final animate = live && !Motion.of(context).reduced;
+  final shown = animate ? text.substring(0, shownLength(text)) : text;
+  return ArrivingText(text: shown, animate: animate, child: build(shown));
 }
 
 /// La "m" de avatar y, a su lado, lo del modelo.
@@ -177,6 +198,26 @@ class _ThoughtViewState extends State<ThoughtView>
   final _content = GlobalKey();
   late final _fold = AnimationController(vsync: this, value: _open ? 1 : 0)
     ..addListener(_keepAnswerInPlace);
+  late final _curved = CurvedAnimation(parent: _fold, curve: Motion.enter);
+
+  /// Plegado del todo: no se arma (ni se parsea) el Markdown.
+  bool _shut = false;
+
+  /// El Markdown del pensamiento se reusa mientras no cambie su texto.
+  String? _shownFor;
+  bool _shownLive = false;
+  Widget? _shown;
+
+  @override
+  void initState() {
+    super.initState();
+    _shut = _fold.isDismissed;
+    _fold.addStatusListener((s) {
+      final shut = s == AnimationStatus.dismissed;
+      if (shut != _shut) setState(() => _shut = shut);
+    });
+  }
+
   bool _autoFolding = false;
   double _lastFold = 1;
 
@@ -199,7 +240,7 @@ class _ThoughtViewState extends State<ThoughtView>
   void _animate({required bool auto}) {
     final motion = Motion.of(context);
     _autoFolding = auto && !_open;
-    _lastFold = _fold.value;
+    _lastFold = _curved.value;
     _fold.duration = auto ? motion.thinkingAutoFold : motion.thinkingFold;
     _open ? _fold.forward() : _fold.reverse();
   }
@@ -208,14 +249,15 @@ class _ThoughtViewState extends State<ThoughtView>
   void _keepAnswerInPlace() {
     if (!_autoFolding) return;
     final height = _content.currentContext?.size?.height ?? 0;
-    final delta = height * (_lastFold - _fold.value);
-    _lastFold = _fold.value;
+    final delta = height * (_lastFold - _curved.value);
+    _lastFold = _curved.value;
     if (delta > 0) ScrollAnchor.maybeOf(context)?.keepBelow(context, delta);
     if (_fold.isDismissed) _autoFolding = false;
   }
 
   @override
   void dispose() {
+    _curved.dispose();
     _fold.dispose();
     super.dispose();
   }
@@ -226,7 +268,21 @@ class _ThoughtViewState extends State<ThoughtView>
     final s = context.styles;
     // También mientras se pliega solo, para que no crezca antes de plegarse.
     final live = (_live(widget.entry) && _userOpen == null) || _autoFolding;
-    final text = MarkdownView(widget.entry.reasoning, thought: true);
+    final reasoning = widget.entry.reasoning;
+    final arrivingNow = _live(widget.entry);
+    if (!identical(reasoning, _shownFor) || arrivingNow != _shownLive) {
+      _shownFor = reasoning;
+      _shownLive = arrivingNow;
+      _shown = Builder(
+        builder: (context) => arriving(
+          context,
+          reasoning,
+          live: arrivingNow,
+          build: (text) => MarkdownView(text, thought: true),
+        ),
+      );
+    }
+    final text = _shown!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -245,7 +301,7 @@ class _ThoughtViewState extends State<ThoughtView>
                 spacing: 6,
                 children: [
                   RotationTransition(
-                    turns: Tween(begin: 0.0, end: 0.25).animate(_fold),
+                    turns: Tween(begin: 0.0, end: 0.25).animate(_curved),
                     child: Icon(
                       Icons.chevron_right_rounded,
                       size: 16,
@@ -262,28 +318,31 @@ class _ThoughtViewState extends State<ThoughtView>
           ),
         ),
         SizeTransition(
-          sizeFactor: _fold,
+          sizeFactor: _curved,
           alignment: AlignmentDirectional.topStart,
-          child: Padding(
-            key: _content,
-            padding: const EdgeInsets.only(top: 6, left: 22),
-            child: live
-                // Las últimas ~6 líneas mientras llega.
-                ? ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxHeight: s.thought.fontSize! * s.thought.height! * 6,
-                    ),
-                    child: ClipRect(
-                      child: OverflowBox(
-                        alignment: Alignment.bottomLeft,
-                        maxHeight: double.infinity,
-                        fit: OverflowBoxFit.deferToChild,
-                        child: text,
-                      ),
-                    ),
-                  )
-                : text,
-          ),
+          child: _shut && !_open
+              ? const SizedBox(width: double.infinity)
+              : Padding(
+                  key: _content,
+                  padding: const EdgeInsets.only(top: 6, left: 22),
+                  child: live
+                      // Las últimas ~6 líneas mientras llega.
+                      ? ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxHeight:
+                                s.thought.fontSize! * s.thought.height! * 6,
+                          ),
+                          child: ClipRect(
+                            child: OverflowBox(
+                              alignment: Alignment.bottomLeft,
+                              maxHeight: double.infinity,
+                              fit: OverflowBoxFit.deferToChild,
+                              child: text,
+                            ),
+                          ),
+                        )
+                      : text,
+                ),
         ),
       ],
     );

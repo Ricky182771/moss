@@ -10,6 +10,7 @@ import '../strings.dart';
 import '../theme/colors.dart';
 import '../theme/motion.dart';
 import '../theme/theme.dart';
+import 'arriving_text.dart';
 import 'controls.dart';
 import 'indicators.dart';
 
@@ -51,7 +52,7 @@ class MarkdownView extends StatelessWidget {
     final s = context.styles;
     final c = context.colors;
     final base = thought ? s.thought : s.answer;
-    final bold = base.copyWith(fontWeight: FontWeight.w600);
+    final bold = base.merge(s.strong);
     final heading = s.title.copyWith(color: base.color);
     return _Body(
       blockSpacing: thought ? 8 : 14,
@@ -65,7 +66,7 @@ class MarkdownView extends StatelessWidget {
       styleSheet: MarkdownStyleSheet(
         p: base,
         a: base.copyWith(color: c.accent, decoration: TextDecoration.underline),
-        strong: const TextStyle(fontWeight: FontWeight.w600),
+        strong: s.strong,
         em: const TextStyle(fontStyle: FontStyle.italic),
         del: const TextStyle(decoration: TextDecoration.lineThrough),
         code: s.inlineCode.copyWith(backgroundColor: c.field),
@@ -222,44 +223,48 @@ class _CodeBlockState extends State<CodeBlock> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            padding: const EdgeInsets.fromLTRB(14, 4, 6, 4),
-            decoration: BoxDecoration(border: Border(bottom: line)),
-            child: Row(
-              children: [
-                Expanded(child: Text(widget.language, style: s.codeLabel)),
-                Pressable(
-                  onPressed: _copy,
-                  radius: 8,
-                  minHeight: 36,
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  child: Center(
-                    widthFactor: 1,
-                    child: AnimatedSwitcher(
-                      duration: Motion.of(context).copySwap,
-                      child: _copied
-                          ? Text(
-                              Strings.copied,
-                              key: const ValueKey(true),
-                              style: s.smallButton,
-                            )
-                          : Row(
-                              key: const ValueKey(false),
-                              mainAxisSize: MainAxisSize.min,
-                              spacing: 6,
-                              children: [
-                                Icon(
-                                  Icons.content_copy_rounded,
-                                  size: 14,
-                                  color: c.textMuted,
-                                ),
-                                Text(Strings.copy, style: s.smallButton),
-                              ],
-                            ),
+          NotArriving(
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(14, 4, 6, 4),
+              decoration: BoxDecoration(border: Border(bottom: line)),
+              child: Row(
+                children: [
+                  Expanded(child: Text(widget.language, style: s.codeLabel)),
+                  Pressable(
+                    onPressed: _copy,
+                    radius: 8,
+                    minHeight: 36,
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    child: Center(
+                      widthFactor: 1,
+                      child: AnimatedSwitcher(
+                        duration: Motion.of(context).copySwap,
+                        switchInCurve: Motion.enter,
+                        switchOutCurve: Motion.enter,
+                        child: _copied
+                            ? Text(
+                                Strings.copied,
+                                key: const ValueKey(true),
+                                style: s.smallButton,
+                              )
+                            : Row(
+                                key: const ValueKey(false),
+                                mainAxisSize: MainAxisSize.min,
+                                spacing: 6,
+                                children: [
+                                  Icon(
+                                    Icons.content_copy_rounded,
+                                    size: 14,
+                                    color: c.textMuted,
+                                  ),
+                                  Text(Strings.copy, style: s.smallButton),
+                                ],
+                              ),
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
           SingleChildScrollView(

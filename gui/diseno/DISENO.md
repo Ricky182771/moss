@@ -53,6 +53,7 @@ Todos los pares de texto pasan 4.5:1.
   - Con la búsqueda activa, una pastilla **"Búsqueda web ×"** junto al engranaje.
   - **Enviar** (flecha verde) y **Detener** (cuadrado redondeado), solo ícono, sin fondo.
   - Ayuda: `Enter envía · Shift+Enter nueva línea · / comandos`.
+  - **Menú de `/`** (G2): al escribir `/` al principio, y mientras no haya espacio, un menú arriba de la caja con `commands.list` (pedido al abrirse): nombre con argumentos y descripción, filtrado por prefijo. Como el de la TUI (`cli/src/command_menu.cpp`): ↑ ↓ con vuelta, Tab completa, Enter completa `/buscar` y manda los demás, Esc solo cierra. **A diferencia de la TUI, los no disponibles van atenuados con su nota y no se pueden elegir.**
 - **Chat nuevo:** logo más "¿En qué te ayudo?". Si falta configurar el proveedor, una tarjeta con "Ir a Configuración".
 - **Buscar chats** (Ctrl+K): ventana centrada con el campo, resultados por fecha con la coincidencia resaltada y el globo de búsqueda; ↑ ↓, Enter, Esc. **Por título** (lo que da `conversations.list`); buscar dentro del texto necesitaría un método nuevo en el RPC.
 - **Configuración:** pantalla aparte (Volver al chat con Esc), menú de secciones a la izquierda, estado del servicio de Telegram al pie del menú, barra Cancelar / Guardar fija abajo; el panel de cada sección se desplaza solo. Por ahora solo en modo oscuro.
@@ -77,10 +78,10 @@ Todos los pares de texto pasan 4.5:1.
 |---|---|---|
 | Hover y foco (filas, Opciones, Detener) | color de fondo | 100 ms |
 | Etiqueta de un botón de ícono | aparece tras ~400 ms de hover (al instante con teclado): opacidad + sube 4 px | 120 ms |
-| Menú de Opciones y menú `⋯` | opacidad + escala 0.98 → 1 desde la esquina del botón | 140 ms (cierra en 100) |
+| Menú de Opciones, menú `⋯` y menú de `/` | opacidad + escala 0.98 → 1 desde la esquina del botón | 140 ms (cierra en 100) |
 | Buscar chats (Ctrl+K) | el fondo se oscurece; la ventana aparece y sube 8 px | 180 ms |
 | Chat ↔ Configuración | fundido, sin deslizar | 160 ms |
-| Ocultar barra lateral (Ctrl+B) | el ancho | 200 ms |
+| Ocultar barra lateral (Ctrl+B) | el ancho | 200 ms (cierra en 160) |
 | Caja que crece a dos filas | la altura | 140 ms |
 | Tu mensaje al enviarlo | opacidad + sube 6 px | 160 ms |
 | **Texto del modelo llegando** | **cada palabra nueva aparece con opacidad 0 → 1** (ver abajo) | **120 ms** |
