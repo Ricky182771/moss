@@ -63,15 +63,16 @@ class _InputBoxState extends State<InputBox> {
     final enter =
         e.logicalKey == LogicalKeyboardKey.enter ||
         e.logicalKey == LogicalKeyboardKey.numpadEnter;
-    // Shift+Enter, Enter con una composición del teclado y la repetición de
-    // la tecla siguen de largo.
-    if (e is! KeyDownEvent ||
+    // Shift+Enter y Enter con una composición del teclado siguen de largo.
+    if (e is KeyUpEvent ||
         !enter ||
         HardwareKeyboard.instance.isShiftPressed ||
         _text.value.composing.isValid) {
       return KeyEventResult.ignored;
     }
-    _send();
+    // Enter mantenido: se envía una vez y la repetición no mete saltos de
+    // línea en la caja.
+    if (e is KeyDownEvent) _send();
     return KeyEventResult.handled;
   }
 

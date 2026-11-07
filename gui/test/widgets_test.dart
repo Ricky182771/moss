@@ -248,6 +248,19 @@ void main() {
       expect(_input(tester).text, isEmpty);
     });
 
+    testWidgets('Enter mantenido envía una sola vez', (tester) async {
+      final (_, server) = await startApp(tester);
+      await tester.enterText(find.byType(TextField), 'hola');
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.enter);
+      // Atendida aquí: si siguiera de largo, GTK metería un salto de línea.
+      expect(await tester.sendKeyRepeatEvent(LogicalKeyboardKey.enter), true);
+      expect(await tester.sendKeyRepeatEvent(LogicalKeyboardKey.enter), true);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+      expect(server.methods.where((m) => m == 'chat.send'), hasLength(1));
+      expect(_input(tester).text, isEmpty);
+    });
+
     testWidgets('/comandos van por commands.run; status es un aviso', (
       tester,
     ) async {
