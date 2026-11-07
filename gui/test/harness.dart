@@ -20,6 +20,7 @@ Future<(AppState, FakeServer)> startApp(
   GuiPrefs? prefs,
   Key? key,
   Future<RpcClient> Function()? reconnect,
+  List<String> addons = const [],
 }) async {
   // Por defecto, oscuro.
   final saved =
@@ -72,6 +73,7 @@ Future<(AppState, FakeServer)> startApp(
     client,
     reconnect: reconnect,
     prefs: ValueNotifier(saved),
+    addons: addons,
   );
   await app.load('c1');
   await tester.pumpWidget(
@@ -273,4 +275,121 @@ Map<String, Object?> commandList({
       'note': modelNote,
     },
   ],
+};
+
+/// Las etiquetas de `addons.telegram.get` (las de `addon_field_label`).
+const kTelegramLabels = {
+  'token': 'Token',
+  'model': 'Modelo',
+  'model_key': 'Key del modelo',
+  'search_key': 'Key de búsqueda',
+  'allowed_users': 'IDs autorizados',
+  'invite_code': 'Código de invitación',
+  'daily_limit': 'Mensajes por día',
+  'concurrent': 'Respuestas a la vez',
+  'idle_minutes': 'Min. de inactividad',
+  'stale_minutes': 'Min. mensaje viejo',
+  'draft_ms': 'Vista previa (ms)',
+  'time_zone': 'Zona horaria',
+};
+
+Map<String, Object?> telegramGet({
+  bool enabled = true,
+  bool logErrorDetails = false,
+  Map<String, String> fields = const {},
+  bool readOnly = false,
+  String? readOnlyReason,
+  String? loadError,
+  String envNote = '',
+  List<String> discarded = const [],
+}) => {
+  'form': {
+    'enabled': enabled,
+    'log_error_details': logErrorDetails,
+    'fields': {
+      'token': '',
+      'model': '',
+      'model_key': '',
+      'search_key': '',
+      'allowed_users': '123456789, 987654321',
+      'invite_code': '',
+      'daily_limit': '34',
+      'concurrent': '4',
+      'idle_minutes': '60',
+      'stale_minutes': '10',
+      'draft_ms': '1000',
+      'time_zone': 'America/Mexico_City',
+      ...fields,
+    },
+    'remove_model_key': false,
+    'remove_search_key': false,
+  },
+  'secrets': {
+    'token': 'guardada: …x9Qe',
+    'model_key': 'sin configurar',
+    'search_key': 'sin configurar',
+  },
+  'labels': kTelegramLabels,
+  'env_note': envNote,
+  'read_only': readOnly,
+  'read_only_reason': readOnlyReason,
+  'discarded': discarded,
+  'load_error': loadError,
+};
+
+Map<String, Object?> serviceStatus({
+  bool systemd = true,
+  String active = 'active',
+  String summary = 'Servicio: activo · habilitado',
+  String problem = '',
+  String mismatch = '',
+}) => {
+  'systemd': systemd,
+  'active': active,
+  'enabled': 'enabled',
+  'exit_status': null,
+  'unit': 'current',
+  'linger': true,
+  'last_error': '',
+  'summary': summary,
+  'problem': problem,
+  'mismatch': mismatch,
+  'journal_command': 'journalctl --user -u moss-telegram -f',
+};
+
+Map<String, Object?> addonInstall({
+  bool installed = true,
+  String problem = '',
+}) => {
+  'name': 'telegram',
+  'installed': installed,
+  'path': installed ? '/usr/local/bin/moss-telegram' : null,
+  'problem': problem,
+  'config_version_ok': installed && problem.isEmpty ? true : null,
+};
+
+/// Los manejadores de la sección Telegram, para `startApp(handlers:)`.
+Map<String, Object? Function(Map<String, dynamic>)> telegramHandlers({
+  Map<String, Object?>? get,
+  Map<String, Object?>? status,
+  List<String> invited = const [],
+  bool needsRestart = false,
+}) => {
+  'addons.telegram.get': (_) => get ?? telegramGet(),
+  'addons.telegram.invited.list': (_) => {'users': invited},
+  'addons.list': (_) => {
+    'addons': [addonInstall()],
+  },
+  'addons.check_install': (_) => addonInstall(),
+  'service.status': (_) => status ?? serviceStatus(),
+  'addons.telegram.check': (_) => {
+    'field_errors': <String, String>{},
+    'form_error': null,
+    'needs_restart': needsRestart,
+  },
+  'addons.telegram.save': (_) => {'needs_restart': needsRestart},
+  'service.apply': (_) => {
+    'message': 'Configuración aplicada al bot.',
+    'ok': true,
+  },
 };

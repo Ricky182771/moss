@@ -128,9 +128,11 @@ class _BootState extends State<Boot> {
       final init = await client.initialize();
       // Antes de dibujar el chat, para que salga ya con su tema y tamaño.
       widget.prefs.value = await loadGuiPrefs(client);
+      final capabilities = init['capabilities'] as Map<String, dynamic>;
       final app = AppState(
         client,
         prefs: widget.prefs,
+        addons: (capabilities['addons'] as List?)?.cast<String>() ?? const [],
         reconnect: () => RpcClient.spawn(_location.path, _stderr),
       );
       await app.load(init['conversation'] as String);

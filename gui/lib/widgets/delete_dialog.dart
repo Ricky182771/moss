@@ -21,6 +21,52 @@ Future<void> confirmDelete(
   action: delete,
 );
 
+/// Una pregunta s/n (las del servidor con `-32008`, "¿Reiniciar ahora?"):
+/// true con Sí, false con No y null con Esc o el clic afuera, que cancelan
+/// (como `yes_no_answer` en la TUI). El foco empieza en No, la opción segura.
+Future<bool?> askYesNo(
+  BuildContext context, {
+  required String question,
+  String? detail,
+}) async {
+  final motion = Motion.of(context);
+  return showGeneralDialog<bool>(
+    context: context,
+    barrierDismissible: true,
+    barrierLabel: Strings.cancel,
+    barrierColor: context.colors.scrim,
+    transitionDuration: motion.menuOpen,
+    transitionBuilder: _transition,
+    pageBuilder: (context, _, _) => _ConfirmDialog(
+      // Las del servidor son las de la TUI: aquí responden los botones.
+      question: question.endsWith(' (s/n)')
+          ? question.substring(0, question.length - ' (s/n)'.length)
+          : question,
+      detail: detail,
+      cancelLabel: Strings.no,
+      confirmLabel: Strings.yes,
+      cancelResult: false,
+      action: () async => null,
+    ),
+  );
+}
+
+Widget _transition(
+  BuildContext context,
+  Animation<double> anim,
+  Animation<double> _,
+  Widget child,
+) {
+  final t = CurvedAnimation(parent: anim, curve: Motion.enter);
+  return FadeTransition(
+    opacity: t,
+    child: ScaleTransition(
+      scale: Tween(begin: 0.98, end: 1.0).animate(t),
+      child: child,
+    ),
+  );
+}
+
 /// Pregunta con [cancelLabel] y [confirmLabel] (en el color de error). El
 /// foco empieza en cancelar. [action] devuelve el error del servidor, que se
 /// queda en la ventana, o null para cerrarla. Devuelve si se confirmó.
@@ -39,16 +85,7 @@ Future<bool> confirm(
     barrierLabel: Strings.cancel,
     barrierColor: context.colors.scrim,
     transitionDuration: motion.menuOpen,
-    transitionBuilder: (context, anim, _, child) {
-      final t = CurvedAnimation(parent: anim, curve: Motion.enter);
-      return FadeTransition(
-        opacity: t,
-        child: ScaleTransition(
-          scale: Tween(begin: 0.98, end: 1.0).animate(t),
-          child: child,
-        ),
-      );
-    },
+    transitionBuilder: _transition,
     pageBuilder: (context, _, _) => _ConfirmDialog(
       question: question,
       detail: detail,
@@ -66,12 +103,16 @@ class _ConfirmDialog extends StatefulWidget {
   final String cancelLabel;
   final String confirmLabel;
   final Future<String?> Function() action;
+
+  /// Lo que devuelve el botón de cancelar (null: igual que Esc).
+  final bool? cancelResult;
   const _ConfirmDialog({
     required this.question,
     required this.detail,
     required this.cancelLabel,
     required this.confirmLabel,
     required this.action,
+    this.cancelResult,
   });
 
   @override
@@ -170,7 +211,8 @@ class _ConfirmDialogState extends State<_ConfirmDialog> {
                       children: [
                         Pressable(
                           focusNode: _cancel,
-                          onPressed: () => Navigator.of(context).pop(),
+                          onPressed: () =>
+                              Navigator.of(context).pop(widget.cancelResult),
                           minHeight: 40,
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           child: Center(

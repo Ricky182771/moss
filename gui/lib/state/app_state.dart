@@ -49,8 +49,12 @@ class AppState extends ChangeNotifier {
   /// Arranca otro `moss-rpc` cuando el que había se cayó.
   final Future<RpcClient> Function()? reconnect;
 
-  AppState(this._rpc, {this.reconnect, ValueNotifier<GuiPrefs>? prefs})
-    : prefs = prefs ?? ValueNotifier(const GuiPrefs()) {
+  AppState(
+    this._rpc, {
+    this.reconnect,
+    ValueNotifier<GuiPrefs>? prefs,
+    this.addons = const [],
+  }) : prefs = prefs ?? ValueNotifier(const GuiPrefs()) {
     _attach();
   }
 
@@ -76,6 +80,14 @@ class AppState extends ChangeNotifier {
 
   /// La sección de Configuración abierta; null en el chat.
   final settingsOpen = ValueNotifier<SettingsPage?>(null);
+
+  /// `capabilities.addons` de `initialize`: los addons que soporta el
+  /// servidor (en Windows, ninguno). No cambia durante la sesión.
+  final List<String> addons;
+
+  /// `service.changed` con su addon, para Configuración.
+  final _serviceEvents = StreamController<String>.broadcast(sync: true);
+  Stream<String> get serviceEvents => _serviceEvents.stream;
 
   /// `settings.changed` con su sección, para Configuración.
   final _settingsEvents = StreamController<String>.broadcast(sync: true);
@@ -332,6 +344,8 @@ class AppState extends ChangeNotifier {
     switch (e) {
       case ConversationsChanged():
         _refreshList().then((_) => notifyListeners(), onError: (_) {});
+      case ServiceChanged(:final addon):
+        if (!_serviceEvents.isClosed) _serviceEvents.add(addon);
       case SettingsChanged(:final section):
         if (!_settingsEvents.isClosed) _settingsEvents.add(section);
         if (section == 'provider' || section == 'search') {
@@ -391,6 +405,7 @@ class AppState extends ChangeNotifier {
     openOptions.dispose();
     settingsOpen.dispose();
     _settingsEvents.close();
+    _serviceEvents.close();
     super.dispose();
   }
 }

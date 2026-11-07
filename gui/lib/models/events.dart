@@ -19,12 +19,16 @@ sealed class RpcEvent {
     'chat.finished',
     'conversations.changed',
     'settings.changed',
+    'service.changed',
   };
 
   static RpcEvent parse(String method, Map<String, dynamic> p) {
     if (method == 'conversations.changed') return const ConversationsChanged();
     if (method == 'settings.changed') {
       return SettingsChanged(p['section'] as String);
+    }
+    if (method == 'service.changed') {
+      return ServiceChanged(p['addon'] as String);
     }
     final c = p['conversation'] as String;
     final rev = p['rev'] as int;
@@ -74,6 +78,13 @@ sealed class RpcEvent {
 
 class ConversationsChanged extends RpcEvent {
   const ConversationsChanged();
+}
+
+/// `service.changed`: terminó una acción del servicio de un addon (PROTOCOL.md
+/// §6.8), aunque se haya cancelado o haya fallado.
+class ServiceChanged extends RpcEvent {
+  final String addon;
+  const ServiceChanged(this.addon);
 }
 
 /// `settings.changed`: `provider`, `search`, `system_prompt`, `gui`…

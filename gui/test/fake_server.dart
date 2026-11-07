@@ -88,6 +88,29 @@ class FakeServer {
     _channel.foreign.sink.close();
   }
 
+  /// La respuesta tardía de una petición a la que su handler dio [noReply]
+  /// (una petición larga): [result] o el error [error].
+  void respond(Object id, {Object? result, FakeError? error}) => _send({
+    'id': id,
+    if (error == null)
+      'result': result
+    else
+      'error': {
+        'code': error.code,
+        'message': error.message,
+        if (error.data != null) 'data': error.data,
+      },
+  });
+
+  /// El `id` de la última petición de [method].
+  Object lastId(String method) =>
+      requests.lastWhere((r) => r['method'] == method)['id'] as Object;
+
+  /// Los `params` de la última petición de [method].
+  Map<String, dynamic> lastParams(String method) =>
+      (requests.lastWhere((r) => r['method'] == method)['params'] as Map)
+          .cast<String, dynamic>();
+
   /// Una notificación del servidor (un evento).
   void notify(String method, Map<String, Object?> params) =>
       _send({'method': method, 'params': params});
