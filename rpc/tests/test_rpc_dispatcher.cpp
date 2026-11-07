@@ -1999,7 +1999,76 @@ TEST_CASE("RPC: service.log", "[rpc][addons][registro]") {
             details ? "error chat=5 detalle=\"texto del alumno\"" : "error chat=5"));
         CHECK(result["truncated"] == false);
         CHECK(result["notice"] == "");
+        CHECK(result["errors"] == Json::array({1}));
         CHECK(rpc.system.calls() == std::vector<std::string>{journal});
+    }
+    SECTION("errors: sin errores, ninguno") {
+        rpc.system.answer(journal, chatbot_test::exited(
+                                       0, "2026-11-01T10:00:00-0600 pc moss-telegram[7]: "
+                                          "2026-11-01 10:00:00 info inicio\n"));
+        const Json result =
+            long_call(rpc, 2, "service.log", {{"addon", "telegram"}})[0]["result"];
+        CHECK(result["lines"].size() == 1);
+        CHECK(result["errors"] == Json::array());
+    }
+    SECTION("errors: la misma regla que la TUI, en orden") {
+        // De la más nueva a la más vieja; se voltean al leerlas.
+        const std::vector<std::string> newest_first = {
+            "2026-11-01T10:00:06-0600 pc moss-telegram[7]: moss-telegram: no se pudo leer",
+            "2026-11-01T10:00:05-0600 pc moss-telegram[7]: 2026-11-01 10:00:05 info error al "
+            "final no cuenta",
+            "2026-11-01T10:00:04-0600 pc moss-telegram[7]: 2026-11-01 10:00:04 error chat=5",
+            "una línea sin el formato short-iso con error",
+            "2026-11-01T10:00:02-0600 pc systemd[1]: Started moss-telegram.service.",
+            "2026-11-01T10:00:01-0600 pc moss-telegram[7]: 2026-11-01 10:00:01 error red",
+        };
+        std::string out;
+        for (const std::string& line : newest_first) {
+            out += line + "\n";
+        }
+        rpc.system.answer(journal, chatbot_test::exited(0, out));
+        const Json result =
+            long_call(rpc, 2, "service.log", {{"addon", "telegram"}})[0]["result"];
+        REQUIRE(result["lines"].size() == newest_first.size());
+        Json expected = Json::array();
+        for (std::size_t i = 0; i < result["lines"].size(); ++i) {
+            if (chatbot::cli::log_line_is_error(result["lines"][i].get<std::string>(),
+                                                "moss-telegram")) {
+                expected.push_back(i);
+            }
+        }
+        CHECK(expected == Json::array({0, 3, 5})); // La regla no cambió sin avisar.
+        CHECK(result["errors"] == expected);
+    }
+    SECTION("errors: índices sobre las líneas ya recortadas") {
+        // 300 líneas de ~4 KiB pasan de 1 MiB: se quitan las más viejas. La
+        // más nueva pasa de 4 KiB y se corta, pero sigue siendo error.
+        constexpr int count = 300;
+        std::string out;
+        for (int i = count - 1; i >= 0; --i) {
+            const std::string level = i % 3 == 2 ? "error" : "info";
+            std::string line = "2026-11-01T10:00:00-0600 pc moss-telegram[7]: 2026-11-01 "
+                               "10:00:00 " +
+                               level + " n=" + std::to_string(i) + " ";
+            line.append(i == count - 1 ? 5000 : 3500, 'x');
+            out += line + "\n";
+        }
+        rpc.system.answer(journal, chatbot_test::exited(0, out));
+        const Json result =
+            long_call(rpc, 2, "service.log", {{"addon", "telegram"}})[0]["result"];
+        CHECK(result["truncated"] == true);
+        const std::size_t kept = result["lines"].size();
+        REQUIRE(kept > 0);
+        REQUIRE(kept < count);
+        CHECK(result["lines"][kept - 1].get<std::string>().size() ==
+              chatbot::cli::kMaxLogLineBytes);
+        Json expected = Json::array();
+        for (std::size_t j = 0; j < kept; ++j) {
+            if ((count - kept + j) % 3 == 2) {
+                expected.push_back(j);
+            }
+        }
+        CHECK(result["errors"] == expected);
     }
     SECTION("lines: el número pedido y fuera de rango") {
         const std::string five =
@@ -2023,7 +2092,8 @@ TEST_CASE("RPC: service.log", "[rpc][addons][registro]") {
         CHECK(got[0]["result"].dump() ==
               Json({{"lines", Json::array()},
                     {"truncated", false},
-                    {"notice", std::string{chatbot::cli::kEmptyLog}}})
+                    {"notice", std::string{chatbot::cli::kEmptyLog}},
+                    {"errors", Json::array()}})
                   .dump());
     }
     SECTION("sin systemd: -32006; journalctl falla: -32007") {

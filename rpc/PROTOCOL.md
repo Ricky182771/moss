@@ -25,6 +25,7 @@ Versión del protocolo: **1**.
 | `settings.model_params.*`; `settings.changed` con `model_params` | 6.7, 7 | Implementado |
 | Pensamiento: `reasoning` en `Entry`, evento `conversation.reasoning_delta` | 5, 7 | Implementado |
 | `service.log` (el registro del bot) | 6.8 | Implementado |
+| `errors` en `service.log` (las líneas que la TUI pinta como error) | 6.8 | Implementado |
 | `conversation.rename`, evento `conversation.renamed`, `used_search` en `Summary`, `conversation.export` con `id` | 6.2, 6.3, 7 | Implementado |
 | `CHAT_DEBUG_RPC` | 10 | Implementado |
 | Windows: stdio en modo binario | 2 | Implementado, probado en la CI con pipes (`tools/check-rpc-pipes.sh`) |
@@ -603,11 +604,12 @@ La unidad que escribe `moss-rpc` es **byte por byte** la de la TUI: su `ExecStar
 **`service.restart`** · **`service.disable`** · **`service.reload`** `→ {addon}` `← {message, ok}`
 - `restart` con Activado sin guardar → `-32005` con `Activa el addon y guarda para arrancarlo.` (`[Reiniciar]` de F2). `reload` solo recarga si está activo (`message: ""` si no). Sin systemd de usuario → `-32006`.
 
-**`service.log`** `→ {addon, lines?: 200}` `← {lines: ["…"], truncated, notice}`
+**`service.log`** `→ {addon, lines?: 200}` `← {lines: ["…"], truncated, notice, errors: [0, …]}`
 - Las últimas `lines` líneas del registro del bot (`ServiceControl::log`: `journalctl --user -u moss-telegram.service -n <lines> -r -o short-iso --no-pager`: de la más nueva a la más vieja, para que si la salida pasa de 1 MiB se pierdan las viejas), volteadas: de la más vieja a la más nueva, como `[Ver registro]` de F2. `lines` va de 1 a 1000; fuera de rango, o si no es entero, `-32602` con `fields: ["lines"]`.
 - Cada línea viene sin controles (`md::sanitize`), con 4 KiB como mucho (sin partir UTF-8), y todas juntas con 1 MiB como mucho (se quitan las más viejas). `truncated` es `true` si se recortó una línea o se quitaron líneas.
 - **Privacidad:** con "Detalle de errores en el registro" (`log_error_details`) apagado en lo guardado, cada línea llega sin lo que va desde ` detalle=` (puede traer texto de los alumnos, como en `last_error`); encendido, completa. El token nunca está en el registro (el bot lo redacta) y las keys tampoco (el núcleo las cambia por `[key oculta]` en los mensajes de error).
-- Sin entradas: `{lines: [], truncated: false, notice: "El bot todavía no ha escrito nada en el registro."}`; si no, `notice` es `""`.
+- `errors`: los índices de `lines`, en orden, de las líneas que marca `log_line_is_error` (la misma función con la que F2 las pinta en el color de error: el mensaje de `short-iso` es un error del bot, con nivel `error` o el fatal `moss-telegram: …`). Se calculan sobre las líneas ya recortadas, así que siempre apuntan a `lines`. La GUI no copia la regla. Se agregó sin cambiar `protocol_version`: un cliente que no lo conoce lo ignora.
+- Sin entradas: `{lines: [], truncated: false, notice: "El bot todavía no ha escrito nada en el registro.", errors: []}`; si no, `notice` es `""`.
 - Sin systemd de usuario (o sin `journalctl`) → `-32006`. Si `journalctl` falla → `-32007` con `No se pudo leer el registro: …`. No necesita `moss` junto a `moss-rpc`.
 - `$/cancel` descarta la respuesta sin cortar `journalctl`. **No** emite `service.changed`: no cambia nada.
 
