@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:moss_gui/main.dart';
+import 'package:moss_gui/models/gui_prefs.dart';
 import 'package:moss_gui/rpc/client.dart';
 import 'package:moss_gui/screens/home_screen.dart';
 import 'package:moss_gui/state/app_state.dart';
-import 'package:moss_gui/theme/theme.dart';
 
 import 'fake_server.dart';
 
@@ -16,9 +17,18 @@ Future<(AppState, FakeServer)> startApp(
   Size size = const Size(1440, 900),
   bool disableAnimations = false,
   ThemeData? theme,
+  GuiPrefs? prefs,
   Key? key,
   Future<RpcClient> Function()? reconnect,
 }) async {
+  // Por defecto, oscuro.
+  final saved =
+      prefs ??
+      GuiPrefs(
+        theme: theme?.brightness == Brightness.light
+            ? ThemeChoice.light
+            : ThemeChoice.dark,
+      );
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -29,23 +39,25 @@ Future<(AppState, FakeServer)> startApp(
       'chat.send': (_) => {'accepted': true},
       'chat.cancel': (_) => {'cancelled': true},
       'app.status': (_) => appStatus(),
+      'settings.gui.get': (_) => {'value': saved.toJson()},
       ...handlers,
     },
   );
   final client = server.client();
   await client.initialize();
-  final app = AppState(client, reconnect: reconnect);
+  // Como `Boot`: las preferencias guardadas antes del chat.
+  final app = AppState(
+    client,
+    reconnect: reconnect,
+    prefs: ValueNotifier(saved),
+  );
   await app.load('c1');
   await tester.pumpWidget(
     MediaQuery(
       data: MediaQueryData(size: size, disableAnimations: disableAnimations),
       child: RepaintBoundary(
         key: key,
-        child: MaterialApp(
-          theme: theme ?? MossTheme.dark(),
-          debugShowCheckedModeBanner: false,
-          home: HomeScreen(app),
-        ),
+        child: PrefsApp(prefs: app.prefs, home: HomeScreen(app)),
       ),
     ),
   );

@@ -1,9 +1,11 @@
 import 'dart:io';
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'frame_stats.dart';
+import 'models/gui_prefs.dart';
 import 'rpc/client.dart';
 import 'screens/home_screen.dart';
 import 'screens/error_screen.dart';
@@ -16,29 +18,76 @@ void main(List<String> args) {
   runApp(MossApp(args: args));
 }
 
-class MossApp extends StatelessWidget {
+class MossApp extends StatefulWidget {
   final List<String> args;
   const MossApp({super.key, this.args = const []});
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
+  State<MossApp> createState() => _MossAppState();
+}
+
+class _MossAppState extends State<MossApp> {
+  /// Lo de Colores y accesibilidad; `Boot` lo lee antes del primer chat.
+  final _prefs = ValueNotifier(const GuiPrefs());
+
+  @override
+  void dispose() {
+    _prefs.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => PrefsApp(
+    prefs: _prefs,
+    home: Boot(args: widget.args, prefs: _prefs),
+  );
+}
+
+/// La `MaterialApp` con lo de Colores y accesibilidad: tema, Más contraste,
+/// tamaño del texto y Reducir animaciones (que se suma a la del sistema).
+class PrefsApp extends StatelessWidget {
+  final ValueListenable<GuiPrefs> prefs;
+  final Widget home;
+  const PrefsApp({super.key, required this.prefs, required this.home});
+
+  @override
+  Widget build(BuildContext context) => ValueListenableBuilder(
+    valueListenable: prefs,
+    builder: (context, p, home) => MaterialApp(
       title: 'Moss',
-      theme: MossTheme.light(),
-      darkTheme: MossTheme.dark(),
-      themeMode: ThemeMode.system,
+      theme: MossTheme.light(highContrast: p.highContrast),
+      darkTheme: MossTheme.dark(highContrast: p.highContrast),
+      themeMode: switch (p.theme) {
+        ThemeChoice.system => ThemeMode.system,
+        ThemeChoice.dark => ThemeMode.dark,
+        ThemeChoice.light => ThemeMode.light,
+      },
       // DISENO.md: el cambio de tema es instantáneo.
       themeAnimationDuration: Duration.zero,
       debugShowCheckedModeBanner: false,
-      home: Boot(args: args),
-    );
-  }
+      builder: (context, child) {
+        final mq = MediaQuery.of(context);
+        return MediaQuery(
+          data: mq.copyWith(
+            disableAnimations: mq.disableAnimations || p.reduceMotion,
+            textScaler: TextScaler.linear(
+              mq.textScaler.scale(1) * p.textSize.scale,
+            ),
+          ),
+          child: child!,
+        );
+      },
+      home: home,
+    ),
+    child: home,
+  );
 }
 
 /// Busca y arranca `moss-rpc`; muestra el chat o la pantalla de error.
 class Boot extends StatefulWidget {
   final List<String> args;
-  const Boot({super.key, required this.args});
+  final ValueNotifier<GuiPrefs> prefs;
+  const Boot({super.key, required this.args, required this.prefs});
 
   @override
   State<Boot> createState() => _BootState();
@@ -75,8 +124,11 @@ class _BootState extends State<Boot> {
     try {
       client = await RpcClient.spawn(_location.path, _stderr);
       final init = await client.initialize();
+      // Antes de dibujar el chat, para que salga ya con su tema y tamaño.
+      widget.prefs.value = await loadGuiPrefs(client);
       final app = AppState(
         client,
+        prefs: widget.prefs,
         reconnect: () => RpcClient.spawn(_location.path, _stderr),
       );
       await app.load(init['conversation'] as String);

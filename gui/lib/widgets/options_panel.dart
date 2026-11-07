@@ -528,7 +528,7 @@ class _Row extends StatelessWidget {
       child: Container(
         foregroundDecoration: highlighted
             ? BoxDecoration(
-                border: Border.all(color: c.accent, width: 2),
+                border: Border.all(color: c.accent, width: c.focusWidth),
                 borderRadius: BorderRadius.circular(8),
               )
             : null,

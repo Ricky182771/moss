@@ -331,7 +331,7 @@ class _RowState extends State<_Row> {
             decoration: BoxDecoration(
               color: c.field,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: c.accent, width: 2),
+              border: Border.all(color: c.accent, width: c.focusWidth),
             ),
             child: Focus(
               onKeyEvent: _renameKeys,

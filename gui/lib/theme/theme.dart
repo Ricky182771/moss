@@ -95,6 +95,9 @@ class MossText extends ThemeExtension<MossText> {
   /// Etiqueta de un campo: 14/500.
   final TextStyle label;
 
+  /// Nombre de una opción (tema, casilla): 15/500.
+  final TextStyle option;
+
   /// Texto de un campo: 15.
   final TextStyle field;
 
@@ -137,6 +140,7 @@ class MossText extends ThemeExtension<MossText> {
     required this.lead,
     required this.cardTitle,
     required this.label,
+    required this.option,
     required this.field,
     required this.fieldMono,
     required this.note,
@@ -197,6 +201,7 @@ class MossText extends ThemeExtension<MossText> {
       lead: geist(15, height: 1.5).copyWith(color: c.textMuted),
       cardTitle: geist(16, weight: FontWeight.w600),
       label: geist(14, weight: FontWeight.w500),
+      option: geist(15, weight: FontWeight.w500),
       field: geist(15),
       fieldMono: mono(15),
       note: geist(13, height: 1.5).copyWith(color: c.textMuted),
@@ -218,8 +223,14 @@ extension MossTextExtension on BuildContext {
 
 /// `ThemeData` armado a partir de los tokens.
 class MossTheme {
-  static ThemeData dark() => _build(MossColors.dark, Brightness.dark);
-  static ThemeData light() => _build(MossColors.light, Brightness.light);
+  static ThemeData dark({bool highContrast = false}) => _build(
+    highContrast ? MossColors.darkHigh : MossColors.dark,
+    Brightness.dark,
+  );
+  static ThemeData light({bool highContrast = false}) => _build(
+    highContrast ? MossColors.lightHigh : MossColors.light,
+    Brightness.light,
+  );
 
   static ThemeData _build(MossColors c, Brightness brightness) {
     final text = MossText.of(c);

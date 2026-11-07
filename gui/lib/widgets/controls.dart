@@ -91,7 +91,7 @@ class _PressableState extends State<Pressable> {
             ),
             foregroundDecoration: _focus
                 ? BoxDecoration(
-                    border: Border.all(color: c.accent, width: 2),
+                    border: Border.all(color: c.accent, width: c.focusWidth),
                     borderRadius: radius,
                   )
                 : null,

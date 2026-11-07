@@ -29,6 +29,10 @@ class MossColors extends ThemeExtension<MossColors> {
   /// Fondo oscurecido detrás de una ventana (Buscar chats).
   final Color scrim;
 
+  /// Grosor del anillo de foco (no es un color, pero cambia con Más
+  /// contraste junto con los demás tokens).
+  final double focusWidth;
+
   const MossColors({
     required this.background,
     required this.sidebar,
@@ -43,6 +47,7 @@ class MossColors extends ThemeExtension<MossColors> {
     required this.error,
     required this.shadow,
     required this.scrim,
+    this.focusWidth = 2,
   });
 
   static const dark = MossColors(
@@ -76,6 +81,43 @@ class MossColors extends ThemeExtension<MossColors> {
     // Las maquetas claras no tienen ventanas flotantes: el texto, más suave.
     shadow: Color(0x2917201A),
     scrim: Color(0x4D17201A),
+  );
+
+  // Más contraste (Colores y accesibilidad): todos los pares de texto en 7:1
+  // o más sobre fondo, barra, campo y acento suave (tabla en DISENO.md);
+  // bordes más marcados y foco de 3 px. Los fondos no cambian.
+  static final darkHigh = MossColors(
+    background: dark.background,
+    sidebar: dark.sidebar,
+    field: dark.field,
+    border: const Color(0xFF6B7D6F),
+    text: const Color(0xFFF2F7F3),
+    textMuted: const Color(0xFFC2CEC5),
+    accent: const Color(0xFFA8D47E),
+    textOnAccent: dark.textOnAccent,
+    accentSoft: dark.accentSoft,
+    code: const Color(0xFFC8E0AE),
+    error: const Color(0xFFF7A995),
+    shadow: dark.shadow,
+    scrim: dark.scrim,
+    focusWidth: 3,
+  );
+
+  static final lightHigh = MossColors(
+    background: light.background,
+    sidebar: light.sidebar,
+    field: light.field,
+    border: const Color(0xFF7D8C81),
+    text: const Color(0xFF0B110D),
+    textMuted: const Color(0xFF2E3A32),
+    accent: const Color(0xFF2F5221),
+    textOnAccent: light.textOnAccent,
+    accentSoft: light.accentSoft,
+    code: const Color(0xFF213A18),
+    error: const Color(0xFF8A2A18),
+    shadow: light.shadow,
+    scrim: light.scrim,
+    focusWidth: 3,
   );
 
   @override

@@ -8,8 +8,8 @@ class Motion {
   /// Animaciones apagadas: todo dura 0 ms y lo que se repite queda fijo.
   final bool reduced;
 
-  /// Lee `MediaQuery.disableAnimations`. En G3 se suma aquí la opción
-  /// "Reducir animaciones" de `settings.gui`.
+  /// Lee `MediaQuery.disableAnimations`, que `PrefsApp` (main.dart) ya
+  /// enciende también con "Reducir animaciones" de Colores y accesibilidad.
   static Motion of(BuildContext context) =>
       Motion._(MediaQuery.disableAnimationsOf(context));
 

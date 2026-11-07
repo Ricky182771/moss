@@ -536,7 +536,10 @@ class _SlashMenu extends StatelessWidget {
                 Container(
                   foregroundDecoration: i == index
                       ? BoxDecoration(
-                          border: Border.all(color: c.accent, width: 2),
+                          border: Border.all(
+                            color: c.accent,
+                            width: c.focusWidth,
+                          ),
                           borderRadius: BorderRadius.circular(8),
                         )
                       : null,
