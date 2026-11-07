@@ -53,7 +53,8 @@ class MarkdownView extends StatelessWidget {
     final base = thought ? s.thought : s.answer;
     final bold = base.copyWith(fontWeight: FontWeight.w600);
     final heading = s.title.copyWith(color: base.color);
-    return MarkdownBody(
+    return _Body(
+      blockSpacing: thought ? 8 : 14,
       data: streaming ? '${text.trimRight()}$_cursorMark' : text,
       onTapLink: (_, href, _) => openLink(href),
       // Nunca cargar imágenes (red o disco) por lo que escriba el modelo o una
@@ -87,10 +88,38 @@ class MarkdownView extends StatelessWidget {
           border: Border(top: BorderSide(color: c.border)),
         ),
         codeblockDecoration: const BoxDecoration(),
-        blockSpacing: thought ? 8 : 14,
+        // Entre viñetas, como la maqueta; entre bloques, el de [_Body].
+        blockSpacing: _itemSpacing,
       ),
     );
   }
+}
+
+const double _itemSpacing = 4;
+
+/// `MarkdownBody` usa el mismo `blockSpacing` entre bloques y entre viñetas.
+/// Este pone [blockSpacing] solo entre los bloques de arriba; adentro de las
+/// listas (y de las citas) queda [_itemSpacing].
+class _Body extends MarkdownBody {
+  final double blockSpacing;
+
+  const _Body({
+    required this.blockSpacing,
+    required super.data,
+    super.onTapLink,
+    super.imageBuilder,
+    super.inlineSyntaxes,
+    super.builders,
+    super.styleSheet,
+  });
+
+  @override
+  Widget build(BuildContext context, List<Widget>? children) =>
+      super.build(context, [
+        // Los separadores de arriba son `SizedBox` vacíos (`_addBlockChild`).
+        for (final w in children!)
+          w is SizedBox && w.child == null ? SizedBox(height: blockSpacing) : w,
+      ]);
 }
 
 class _CursorSyntax extends md.InlineSyntax {

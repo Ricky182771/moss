@@ -3,7 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:moss_gui/strings.dart';
 import 'package:moss_gui/theme/motion.dart';
+import 'package:moss_gui/theme/theme.dart';
 import 'package:moss_gui/widgets/entry_view.dart';
+import 'package:moss_gui/widgets/markdown_view.dart';
 import 'package:moss_gui/widgets/message_list.dart';
 import 'package:moss_gui/widgets/sidebar.dart';
 
@@ -313,6 +315,23 @@ void main() {
         isSemantics(isButton: true, isEnabled: false, hasEnabledState: true),
       );
     });
+  });
+
+  testWidgets('viñetas a 4 px y bloques a 14 px, como la maqueta', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: MossTheme.dark(),
+        home: const Material(
+          child: MarkdownView('Antes\n\n- uno\n- dos\n\nDespués'),
+        ),
+      ),
+    );
+    Rect box(String t) => tester.getRect(find.text(t, findRichText: true).last);
+    expect(box('dos').top - box('uno').bottom, 4);
+    expect(box('uno').top - box('Antes').bottom, 14);
+    expect(box('Después').top - box('dos').bottom, 14);
   });
 
   testWidgets('las imágenes del Markdown no se cargan: solo su alt', (
