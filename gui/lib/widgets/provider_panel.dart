@@ -426,6 +426,7 @@ class _ListRow extends StatelessWidget {
                 child: Text(
                   note,
                   style: s.help,
+                  textAlign: TextAlign.end,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),

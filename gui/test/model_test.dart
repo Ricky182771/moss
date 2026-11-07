@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:moss_gui/strings.dart';
 import 'package:moss_gui/widgets/controls.dart';
+import 'package:moss_gui/widgets/markdown_view.dart';
 import 'package:moss_gui/widgets/settings_form.dart';
 
 import 'fake_server.dart';
@@ -152,6 +153,47 @@ void main() {
     );
   });
 
+  testWidgets('"0.60" es lo guardado (0.6): sin cambios tras guardar', (
+    tester,
+  ) async {
+    final (_, server) = await startApp(
+      tester,
+      handlers: {'settings.model_params.save': (_) => <String, Object?>{}},
+    );
+    await _openModel(tester);
+    await tester.ensureVisible(_field('Temperatura'));
+    await tester.enterText(_editable('Temperatura'), '0.60');
+    await tester.pumpAndSettle(const Duration(milliseconds: 500));
+    expect(
+      find.bySemanticsLabel(Strings.withUnsaved(Strings.modelTitle)),
+      findsNothing,
+    );
+    await tester.enterText(_editable('Temperatura'), '0,7');
+    await tester.pumpAndSettle(const Duration(milliseconds: 500));
+    await tester.tap(find.text(Strings.save));
+    await tester.pumpAndSettle();
+    final params = _last(server, 'settings.model_params.save')['params'] as Map;
+    expect(params['temperature'], 0.7);
+    expect(
+      find.bySemanticsLabel(Strings.withUnsaved(Strings.modelTitle)),
+      findsNothing,
+    );
+  });
+
+  testWidgets('un entero con decimales se marca y no se guarda', (
+    tester,
+  ) async {
+    final (_, server) = await startApp(tester);
+    await _openModel(tester);
+    await tester.ensureVisible(_field('Top K'));
+    await tester.enterText(_editable('Top K'), '2.5');
+    await tester.pumpAndSettle(const Duration(milliseconds: 500));
+    expect(find.text(Strings.notAnInteger), findsOneWidget);
+    await tester.tap(find.text(Strings.save));
+    await tester.pumpAndSettle();
+    expect(server.methods, isNot(contains('settings.model_params.save')));
+  });
+
   testWidgets('Avanzado: extra_error, vista previa y Copiar', (tester) async {
     await startApp(
       tester,
@@ -186,7 +228,13 @@ void main() {
     );
     await tester.enterText(_editable(Strings.extraJson), '{"x": 1}');
     await tester.pumpAndSettle(const Duration(milliseconds: 500));
-    expect(find.textContaining('"x": 1'), findsWidgets);
+    expect(
+      find.descendant(
+        of: find.byType(CodeBlock),
+        matching: find.textContaining('"x": 1'),
+      ),
+      findsOneWidget,
+    );
     expect(find.widgetWithText(Pressable, Strings.copy), findsOneWidget);
   });
 

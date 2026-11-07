@@ -581,6 +581,7 @@ class _Row extends StatelessWidget {
                   child: Text(
                     note,
                     style: s.help,
+                    textAlign: TextAlign.end,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),

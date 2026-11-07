@@ -114,6 +114,7 @@ Todos pasan 7:1 (lo vigila `test/colors_test.dart`). El borde queda en 4.2:1 (os
 | Cursor verde al final de la respuesta | parpadeo lento (1 s); fijo con Reducir animaciones | — |
 | "Pensando…" | opacidad que pulsa suave (1.2 s); fija con Reducir animaciones | — |
 | Bloque Pensamiento (plegar/desplegar) | la altura y la flechita gira | 180 ms |
+| Avanzado en Configuración del modelo (G3) | la altura y la flechita gira | 180 ms |
 | Pensamiento que se pliega solo con el primer texto | la altura, **sin que salte el scroll** (la respuesta se queda donde estaba a la vista) | 200 ms |
 | [Copiar] → "Copiado ✓" | fundido del texto del botón; regresa a los 2 s | 120 ms |
 | Error en un campo | el mensaje aparece con opacidad, sin sacudir el campo | 120 ms |

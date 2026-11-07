@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../models/conversation.dart';
 import '../rpc/client.dart';
 import '../rpc/errors.dart';
+import '../strings.dart';
 import 'app_state.dart';
 
 /// Las secciones de Configuración, en el orden del menú (las maquetas).
@@ -217,6 +218,7 @@ class SettingsState extends ChangeNotifier {
       for (final (i, e) in changed.indexed) {
         if (!ok[i]) {
           page = e.key;
+          barError = Strings.reviewMarked;
           return;
         }
       }

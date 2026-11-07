@@ -100,13 +100,22 @@ class ModelSection extends SettingsSection {
     if (reasoning != savedParams['reasoning'] || extra.text != savedExtra) {
       return true;
     }
-    return kNumberFields.any((k) => fields[k]!.text != _show(savedParams[k]));
+    // Por valor, no por texto: "0.60" es lo mismo que 0.6 guardado.
+    return kNumberFields.any((k) {
+      final (value, bad) = _parse(k);
+      return bad != null || value != savedParams[k];
+    });
   }
 
   @override
   bool get dirty => promptDirty || paramsDirty;
 
-  static String _show(Object? v) => v == null ? '' : '$v';
+  static String _show(Object? v) => switch (v) {
+    null => '',
+    // 2048.0 de JSON se ve como 2048.
+    final double d when d == d.roundToDouble() => '${d.round()}',
+    _ => '$v',
+  };
 
   /// Lo que se manda de las instrucciones: el predeterminado se guarda como
   /// "sin la llave" en el servidor (`system_prompt_to_store`).
@@ -212,9 +221,12 @@ class ModelSection extends SettingsSection {
   void _schedulePrompt({bool now = false}) {
     _promptTimer?.cancel();
     if (now) {
-      _quiet(_checkPrompt);
+      _quiet(_checkPrompt, prompt: true);
     } else {
-      _promptTimer = Timer(kCheckDelay, () => _quiet(_checkPrompt));
+      _promptTimer = Timer(
+        kCheckDelay,
+        () => _quiet(_checkPrompt, prompt: true),
+      );
     }
   }
 
@@ -260,20 +272,36 @@ class ModelSection extends SettingsSection {
     paramsEdited(now: true);
   }
 
-  /// Lo escrito como número. Lo que no es número se marca aquí (no se puede
-  /// mandar como número); el rango y si es entero los revisa el servidor.
+  static final _decimal = RegExp(r'^-?\d+(\.\d+)?$');
+  static final _integer = RegExp(r'^-?\d+$');
+
+  /// Lo escrito en [key] como número: vacío es null (Predeterminado). Lo que
+  /// no se puede mandar como número (o como entero, si `limits` dice que lo
+  /// es) se marca aquí, con los textos de la TUI; el rango lo revisa el
+  /// servidor. Acepta la coma decimal, como la TUI.
+  (num?, String?) _parse(String key) {
+    final t = fields[key]!.text
+        .trim()
+        .replaceAll('−', '-')
+        .replaceAll(',', '.');
+    if (t.isEmpty) return (null, null);
+    if (limits[key]?.integer ?? false) {
+      return _integer.hasMatch(t)
+          ? (int.parse(t), null)
+          : (null, Strings.notAnInteger);
+    }
+    return _decimal.hasMatch(t)
+        ? (num.parse(t), null)
+        : (null, Strings.notANumber);
+  }
+
   (Map<String, Object?>, Map<String, String>) _params() {
     final params = <String, Object?>{'reasoning': reasoning};
     final bad = <String, String>{};
     for (final k in kNumberFields) {
-      final t = fields[k]!.text.trim().replaceAll('−', '-');
-      if (t.isEmpty) {
-        params[k] = null;
-      } else if (num.tryParse(t) case final n?) {
-        params[k] = n;
-      } else {
-        bad[k] = Strings.notANumber;
-      }
+      final (value, error) = _parse(k);
+      params[k] = value;
+      if (error != null) bad[k] = error;
     }
     return (params, bad);
   }
@@ -285,6 +313,7 @@ class ModelSection extends SettingsSection {
     final (params, bad) = _params();
     if (bad.isNotEmpty) {
       fieldErrors = bad;
+      paramsError = null;
       preview = null;
       notifyListeners();
       return false;
@@ -308,13 +337,17 @@ class ModelSection extends SettingsSection {
   }
 
   /// Un `check` mientras se escribe: si falla (Busy, no se pudo leer), su
-  /// mensaje queda a la vista.
-  Future<void> _quiet(Future<bool> Function() f) async {
+  /// mensaje queda a la vista, en su parte.
+  Future<void> _quiet(Future<bool> Function() f, {bool prompt = false}) async {
     try {
       await f();
     } on RpcError catch (e) {
       if (disposed) return;
-      paramsError = e.displayMessage;
+      if (prompt || noModel != null) {
+        promptError = e.displayMessage;
+      } else {
+        paramsError = e.displayMessage;
+      }
       notifyListeners();
     } on StateError {
       // El canal se cerró.
@@ -338,22 +371,27 @@ class ModelSection extends SettingsSection {
     if (paramsDirty)
       SaveStep(SaveOrder.modelParams, () async {
         _savingParams = true;
+        // Lo que se manda: lo que se escriba mientras responde sigue como
+        // cambio sin guardar.
+        final params = _params().$1;
+        final sent = extra.text;
         await rpc.request('settings.model_params.save', {
-          'params': _params().$1,
-          'extra': extra.text,
+          'params': params,
+          'extra': sent,
         });
-        savedParams = _params().$1;
-        savedExtra = extra.text;
+        savedParams = params;
+        savedExtra = sent;
         notifyListeners();
       }),
     if (promptDirty)
       SaveStep(SaveOrder.systemPrompt, () async {
         _savingParams = false;
+        final (sentMode, sentText) = (mode, prompt.text);
         await rpc.request('settings.system_prompt.save', {
           'text': promptToSend,
         });
-        savedMode = mode;
-        savedText = prompt.text;
+        savedMode = sentMode;
+        savedText = sentText;
         notifyListeners();
       }),
   ];

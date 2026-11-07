@@ -221,11 +221,13 @@ class Strings {
   static const envApiKey = 'CHAT_API_KEY';
   static const envSearchKey = 'CHAT_SEARCH_API_KEY';
   static const notANumber = 'Escribe un número.';
+  static const notAnInteger = 'Escribe un número entero.';
   static const showKey = 'Ver lo que escribes';
   static const hideKey = 'Ocultar lo que escribes';
   static const newKeyHint = 'Escribe una API key nueva';
   static const keepKeyHelp =
       'Déjala vacía para conservar la guardada. Nunca se muestra completa.';
+  static const reviewMarked = 'Revisa los campos marcados: no se guardó nada.';
   static const changedOutside =
       'Esto se cambió fuera de aquí mientras lo editabas. Cancelar trae lo '
       'guardado; Guardar lo reemplaza con lo tuyo.';
