@@ -46,6 +46,11 @@ class Strings {
   static const stop = 'Detener';
   static const help = 'Enter envía · Shift+Enter nueva línea · / comandos';
 
+  // Menú de /
+  static const commands = 'Comandos';
+  static const noCommands =
+      'Sin comandos que coincidan · se enviará como mensaje';
+
   // Opciones
   static const options = 'Opciones';
   static const modelSection = 'Modelo';

@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../models/conversation.dart';
 import '../models/events.dart';
+import '../models/settings.dart';
 import '../models/summary.dart';
 import '../rpc/client.dart';
 import '../rpc/errors.dart';
@@ -199,6 +200,24 @@ class AppState extends ChangeNotifier {
     }
     return r;
   });
+
+  /// `commands.list` para el menú de `/` (con su disponibilidad de ahora).
+  /// Si falla, lista vacía: el texto se manda como siempre.
+  Future<List<CommandInfo>> commands() async {
+    final c = conversation;
+    if (c == null) return const [];
+    try {
+      final r = await _rpc.request('commands.list', {
+        'conversation': c.conversation,
+      });
+      return [
+        for (final x in r['commands'] as List)
+          CommandInfo.fromJson(x as Map<String, dynamic>),
+      ];
+    } on Object {
+      return const [];
+    }
+  }
 
   /// Una petición cuyo error se muestra junto a lo que la causó.
   Future<String?> _ask(Future<Object?> Function() f) async {
