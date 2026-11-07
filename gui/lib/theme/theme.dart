@@ -107,6 +107,9 @@ class MossText extends ThemeExtension<MossText> {
   /// Ayuda bajo un campo y notas: 13/1.5, tenue.
   final TextStyle note;
 
+  /// Estado de una key (`guardada: …abcd`): Geist Mono 13, tenue.
+  final TextStyle noteMono;
+
   /// Vista previa de la petición: Geist Mono 13/1.6.
   final TextStyle preview;
 
@@ -144,6 +147,7 @@ class MossText extends ThemeExtension<MossText> {
     required this.field,
     required this.fieldMono,
     required this.note,
+    required this.noteMono,
     required this.preview,
   });
 
@@ -205,6 +209,7 @@ class MossText extends ThemeExtension<MossText> {
       field: geist(15),
       fieldMono: mono(15),
       note: geist(13, height: 1.5).copyWith(color: c.textMuted),
+      noteMono: mono(13).copyWith(color: c.textMuted),
       preview: mono(13, height: 1.6),
     );
   }

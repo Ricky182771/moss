@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
+import '../strings.dart';
 import '../theme/colors.dart';
 import '../theme/motion.dart';
 import '../theme/theme.dart';
@@ -273,6 +275,287 @@ class FieldMessage extends StatelessWidget {
                 style: error ? s.note.copyWith(color: c.error) : s.note,
               ),
             ),
+    );
+  }
+}
+
+/// Un campo con su etiqueta, deshabilitado con la razón (`Fijado por
+/// CHAT_…`), su ayuda y su error.
+class LabeledField extends StatelessWidget {
+  final String label;
+  final TextEditingController controller;
+  final ValueChanged<String>? onChanged;
+  final bool mono;
+  final bool enabled;
+  final String? lockedBy;
+  final String? help;
+  final String? error;
+  final String? hint;
+  final FocusNode? focusNode;
+  final Widget? trailing;
+
+  const LabeledField({
+    super.key,
+    required this.label,
+    required this.controller,
+    this.onChanged,
+    this.mono = false,
+    this.enabled = true,
+    this.lockedBy,
+    this.help,
+    this.error,
+    this.hint,
+    this.focusNode,
+    this.trailing,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final s = context.styles;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: 8,
+      children: [
+        Text(label, style: s.label),
+        Row(
+          spacing: 12,
+          children: [
+            Expanded(
+              child: FieldBox(
+                controller: controller,
+                label: label,
+                onChanged: onChanged,
+                mono: mono,
+                enabled: enabled && lockedBy == null,
+                hint: hint,
+                focusNode: focusNode,
+                invalid: error != null,
+              ),
+            ),
+            ?trailing,
+          ],
+        ),
+        if (lockedBy != null) Text(Strings.lockedBy(lockedBy!), style: s.note),
+        if (help != null) Text(help!, style: s.note),
+        FieldMessage(error),
+      ],
+    );
+  }
+}
+
+/// La caja de texto de 44 px de las maquetas.
+class FieldBox extends StatelessWidget {
+  final TextEditingController controller;
+  final String label;
+  final ValueChanged<String>? onChanged;
+  final bool mono;
+  final bool enabled;
+  final bool invalid;
+  final String? hint;
+  final FocusNode? focusNode;
+  final bool obscure;
+
+  /// Una key: sin menú de copiar ni Ctrl+C / Ctrl+X, también a la vista.
+  final bool secret;
+  final Widget? suffix;
+  final int? maxLines;
+  final int? minLines;
+
+  const FieldBox({
+    super.key,
+    required this.controller,
+    required this.label,
+    this.onChanged,
+    this.mono = false,
+    this.enabled = true,
+    this.invalid = false,
+    this.hint,
+    this.focusNode,
+    this.obscure = false,
+    this.secret = false,
+    this.suffix,
+    this.maxLines = 1,
+    this.minLines,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final s = context.styles;
+    final style = mono ? s.fieldMono : s.field;
+    OutlineInputBorder border(Color color, [double width = 1]) =>
+        OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: color, width: width),
+        );
+    final field = Semantics(
+      label: label,
+      textField: true,
+      child: TextField(
+        controller: controller,
+        focusNode: focusNode,
+        onChanged: onChanged,
+        enabled: enabled,
+        obscureText: obscure,
+        contextMenuBuilder: secret
+            ? null
+            : (context, state) => AdaptiveTextSelectionToolbar.editableText(
+                editableTextState: state,
+              ),
+        maxLines: obscure ? 1 : maxLines,
+        minLines: minLines,
+        // Keys: sin autocorrector, sugerencias ni aprendizaje del teclado.
+        autocorrect: !obscure && !mono,
+        enableSuggestions: !obscure && !mono,
+        enableIMEPersonalizedLearning: !obscure,
+        keyboardType: obscure
+            ? TextInputType.visiblePassword
+            : maxLines == 1
+            ? TextInputType.text
+            : TextInputType.multiline,
+        style: enabled ? style : style.copyWith(color: c.textMuted),
+        cursorColor: c.accent,
+        decoration: InputDecoration(
+          isDense: true,
+          filled: true,
+          fillColor: c.field,
+          hintText: hint,
+          hintStyle: style.copyWith(color: c.textMuted),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 12,
+          ),
+          suffixIcon: suffix,
+          border: border(c.border),
+          enabledBorder: border(invalid ? c.error : c.border),
+          disabledBorder: border(c.border),
+          focusedBorder: border(invalid ? c.error : c.accent, c.focusWidth),
+        ),
+      ),
+    );
+    if (!secret) return field;
+    const block = DoNothingAndStopPropagationTextIntent();
+    return Shortcuts(
+      shortcuts: const {
+        SingleActivator(LogicalKeyboardKey.keyC, control: true): block,
+        SingleActivator(LogicalKeyboardKey.keyX, control: true): block,
+        SingleActivator(LogicalKeyboardKey.insert, control: true): block,
+        SingleActivator(LogicalKeyboardKey.delete, shift: true): block,
+      },
+      child: field,
+    );
+  }
+}
+
+/// API key: enmascarada y vacía (vacía = se conserva la guardada). El botón
+/// de ver muestra lo que se escribe hasta que el campo pierde el foco. No se
+/// puede copiar ni cortar, tampoco a la vista.
+class SecretField extends StatefulWidget {
+  final String label;
+  final TextEditingController controller;
+  final ValueChanged<String>? onChanged;
+  final bool enabled;
+
+  /// `key_status` del servidor (`guardada: …abcd`), al lado del campo.
+  final String status;
+  final String? lockedBy;
+  final String? help;
+  final String? error;
+
+  const SecretField({
+    super.key,
+    required this.label,
+    required this.controller,
+    this.onChanged,
+    this.enabled = true,
+    this.status = '',
+    this.lockedBy,
+    this.help,
+    this.error,
+  });
+
+  @override
+  State<SecretField> createState() => _SecretFieldState();
+}
+
+class _SecretFieldState extends State<SecretField> {
+  final _focus = FocusNode();
+  bool _reveal = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focus.addListener(_blur);
+  }
+
+  /// Al salir del campo (el botón de ver no se lleva el foco) se tapa.
+  void _blur() {
+    if (!_focus.hasFocus && _reveal) setState(() => _reveal = false);
+  }
+
+  @override
+  void dispose() {
+    _focus.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final s = context.styles;
+    final enabled = widget.enabled && widget.lockedBy == null;
+    final eye = ExcludeFocus(
+      child: IconAction(
+        size: 36,
+        label: _reveal ? Strings.hideKey : Strings.showKey,
+        onPressed: enabled
+            ? () {
+                setState(() => _reveal = !_reveal);
+                _focus.requestFocus();
+              }
+            : null,
+        icon: Icon(
+          _reveal ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+          size: 18,
+          color: c.textMuted,
+        ),
+      ),
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: 8,
+      children: [
+        Text(widget.label, style: s.label),
+        Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 12,
+          runSpacing: 8,
+          children: [
+            ConstrainedBox(
+              constraints: const BoxConstraints(minWidth: 280, maxWidth: 520),
+              child: FieldBox(
+                controller: widget.controller,
+                label: widget.label,
+                focusNode: _focus,
+                onChanged: widget.onChanged,
+                enabled: enabled,
+                invalid: widget.error != null,
+                mono: true,
+                obscure: !_reveal,
+                secret: true,
+                hint: Strings.newKeyHint,
+                suffix: eye,
+              ),
+            ),
+            if (widget.status.isNotEmpty)
+              Text(widget.status, style: s.noteMono),
+          ],
+        ),
+        if (widget.lockedBy != null)
+          Text(Strings.lockedBy(widget.lockedBy!), style: s.note),
+        Text(widget.help ?? Strings.keepKeyHelp, style: s.note),
+        FieldMessage(widget.error),
+      ],
     );
   }
 }

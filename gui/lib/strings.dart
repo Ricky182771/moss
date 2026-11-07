@@ -113,6 +113,37 @@ class Strings {
       'respuesta.';
   static const highContrast = 'Más contraste';
   static const highContrastNote = 'Bordes y textos tenues más marcados.';
+  static const providersNote =
+      'Los que no tienen key se ven, pero piden una para usarse.';
+  static const fromTable = 'De la lista';
+  static const yourEndpoints = 'Tus endpoints';
+  static const newEndpoint = 'Endpoint nuevo';
+  static const addEndpoint = 'Agregar endpoint…';
+  static const inUse = 'en uso';
+  static const local = 'local';
+  static const keySaved = 'key guardada';
+  static const endpointName = 'Nombre';
+  static const baseUrl = 'URL base';
+  static const baseUrlHelp =
+      'La dirección del servidor compatible con OpenAI, normalmente termina '
+      'en /v1.';
+  static const apiKey = 'API key';
+  static const deleteEndpoint = 'Borrar endpoint';
+  static const endpointInUse =
+      'Es el que está en uso: cambia de proveedor antes de borrarlo.';
+  static String deleteEndpointQuestion(String name) =>
+      '¿Borrar el endpoint $name?';
+  static const refresh = 'Actualizar';
+  static String modelsCount(int n) =>
+      '$n ${n == 1 ? 'modelo' : 'modelos'} del servidor. Si la lista no '
+      'carga, escribe el nombre del modelo a mano.';
+  static const modelByHand = 'Modelo';
+  static const typeModelName = 'Escribe el nombre del modelo';
+  static const showKey = 'Ver lo que escribes';
+  static const hideKey = 'Ocultar lo que escribes';
+  static const newKeyHint = 'Escribe una API key nueva';
+  static const keepKeyHelp =
+      'Déjala vacía para conservar la guardada. Nunca se muestra completa.';
   static const changedOutside =
       'Esto se cambió fuera de aquí mientras lo editabas. Cancelar trae lo '
       'guardado; Guardar lo reemplaza con lo tuyo.';

@@ -37,6 +37,9 @@ abstract class SettingsSection extends ChangeNotifier {
 
   RpcClient get rpc => app.rpc;
 
+  /// La pantalla que la contiene (la pone [SettingsState]).
+  SettingsState? owner;
+
   /// Las secciones de `settings.changed` que la tocan.
   Set<String> get events;
 
@@ -121,6 +124,7 @@ class SettingsState extends ChangeNotifier {
 
   SettingsState(this.app, this.sections, {this.page = SettingsPage.provider}) {
     for (final s in sections.values) {
+      s.owner = this;
       s.addListener(notifyListeners);
       s.reload();
     }
@@ -145,11 +149,32 @@ class SettingsState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Acciones que no esperan a Guardar (borrar un endpoint).
+  int _quiet = 0;
+
+  /// Corre [action] sin que su `settings.changed` cuente como de afuera: los
+  /// eventos llegan después de la respuesta, así que espera a otra (la de
+  /// `app.status`). Después recarga las secciones sin cambios.
+  Future<void> quietly(Future<void> Function() action) async {
+    _quiet++;
+    try {
+      await action();
+      await app.refreshStatus();
+    } finally {
+      _quiet--;
+      if (!_disposed) {
+        for (final s in sections.values) {
+          if (!s.dirty) s.reload();
+        }
+      }
+    }
+  }
+
   void _onEvent(String section) {
     // Los de nuestro guardado: al terminar se recargan las que no cambiaron.
     // Uno de afuera justo durante el guardado no se distingue de los nuestros
     // y no marca "cambió afuera".
-    if (saving) return;
+    if (saving || _quiet > 0) return;
     for (final s in sections.values) {
       if (s.events.contains(section)) s.externalChange();
     }
