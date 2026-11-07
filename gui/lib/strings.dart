@@ -46,6 +46,8 @@ class Strings {
   static String lockedBy(String variable) => 'Fijado por $variable';
   static const searchWeb = 'Buscar en la web';
   static const searchWebHint = 'Responde con fuentes citadas';
+  static const noSearchKey = 'Falta la key de búsqueda';
+  static const provider = 'Proveedor';
   static const webSearch = 'Búsqueda web';
   static const removeWebSearch = 'Quitar la búsqueda web';
 

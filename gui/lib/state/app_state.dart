@@ -98,8 +98,12 @@ class AppState extends ChangeNotifier {
       final r = await _rpc.request('app.status');
       ready = r['ready'] as bool;
       problem = r['problem'] as String?;
+      // Sin key ya no se puede buscar: se apaga la pastilla.
+      if (r['has_search_key'] == false) searchOn.value = false;
     } on RpcError {
       // Sin estado, el chat vacío no muestra el problema.
+    } on StateError {
+      // El canal se cerró: `done` ya marcó `disconnected`.
     }
   }
 

@@ -66,6 +66,7 @@ class OptionsState extends ChangeNotifier {
       if (_disposed) return;
       settings = ProviderSettings.fromJson(r[0]);
       hasSearchKey = r[1]['has_search_key'] as bool;
+      if (!hasSearchKey) app.searchOn.value = false;
       if (r.length > 2) {
         for (final c in r[2]['commands'] as List) {
           final cmd = CommandInfo.fromJson(c as Map<String, dynamic>);
@@ -118,25 +119,29 @@ class OptionsState extends ChangeNotifier {
     });
     _pendingId = id;
     notifyListeners();
-    result
-        .then(
-          (r) {
-            if (generation == _generation) {
-              models = (r['models'] as List).cast<String>();
-            }
-          },
-          onError: (Object e) {
-            if (generation != _generation) return;
-            if (e is RpcError) modelsError = e.displayMessage;
-          },
-        )
-        .whenComplete(() {
-          if (generation != _generation || _disposed) return;
-          _pendingId = null;
-          _slow?.cancel();
-          loadingVisible = false;
-          notifyListeners();
-        });
+    _finishModels(generation, result);
+  }
+
+  Future<void> _finishModels(
+    int generation,
+    Future<Map<String, dynamic>> result,
+  ) async {
+    List<String>? list;
+    String? error;
+    try {
+      list = ((await result)['models'] as List).cast<String>();
+    } on RpcError catch (e) {
+      error = e.displayMessage;
+    } on Object catch (e) {
+      error = '$e'; // Canal cerrado o respuesta rara: algo que mostrar.
+    }
+    if (generation != _generation || _disposed) return;
+    models = list;
+    modelsError = error;
+    _pendingId = null;
+    _slow?.cancel();
+    loadingVisible = false;
+    notifyListeners();
   }
 
   /// `settings.provider.switch` al modelo [model] del proveedor que se ve.

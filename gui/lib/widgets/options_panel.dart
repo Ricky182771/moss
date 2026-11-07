@@ -5,6 +5,7 @@ import '../state/app_state.dart';
 import '../state/options_state.dart';
 import '../strings.dart';
 import '../theme/colors.dart';
+import '../theme/motion.dart';
 import '../theme/theme.dart';
 import 'controls.dart';
 import 'list_keys.dart';
@@ -35,12 +36,7 @@ class OptionsPanel extends StatefulWidget {
 }
 
 class _OptionsPanelState extends State<OptionsPanel> {
-  late final _state = OptionsState(widget.app)
-    ..addListener(_changed)
-    ..load(
-      provider: widget.request?.provider,
-      providers: widget.request != null && widget.request!.provider == null,
-    );
+  late final _state = OptionsState(widget.app)..addListener(_changed);
   final _filter = TextEditingController();
   final _scroll = ScrollController();
   int _highlight = -1;
@@ -52,6 +48,11 @@ class _OptionsPanelState extends State<OptionsPanel> {
   void initState() {
     super.initState();
     _filter.addListener(() => setState(_resetHighlight));
+    final request = widget.request;
+    _state.load(
+      provider: request?.provider,
+      providers: request != null && request.provider == null,
+    );
   }
 
   void _changed() {
@@ -126,7 +127,7 @@ class _OptionsPanelState extends State<OptionsPanel> {
 
   Future<void> _pick(String model) async {
     if (model.trim().isEmpty) return;
-    if (await _state.pick(model.trim())) widget.onClose();
+    if (await _state.pick(model.trim()) && mounted) widget.onClose();
   }
 
   void _toggleProviders() {
@@ -184,6 +185,7 @@ class _OptionsPanelState extends State<OptionsPanel> {
                     minHeight: 40,
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     child: Semantics(
+                      label: Strings.provider,
                       expanded: _state.pickingProvider,
                       child: Row(
                         spacing: 8,
@@ -298,6 +300,7 @@ class _OptionsPanelState extends State<OptionsPanel> {
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: TextField(
+                    enabled: !(_state.settings?.modelLocked ?? false),
                     style: s.model,
                     cursorColor: c.accent,
                     onSubmitted: _pick,
@@ -327,7 +330,9 @@ class _OptionsPanelState extends State<OptionsPanel> {
                       const SizedBox(width: 10),
                       SizedBox.square(
                         dimension: 14,
+                        // Fijo con Reducir animaciones.
                         child: CircularProgressIndicator(
+                          value: Motion.of(context).reduced ? 0.75 : null,
                           strokeWidth: 2,
                           color: c.textMuted,
                         ),
@@ -421,8 +426,10 @@ class _OptionsPanelState extends State<OptionsPanel> {
                               : s.nav.copyWith(color: c.textMuted),
                         ),
                         Text(
-                          enabled || _state.searchNote.isEmpty
+                          enabled
                               ? Strings.searchWebHint
+                              : _state.searchNote.isEmpty
+                              ? Strings.noSearchKey
                               : _state.searchNote,
                           style: s.help,
                         ),

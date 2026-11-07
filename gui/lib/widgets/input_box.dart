@@ -32,7 +32,12 @@ class _InputBoxState extends State<InputBox> {
   bool _optionsOpen = false;
   OptionsRequest? _request;
 
+  /// Cada vez que se abre, una ventana nueva (aunque la anterior siga
+  /// cerrándose).
+  int _opened = 0;
+
   void _openOptions(OptionsRequest? request) => setState(() {
+    _opened++;
     _request = request;
     _optionsOpen = true;
   });
@@ -138,15 +143,18 @@ class _InputBoxState extends State<InputBox> {
         ),
       ),
     );
-    final gear = IconAction(
-      label: Strings.options,
-      focusNode: _gear,
-      color: _optionsOpen ? c.accentSoft : null,
-      onPressed: _optionsOpen ? _closeOptions : () => _openOptions(null),
-      icon: Icon(
-        Icons.settings_outlined,
-        size: 20,
-        color: _optionsOpen ? c.text : c.textMuted,
+    final gear = Semantics(
+      expanded: _optionsOpen,
+      child: IconAction(
+        label: Strings.options,
+        focusNode: _gear,
+        color: _optionsOpen ? c.accentSoft : null,
+        onPressed: _optionsOpen ? _closeOptions : () => _openOptions(null),
+        icon: Icon(
+          Icons.settings_outlined,
+          size: 20,
+          color: _optionsOpen ? c.text : c.textMuted,
+        ),
       ),
     );
     final sendOrStop = Select(
@@ -186,7 +194,7 @@ class _InputBoxState extends State<InputBox> {
                   onDismiss: _closeOptions,
                   returnFocus: _gear,
                   builder: (context) => OptionsPanel(
-                    key: ObjectKey(_request),
+                    key: ValueKey(_opened),
                     app: app,
                     request: _request,
                     onClose: _closeOptions,
@@ -212,7 +220,10 @@ class _InputBoxState extends State<InputBox> {
                                   spacing: 6,
                                   children: [
                                     gear,
-                                    _SearchPill(app),
+                                    _SearchPill(
+                                      app,
+                                      onRemoved: _textFocus.requestFocus,
+                                    ),
                                     const Spacer(),
                                     sendOrStop,
                                   ],
@@ -280,7 +291,10 @@ class _InputBoxState extends State<InputBox> {
 /// "Búsqueda web ×" junto al engranaje; la × la apaga.
 class _SearchPill extends StatelessWidget {
   final AppState app;
-  const _SearchPill(this.app);
+
+  /// La × desaparece con la pastilla: el foco va a otro lado.
+  final VoidCallback onRemoved;
+  const _SearchPill(this.app, {required this.onRemoved});
 
   @override
   Widget build(BuildContext context) {
@@ -302,7 +316,10 @@ class _SearchPill extends StatelessWidget {
           IconAction(
             label: Strings.removeWebSearch,
             size: 26,
-            onPressed: () => app.searchOn.value = false,
+            onPressed: () {
+              app.searchOn.value = false;
+              onRemoved();
+            },
             icon: Icon(Icons.close_rounded, size: 14, color: s.pill.color),
           ),
         ],
