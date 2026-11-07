@@ -40,6 +40,11 @@ Future<(AppState, FakeServer)> startApp(
       'chat.cancel': (_) => {'cancelled': true},
       'app.status': (_) => appStatus(),
       'settings.gui.get': (_) => {'value': saved.toJson()},
+      'settings.provider.get': (_) => providerSettings(),
+      'settings.provider.check': (_) => providerCheck(),
+      'models.list': (_) => {
+        'models': ['z-ai/glm5', 'meta/llama-3.3-70b'],
+      },
       ...handlers,
     },
   );
@@ -101,6 +106,9 @@ Map<String, Object?> providerSettings({
   String model = 'z-ai/glm5',
   bool baseUrlLocked = false,
   bool modelLocked = false,
+  bool apiKeyLocked = false,
+  String keyStatus = '',
+  bool withLab = false,
 }) => {
   'providers': [
     {
@@ -133,11 +141,37 @@ Map<String, Object?> providerSettings({
       'selectable': false,
       'note': 'sin key',
     },
+    if (withLab)
+      {
+        'id': 'custom:lab',
+        'kind': 'endpoint',
+        'name': 'Servidor del lab',
+        'base_url': 'http://127.0.0.1:8080/v1',
+        'needs_key': false,
+        'key_saved': false,
+        'selectable': true,
+        'note': '',
+      },
   ],
   'saved': {'provider': provider, 'base_url': '', 'model': model},
   'effective': {'base_url': '', 'model': model},
-  'locks': {'base_url': baseUrlLocked, 'model': modelLocked, 'api_key': false},
-  'key_status': '',
+  'locks': {
+    'base_url': baseUrlLocked,
+    'model': modelLocked,
+    'api_key': apiKeyLocked,
+  },
+  'key_status': keyStatus,
+};
+
+Map<String, Object?> providerCheck({
+  String? error,
+  String? hint,
+  bool canRequestModels = true,
+}) => {
+  'error': error,
+  'hint': hint,
+  'can_request_models': canRequestModels,
+  'dirty': false,
 };
 
 Map<String, Object?> commandList({

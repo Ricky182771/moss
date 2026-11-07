@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../state/app_state.dart';
 import '../state/colors_section.dart';
+import '../state/provider_section.dart';
 import '../state/settings_state.dart';
 import '../strings.dart';
 import '../theme/colors.dart';
@@ -12,6 +13,7 @@ import '../widgets/colors_panel.dart';
 import '../widgets/controls.dart';
 import '../widgets/delete_dialog.dart';
 import '../widgets/logo.dart';
+import '../widgets/provider_panel.dart';
 import '../widgets/sidebar.dart' show kSidebarWidth;
 import '../widgets/toast.dart';
 
@@ -33,15 +35,17 @@ class SettingsPanel {
 /// Las secciones y sus paneles. Para agregar una: un valor en [SettingsPage],
 /// su [SettingsSection] aquí y su [SettingsPanel] en [_panel].
 Map<SettingsPage, SettingsSection> _sections(AppState app) => {
+  SettingsPage.provider: ProviderSection(app),
   SettingsPage.colors: ColorsSection(app),
 };
 
 SettingsPanel _panel(SettingsPage page, SettingsSection? section) =>
     switch (page) {
-      SettingsPage.provider => const SettingsPanel(
+      SettingsPage.provider => SettingsPanel(
         menu: Strings.providerMenu,
         title: Strings.providerTitle,
         lead: Strings.providerLead,
+        body: (_) => ProviderPanel(section! as ProviderSection),
       ),
       SettingsPage.colors => SettingsPanel(
         menu: Strings.colorsTitle,

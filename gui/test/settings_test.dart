@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:moss_gui/screens/settings_screen.dart';
 import 'package:moss_gui/strings.dart';
+import 'package:moss_gui/widgets/input_box.dart';
 
 import 'harness.dart';
 
@@ -26,7 +27,10 @@ void main() {
     tester,
   ) async {
     await startApp(tester);
-    final field = find.byType(EditableText);
+    final field = find.descendant(
+      of: find.byType(InputBox),
+      matching: find.byType(EditableText),
+    );
     await tester.tap(field);
     await tester.pump();
     expect(Focus.of(tester.element(field)).hasFocus, isTrue);
