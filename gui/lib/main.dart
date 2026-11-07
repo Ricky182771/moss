@@ -67,6 +67,8 @@ class PrefsApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       builder: (context, child) {
         final mq = MediaQuery.of(context);
+        // shortcut: aplana el escalado del sistema a lineal (en escritorio
+        // siempre lo es); si llega Android, componer los dos TextScaler.
         return MediaQuery(
           data: mq.copyWith(
             disableAnimations: mq.disableAnimations || p.reduceMotion,

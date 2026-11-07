@@ -137,8 +137,6 @@ class _ThemeCard extends StatelessWidget {
     return Semantics(
       inMutuallyExclusiveGroup: true,
       checked: selected,
-      label: name,
-      excludeSemantics: true,
       child: Pressable(
         onPressed: onTap,
         selected: selected,
@@ -158,57 +156,59 @@ class _ThemeCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             spacing: 12,
             children: [
-              Container(
-                height: 88,
-                clipBehavior: Clip.antiAlias,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: m.border),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Expanded(flex: 3, child: ColoredBox(color: m.sidebar)),
-                    Expanded(
-                      flex: 7,
-                      child: Container(
-                        color: m.background,
-                        padding: const EdgeInsets.all(10),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          spacing: 6,
-                          children: [
-                            _bar(
-                              m.accent.withValues(alpha: 0.35),
-                              0.55,
-                              10,
-                              end: true,
-                            ),
-                            _bar(m.text.withValues(alpha: 0.6), 0.7, 6),
-                            _bar(m.text.withValues(alpha: 0.6), 0.45, 6),
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: Container(
-                                width: 16,
-                                height: 16,
-                                decoration: BoxDecoration(
-                                  color: m.accent,
-                                  borderRadius: BorderRadius.circular(4),
+              ExcludeSemantics(
+                child: Container(
+                  height: 88,
+                  clipBehavior: Clip.antiAlias,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: m.border),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(flex: 3, child: ColoredBox(color: m.sidebar)),
+                      Expanded(
+                        flex: 7,
+                        child: Container(
+                          color: m.background,
+                          padding: const EdgeInsets.all(10),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            spacing: 6,
+                            children: [
+                              _bar(
+                                m.accent.withValues(alpha: 0.35),
+                                0.55,
+                                10,
+                                end: true,
+                              ),
+                              _bar(m.text.withValues(alpha: 0.6), 0.7, 6),
+                              _bar(m.text.withValues(alpha: 0.6), 0.45, 6),
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: Container(
+                                  width: 16,
+                                  height: 16,
+                                  decoration: BoxDecoration(
+                                    color: m.accent,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
                                 ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
               Row(
                 spacing: 10,
                 children: [
-                  _Radio(selected: selected),
+                  RadioMark(selected: selected),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -245,36 +245,4 @@ class _ThemeCard extends StatelessWidget {
       ),
     ),
   );
-}
-
-/// El círculo de una opción (sin el `Radio` de Material, que trae su propio
-/// foco: aquí lo lleva la tarjeta entera).
-class _Radio extends StatelessWidget {
-  final bool selected;
-  const _Radio({required this.selected});
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    return Container(
-      width: 18,
-      height: 18,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: selected ? c.accent : c.textMuted,
-          width: 1.5,
-        ),
-      ),
-      padding: const EdgeInsets.all(3),
-      child: selected
-          ? DecoratedBox(
-              decoration: BoxDecoration(
-                color: c.accent,
-                shape: BoxShape.circle,
-              ),
-            )
-          : null,
-    );
-  }
 }

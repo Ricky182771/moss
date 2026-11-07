@@ -70,7 +70,40 @@ class SettingsCard extends StatelessWidget {
   }
 }
 
-/// Casilla con su título y nota; toda la fila la cambia.
+/// El círculo de una opción (sin el `Radio` de Material, que trae su propio
+/// foco: aquí lo lleva la fila o la tarjeta entera).
+class RadioMark extends StatelessWidget {
+  final bool selected;
+  const RadioMark({super.key, required this.selected});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Container(
+      width: 18,
+      height: 18,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: selected ? c.accent : c.textMuted,
+          width: 1.5,
+        ),
+      ),
+      padding: const EdgeInsets.all(3),
+      child: selected
+          ? DecoratedBox(
+              decoration: BoxDecoration(
+                color: c.accent,
+                shape: BoxShape.circle,
+              ),
+            )
+          : null,
+    );
+  }
+}
+
+/// Casilla con su título y nota; toda la fila la cambia y lleva el foco (con
+/// el anillo de `Pressable`, más grueso con Más contraste).
 class CheckRow extends StatelessWidget {
   final bool value;
   final ValueChanged<bool>? onChanged;
@@ -90,40 +123,43 @@ class CheckRow extends StatelessWidget {
     final c = context.colors;
     final s = context.styles;
     final enabled = onChanged != null;
-    return MergeSemantics(
-      child: GestureDetector(
-        onTap: enabled ? () => onChanged!(!value) : null,
-        behavior: HitTestBehavior.opaque,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 44),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            spacing: 12,
-            children: [
-              SizedBox.square(
-                dimension: 24,
-                child: Checkbox(
-                  value: value,
-                  onChanged: enabled ? (v) => onChanged!(v ?? false) : null,
-                  activeColor: c.accent,
-                  checkColor: c.textOnAccent,
-                  side: BorderSide(color: c.textMuted, width: 1.5),
-                  focusColor: c.accentSoft,
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    return Semantics(
+      checked: value,
+      child: Pressable(
+        onPressed: enabled ? () => onChanged!(!value) : null,
+        minHeight: 44,
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          spacing: 12,
+          children: [
+            Container(
+              width: 18,
+              height: 18,
+              margin: const EdgeInsets.only(top: 2),
+              decoration: BoxDecoration(
+                color: value ? c.accent : null,
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(
+                  color: value ? c.accent : c.textMuted,
+                  width: 1.5,
                 ),
               ),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  spacing: 2,
-                  children: [
-                    Text(title, style: s.option),
-                    if (note != null) Text(note!, style: s.note),
-                  ],
-                ),
+              child: value
+                  ? Icon(Icons.check_rounded, size: 14, color: c.textOnAccent)
+                  : null,
+            ),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                spacing: 2,
+                children: [
+                  Text(title, style: s.option),
+                  if (note != null) Text(note!, style: s.note),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -189,9 +225,8 @@ class Segmented<T> extends StatelessWidget {
                             child: Text(
                               text,
                               style: v == value
-                                  ? s.row.copyWith(
+                                  ? s.primaryButton.copyWith(
                                       color: c.textOnAccent,
-                                      fontWeight: FontWeight.w600,
                                     )
                                   : s.row,
                             ),

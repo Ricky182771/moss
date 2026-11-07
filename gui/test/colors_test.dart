@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:moss_gui/models/gui_prefs.dart';
@@ -155,6 +156,45 @@ void main() {
     await tester.pump();
     expect(Motion.of(_ctx(tester)).screenFade, Duration.zero);
     expect(Motion.of(_ctx(tester)).cursorBlink, Duration.zero);
+  });
+
+  testWidgets('Reducir animaciones del sistema también apaga', (tester) async {
+    await startApp(tester, disableAnimations: true);
+    await _openColors(tester);
+    expect(Motion.of(_ctx(tester)).screenFade, Duration.zero);
+  });
+
+  testWidgets('Sistema sigue al sistema (claro en las pruebas)', (
+    tester,
+  ) async {
+    await startApp(tester, prefs: const GuiPrefs());
+    expect(
+      Theme.of(tester.element(find.text(Strings.emptyPrompt))).brightness,
+      Brightness.light,
+    );
+  });
+
+  testWidgets('las opciones de tema se activan desde la accesibilidad', (
+    tester,
+  ) async {
+    final handle = tester.ensureSemantics();
+    await startApp(tester);
+    await _openColors(tester);
+    expect(
+      tester
+          .getSemantics(find.text(Strings.themeLight))
+          .getSemanticsData()
+          .hasAction(SemanticsAction.tap),
+      isTrue,
+    );
+    expect(
+      tester
+          .getSemantics(find.text(Strings.reduceMotion))
+          .getSemanticsData()
+          .hasAction(SemanticsAction.tap),
+      isTrue,
+    );
+    handle.dispose();
   });
 
   testWidgets('el texto Grande cabe en 720×520', (tester) async {

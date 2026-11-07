@@ -251,8 +251,9 @@ class SettingsState extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _events.cancel();
+    // Sin descartar aquí: la vista previa de Colores ya regresó al salir
+    // (`_close`), y cambiar `app.prefs` durante el desmontaje no se puede.
     for (final s in sections.values) {
-      s.discard(); // La vista previa de Colores regresa a lo guardado.
       s.dispose();
     }
     toast.dispose();

@@ -83,9 +83,9 @@ class MossColors extends ThemeExtension<MossColors> {
     scrim: Color(0x4D17201A),
   );
 
-  // Más contraste (Colores y accesibilidad): todos los pares de texto en 7:1
-  // o más sobre fondo, barra, campo y acento suave (tabla en DISENO.md);
-  // bordes más marcados y foco de 3 px. Los fondos no cambian.
+  // Más contraste (DISENO.md → Colores → Más contraste): todos los pares de
+  // texto en 7:1 o más sobre fondo, barra, campo y acento suave; bordes más
+  // marcados y foco de 3 px. Los fondos no cambian.
   static final darkHigh = MossColors(
     background: dark.background,
     sidebar: dark.sidebar,
