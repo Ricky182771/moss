@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Prueba a mano de la GUI con tools/fake-llm.py, sin tocar tu configuración,
 # tus keys ni tus chats: quita todas las CHAT_* de tu entorno y lo lleva todo
-# a /tmp/moss-prueba. Las pruebas a mano de la GUI se hacen solo con esto
-# (AGENTS.md §16).
+# a /tmp/moss-prueba, y moss-rpc no llega a tu systemd de usuario ni a tu
+# journal (ver el envoltorio abajo). Las pruebas a mano de la GUI se hacen
+# solo con esto (AGENTS.md §16).
 #
 # Uso: tools/run-fake.sh [--perfil] [--reasoning] [--slow] [--status N]
 #                        [--frame-stats]
@@ -37,7 +38,7 @@ while (($#)); do
 		;;
 	--frame-stats) gui+=("$1") ;;
 	-h | --help)
-		sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
+		sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'
 		exit 0
 		;;
 	*) die "opción desconocida: $1 (mira --help)" ;;
@@ -85,6 +86,21 @@ esac
 (umask 077 && mkdir -p "$prueba" "$HOME")
 [[ -O $prueba && ! -L $prueba ]] || die "$prueba no es una carpeta tuya"
 
+# moss-rpc sin tu systemd de usuario: sin bus, `systemctl --user` no llega a tu
+# sesión (las acciones de servicio dan -32006 o "No hay systemd de usuario") y
+# nada toca tu moss-telegram.service. Solo a moss-rpc, con un envoltorio: la
+# GUI necesita XDG_RUNTIME_DIR para Wayland. `journalctl --user` no usa el bus
+# (lee los archivos del journal) y `loginctl` usa el del sistema: van los
+# falsos de tools/fake-bin (un registro de ejemplo y "sin linger").
+envoltorio=$prueba/moss-rpc
+{
+	echo '#!/usr/bin/env bash'
+	echo 'unset DBUS_SESSION_BUS_ADDRESS XDG_RUNTIME_DIR'
+	printf 'export PATH=%q:"$PATH"\n' "$raiz/tools/fake-bin"
+	printf 'exec %q "$@"\n' "$rpc"
+} >"$envoltorio"
+chmod 700 "$envoltorio"
+
 escucha() { (exec 3<>"/dev/tcp/127.0.0.1/$puerto") 2>/dev/null; }
 es_fake() {
 	python3 -I -c 'import sys, urllib.request as u
@@ -116,9 +132,9 @@ estado=0
 if $perfil; then
 	bundle=$raiz/gui/build/linux/x64/profile/bundle/moss-gui
 	[[ -x $bundle ]] || die "falta el bundle de profile (cd gui && flutter build linux --profile)"
-	"$bundle" "--rpc=$rpc" "${gui[@]}" || estado=$?
+	"$bundle" "--rpc=$envoltorio" "${gui[@]}" || estado=$?
 else
-	args=(-a "--rpc=$rpc")
+	args=(-a "--rpc=$envoltorio")
 	for a in "${gui[@]}"; do args+=(-a "$a"); done
 	(cd "$raiz/gui" && flutter run -d linux "${args[@]}") || estado=$?
 fi
