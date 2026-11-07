@@ -165,6 +165,8 @@ class _InputBoxState extends State<InputBox> {
                 valueListenable: app.inputError,
                 builder: (context, error, _) => AnimatedSwitcher(
                   duration: Motion.of(context).fieldError,
+                  switchInCurve: Motion.enter,
+                  switchOutCurve: Motion.enter,
                   child: error == null
                       ? Text(
                           Strings.help,

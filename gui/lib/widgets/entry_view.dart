@@ -177,6 +177,7 @@ class _ThoughtViewState extends State<ThoughtView>
   final _content = GlobalKey();
   late final _fold = AnimationController(vsync: this, value: _open ? 1 : 0)
     ..addListener(_keepAnswerInPlace);
+  late final _curved = CurvedAnimation(parent: _fold, curve: Motion.enter);
   bool _autoFolding = false;
   double _lastFold = 1;
 
@@ -199,7 +200,7 @@ class _ThoughtViewState extends State<ThoughtView>
   void _animate({required bool auto}) {
     final motion = Motion.of(context);
     _autoFolding = auto && !_open;
-    _lastFold = _fold.value;
+    _lastFold = _curved.value;
     _fold.duration = auto ? motion.thinkingAutoFold : motion.thinkingFold;
     _open ? _fold.forward() : _fold.reverse();
   }
@@ -208,14 +209,15 @@ class _ThoughtViewState extends State<ThoughtView>
   void _keepAnswerInPlace() {
     if (!_autoFolding) return;
     final height = _content.currentContext?.size?.height ?? 0;
-    final delta = height * (_lastFold - _fold.value);
-    _lastFold = _fold.value;
+    final delta = height * (_lastFold - _curved.value);
+    _lastFold = _curved.value;
     if (delta > 0) ScrollAnchor.maybeOf(context)?.keepBelow(context, delta);
     if (_fold.isDismissed) _autoFolding = false;
   }
 
   @override
   void dispose() {
+    _curved.dispose();
     _fold.dispose();
     super.dispose();
   }
@@ -245,7 +247,7 @@ class _ThoughtViewState extends State<ThoughtView>
                 spacing: 6,
                 children: [
                   RotationTransition(
-                    turns: Tween(begin: 0.0, end: 0.25).animate(_fold),
+                    turns: Tween(begin: 0.0, end: 0.25).animate(_curved),
                     child: Icon(
                       Icons.chevron_right_rounded,
                       size: 16,
@@ -262,7 +264,7 @@ class _ThoughtViewState extends State<ThoughtView>
           ),
         ),
         SizeTransition(
-          sizeFactor: _fold,
+          sizeFactor: _curved,
           alignment: AlignmentDirectional.topStart,
           child: Padding(
             key: _content,

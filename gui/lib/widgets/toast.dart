@@ -60,7 +60,10 @@ class _ToastHostState extends State<ToastHost>
             : Opacity(
                 opacity: Motion.enter.transform(_anim.value),
                 child: Transform.translate(
-                  offset: Offset(0, 6 * (1 - _anim.value)),
+                  offset: Offset(
+                    0,
+                    6 * (1 - Motion.enter.transform(_anim.value)),
+                  ),
                   child: child,
                 ),
               ),

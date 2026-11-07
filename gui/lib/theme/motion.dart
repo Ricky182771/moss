@@ -22,6 +22,9 @@ class Motion {
   Duration get searchDialog => _ms(180);
   Duration get screenFade => _ms(160);
   Duration get sidebar => _ms(200);
+
+  /// Salir un poco más rápido que entrar (DISENO.md → Animaciones, regla 1).
+  Duration get sidebarClose => _ms(160);
   Duration get inputGrow => _ms(140);
   Duration get messageIn => _ms(160);
   Duration get word => _ms(120);
@@ -33,8 +36,8 @@ class Motion {
   Duration get cursorBlink => _ms(1000);
   Duration get thinkingPulse => _ms(1200);
 
+  /// La curva de todas las animaciones; al salir, la duración es más corta.
   static const Curve enter = Curves.easeOutCubic;
-  static const Curve exit = Curves.easeInCubic;
 
   // Tiempos de espera, no animaciones: Reducir animaciones no los cambia.
   static const Duration tooltipDelay = Duration(milliseconds: 400);

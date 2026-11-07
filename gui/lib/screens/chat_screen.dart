@@ -148,8 +148,10 @@ class _SidebarSlot extends StatelessWidget {
   Widget build(BuildContext context) {
     return TweenAnimationBuilder<double>(
       tween: Tween(end: open ? 1 : 0),
-      duration: Motion.of(context).sidebar,
-      curve: open ? Motion.enter : Motion.exit,
+      duration: open
+          ? Motion.of(context).sidebar
+          : Motion.of(context).sidebarClose,
+      curve: Motion.enter,
       child: child,
       builder: (context, t, child) => t == 0
           ? const SizedBox.shrink()

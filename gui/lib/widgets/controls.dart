@@ -67,6 +67,7 @@ class _PressableState extends State<Pressable> {
           behavior: HitTestBehavior.opaque,
           child: AnimatedContainer(
             duration: Motion.of(context).hover,
+            curve: Motion.enter,
             constraints: BoxConstraints(minHeight: widget.minHeight),
             padding: widget.padding,
             decoration: BoxDecoration(
@@ -163,7 +164,10 @@ class _HoverLabelState extends State<HoverLabel>
                   builder: (context, child) => Opacity(
                     opacity: Motion.enter.transform(_anim.value),
                     child: Transform.translate(
-                      offset: Offset(0, 4 * (1 - _anim.value)),
+                      offset: Offset(
+                        0,
+                        4 * (1 - Motion.enter.transform(_anim.value)),
+                      ),
                       child: child,
                     ),
                   ),

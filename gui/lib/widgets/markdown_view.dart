@@ -237,6 +237,8 @@ class _CodeBlockState extends State<CodeBlock> {
                     widthFactor: 1,
                     child: AnimatedSwitcher(
                       duration: Motion.of(context).copySwap,
+                      switchInCurve: Motion.enter,
+                      switchOutCurve: Motion.enter,
                       child: _copied
                           ? Text(
                               Strings.copied,
