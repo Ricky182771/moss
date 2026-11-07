@@ -9,7 +9,7 @@ import '../strings.dart';
 import 'app_state.dart';
 
 /// Las secciones de Configuración, en el orden del menú (las maquetas).
-enum SettingsPage { provider, colors, model, search }
+enum SettingsPage { provider, colors, model, search, telegram }
 
 /// Un guardado de una sección: [order] es su lugar entre todos (el de la F2
 /// de la TUI), [run] lo manda y deja el borrador como lo guardado.
@@ -27,6 +27,9 @@ abstract final class SaveOrder {
   static const gui = 2;
   static const systemPrompt = 3;
   static const search = 4;
+
+  /// Al final, como Addons en la F2 de la TUI.
+  static const telegram = 5;
 }
 
 /// Una sección de Configuración con su borrador. Lo guardado lo da el
@@ -143,6 +146,10 @@ class SettingsState extends ChangeNotifier {
   final toast = ValueNotifier<Toast?>(null);
 
   bool get dirty => sections.values.any((s) => s.dirty);
+
+  /// Una pregunta s/n durante Guardar (`-32008`, "¿Reiniciar ahora?"): true
+  /// Sí, false No, null Esc. La pone la pantalla.
+  Future<bool?> Function(String question)? ask;
 
   void show(SettingsPage p) {
     if (page == p) return;
