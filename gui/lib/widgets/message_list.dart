@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../models/conversation.dart';
 import '../strings.dart';
 import '../theme/colors.dart';
+import '../theme/motion.dart';
 import '../theme/theme.dart';
 import 'entry_view.dart';
 import 'indicators.dart';
@@ -49,12 +50,16 @@ class _MessageListState extends State<MessageList> {
   /// las reconstruye y un trozo nuevo reconstruye solo la última.
   final _views = <(Entry, Widget)>[];
 
+  /// Las entradas desde aquí llegaron con la lista a la vista: tu mensaje
+  /// aparece al enviarlo; lo que ya estaba al abrir, no.
+  late int _firstNew = widget.conversation.entries.length;
+
   Widget _view(int i, Entry e) {
     if (i < _views.length && identical(_views[i].$1, e)) return _views[i].$2;
-    final w = EntryView(
-      e,
-      key: ValueKey('${widget.conversation.conversation}/$i'),
-    );
+    final key = ValueKey('${widget.conversation.conversation}/$i');
+    final w = i >= _firstNew && e.kind == EntryKind.user
+        ? _AppearUp(key: key, child: EntryView(e))
+        : EntryView(e, key: key);
     if (i < _views.length) {
       _views[i] = (e, w);
     } else {
@@ -78,7 +83,10 @@ class _MessageListState extends State<MessageList> {
         (now.entries.length > old.conversation.entries.length &&
             now.entries.last.kind == EntryKind.user);
     if (sentOrSwitched) _pinned = true;
-    if (now.conversation != old.conversation.conversation) _views.clear();
+    if (now.conversation != old.conversation.conversation) {
+      _views.clear();
+      _firstNew = now.entries.length;
+    }
     if (_views.length > now.entries.length) {
       _views.removeRange(now.entries.length, _views.length);
     }
@@ -176,4 +184,22 @@ class _MessageListState extends State<MessageList> {
       ),
     );
   }
+}
+
+/// Tu mensaje al enviarlo: opacidad + sube 6 px (160 ms).
+class _AppearUp extends StatelessWidget {
+  final Widget child;
+  const _AppearUp({super.key, required this.child});
+
+  @override
+  Widget build(BuildContext context) => TweenAnimationBuilder<double>(
+    tween: Tween(begin: 0, end: 1),
+    duration: Motion.of(context).messageIn,
+    curve: Motion.enter,
+    child: child,
+    builder: (context, t, child) => Opacity(
+      opacity: t,
+      child: Transform.translate(offset: Offset(0, 6 * (1 - t)), child: child),
+    ),
+  );
 }

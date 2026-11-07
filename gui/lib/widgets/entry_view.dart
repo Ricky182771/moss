@@ -3,10 +3,12 @@ import 'package:flutter/rendering.dart' show OverflowBoxFit;
 
 import '../models/conversation.dart';
 import '../state/apply.dart';
+import '../state/arriving.dart';
 import '../strings.dart';
 import '../theme/colors.dart';
 import '../theme/motion.dart';
 import '../theme/theme.dart';
+import 'arriving_text.dart';
 import 'controls.dart';
 import 'logo.dart';
 import 'markdown_view.dart';
@@ -52,9 +54,14 @@ class EntryView extends StatelessWidget {
           children: [
             if (entry.reasoning.isNotEmpty) ThoughtView(entry),
             if (entry.text.isNotEmpty || entry.reasoning.isEmpty)
-              MarkdownView(
+              arriving(
+                context,
                 entry.text,
-                streaming: entry.inProgress && entry.text.isNotEmpty,
+                live: entry.inProgress,
+                build: (text) => MarkdownView(
+                  text,
+                  streaming: entry.inProgress && text.isNotEmpty,
+                ),
               ),
             // Como la TUI: cancelada, incompleta o la nota de finish_reason.
             if (entry.cancelled)
@@ -96,6 +103,20 @@ class EntryView extends StatelessWidget {
       ),
     };
   }
+}
+
+/// El texto del modelo: completo, o, mientras llega ([live]), hasta la
+/// última palabra (o línea de código) completa y con lo nuevo apareciendo.
+/// Con Reducir animaciones, completo y sin animar.
+Widget arriving(
+  BuildContext context,
+  String text, {
+  required bool live,
+  required Widget Function(String text) build,
+}) {
+  if (!live || Motion.of(context).reduced) return build(text);
+  final shown = text.substring(0, shownLength(text));
+  return ArrivingText(text: shown, child: build(shown));
 }
 
 /// La "m" de avatar y, a su lado, lo del modelo.
@@ -184,6 +205,7 @@ class _ThoughtViewState extends State<ThoughtView>
 
   /// El Markdown del pensamiento se reusa mientras no cambie su texto.
   String? _shownFor;
+  bool _shownLive = false;
   Widget? _shown;
 
   @override
@@ -247,9 +269,18 @@ class _ThoughtViewState extends State<ThoughtView>
     // También mientras se pliega solo, para que no crezca antes de plegarse.
     final live = (_live(widget.entry) && _userOpen == null) || _autoFolding;
     final reasoning = widget.entry.reasoning;
-    if (!identical(reasoning, _shownFor)) {
+    final arrivingNow = _live(widget.entry);
+    if (!identical(reasoning, _shownFor) || arrivingNow != _shownLive) {
       _shownFor = reasoning;
-      _shown = MarkdownView(reasoning, thought: true);
+      _shownLive = arrivingNow;
+      _shown = Builder(
+        builder: (context) => arriving(
+          context,
+          reasoning,
+          live: arrivingNow,
+          build: (text) => MarkdownView(text, thought: true),
+        ),
+      );
     }
     final text = _shown!;
     return Column(
