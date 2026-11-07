@@ -13,6 +13,7 @@ class RpcError implements Exception {
     _ => message,
   };
 
+  static const int cancelled = -32800;
   static const int busy = -32002;
   static const int notConfigured = -32004;
   static const int validationFailed = -32005;

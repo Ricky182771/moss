@@ -79,6 +79,13 @@ class RpcStartError implements Exception {
 /// ([spawn]); en las pruebas, uno en memoria con un proceso falso.
 class RpcClient {
   final rpc.Peer _peer;
+
+  /// El `id` de la siguiente petición.
+  ///
+  /// shortcut: json_rpc_2 3.x numera las peticiones 0, 1, 2… en el orden en
+  /// que salen y no deja elegir el id; todas pasan por [request], así que
+  /// esta cuenta coincide (una prueba lo vigila). La 4.x tiene `idGenerator`.
+  int _nextId = 0;
   final Future<int> _exitCode;
   final void Function() _kill;
 
@@ -169,6 +176,7 @@ class RpcClient {
     String method, [
     Map<String, dynamic> params = const {},
   ]) async {
+    _nextId++;
     try {
       final r = await _peer.sendRequest(method, params);
       return (r as Map).cast<String, dynamic>();
@@ -181,12 +189,26 @@ class RpcClient {
     }
   }
 
+  /// Una petición que se puede cancelar con [cancel]: su `id` y su resultado.
+  (int, Future<Map<String, dynamic>>) start(
+    String method, [
+    Map<String, dynamic> params = const {},
+  ]) {
+    final id = _nextId;
+    return (id, request(method, params));
+  }
+
+  /// `$/cancel` (PROTOCOL.md §4): la petición responde -32800.
+  void cancel(int id) {
+    if (!_peer.isClosed) _peer.sendNotification(r'$/cancel', {'id': id});
+  }
+
   /// `shutdown`, `exit` y `kill` si no sale en 3 s. Nunca queda huérfano.
   Future<void> close() async {
     final killer = Timer(kExitTimeout, _kill);
     try {
       if (!_peer.isClosed) {
-        await _peer.sendRequest('shutdown', const {});
+        await request('shutdown');
         _peer.sendNotification('exit');
       }
     } catch (_) {
