@@ -16,6 +16,7 @@ class Sidebar extends StatelessWidget {
   /// `id` de la conversación abierta.
   final String? openId;
   final VoidCallback onNewChat;
+  final VoidCallback onSearch;
   final ValueChanged<String> onOpen;
 
   const Sidebar({
@@ -23,6 +24,7 @@ class Sidebar extends StatelessWidget {
     required this.summaries,
     required this.openId,
     required this.onNewChat,
+    required this.onSearch,
     required this.onOpen,
   });
 
@@ -71,18 +73,38 @@ class Sidebar extends StatelessWidget {
               ],
             ),
           ),
-          Pressable(
-            onPressed: onNewChat,
-            minHeight: 40,
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            child: Row(
-              spacing: 10,
-              children: [
-                Icon(Icons.add_rounded, size: 20, color: c.text),
-                Expanded(child: Text(Strings.newChat, style: s.nav)),
-                Text(Strings.newChatKey, style: s.kbd),
-              ],
-            ),
+          // Como la maqueta: las dos filas juntas (2 px).
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            spacing: 2,
+            children: [
+              Pressable(
+                onPressed: onNewChat,
+                minHeight: 40,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: Row(
+                  spacing: 10,
+                  children: [
+                    Icon(Icons.add_rounded, size: 20, color: c.text),
+                    Expanded(child: Text(Strings.newChat, style: s.nav)),
+                    Text(Strings.newChatKey, style: s.kbd),
+                  ],
+                ),
+              ),
+              Pressable(
+                onPressed: onSearch,
+                minHeight: 40,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: Row(
+                  spacing: 10,
+                  children: [
+                    Icon(Icons.search_rounded, size: 20, color: c.text),
+                    Expanded(child: Text(Strings.searchChats, style: s.nav)),
+                    Text(Strings.searchChatsKey, style: s.kbd),
+                  ],
+                ),
+              ),
+            ],
           ),
           Expanded(
             child: Semantics(

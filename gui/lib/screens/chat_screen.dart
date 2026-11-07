@@ -10,6 +10,7 @@ import '../widgets/controls.dart';
 import '../widgets/input_box.dart';
 import '../widgets/logo.dart';
 import '../widgets/message_list.dart';
+import '../widgets/search_dialog.dart';
 import '../widgets/select.dart';
 import '../widgets/sidebar.dart';
 import '../widgets/toast.dart';
@@ -49,6 +50,11 @@ class _ChatScreenState extends State<ChatScreen> {
     if (_overlay) setState(() => _overlay = false);
   }
 
+  void _search() {
+    _closeOverlay();
+    showSearchDialog(context, summaries: app.summaries, onOpen: app.open);
+  }
+
   void _escape() {
     if (_narrow && _overlay) {
       _closeOverlay();
@@ -68,6 +74,7 @@ class _ChatScreenState extends State<ChatScreen> {
         },
         const SingleActivator(LogicalKeyboardKey.keyB, control: true):
             _toggleSidebar,
+        const SingleActivator(LogicalKeyboardKey.keyK, control: true): _search,
         const SingleActivator(LogicalKeyboardKey.escape): _escape,
       },
       child: Material(
@@ -88,6 +95,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   _closeOverlay();
                   app.newChat();
                 },
+                onSearch: _search,
                 onOpen: (id) {
                   _closeOverlay();
                   app.open(id);

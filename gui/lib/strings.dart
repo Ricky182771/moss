@@ -6,6 +6,10 @@ class Strings {
   // Barra lateral
   static const newChat = 'Nuevo chat';
   static const newChatKey = 'Ctrl+N';
+  static const searchChats = 'Buscar chats';
+  static const searchChatsKey = 'Ctrl+K';
+  static const searchChatsHint = 'Buscar por título';
+  static const noChatsFound = 'Ningún chat coincide';
   static const chats = 'Chats';
   static const withWebSearch = 'Con búsqueda web';
 
