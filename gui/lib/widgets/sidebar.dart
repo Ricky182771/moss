@@ -20,6 +20,7 @@ class Sidebar extends StatelessWidget {
   final VoidCallback onNewChat;
   final VoidCallback onSearch;
   final ValueChanged<String> onOpen;
+  final VoidCallback onSettings;
   final ChatActions actions;
 
   const Sidebar({
@@ -29,6 +30,7 @@ class Sidebar extends StatelessWidget {
     required this.onNewChat,
     required this.onSearch,
     required this.onOpen,
+    required this.onSettings,
     required this.actions,
   });
 
@@ -141,6 +143,26 @@ class Sidebar extends StatelessWidget {
                         ],
                       ),
                     ),
+                ],
+              ),
+            ),
+          ),
+          // Fija abajo, con la línea de arriba de la maqueta.
+          Container(
+            padding: const EdgeInsets.only(top: 12),
+            decoration: BoxDecoration(
+              border: Border(top: BorderSide(color: c.border)),
+            ),
+            child: Pressable(
+              onPressed: onSettings,
+              minHeight: 44,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: Row(
+                spacing: 10,
+                children: [
+                  Icon(Icons.tune_rounded, size: 18, color: c.text),
+                  Expanded(child: Text(Strings.settings, style: s.row)),
+                  Text(Strings.settingsKey, style: s.kbd),
                 ],
               ),
             ),
@@ -309,7 +331,7 @@ class _RowState extends State<_Row> {
             decoration: BoxDecoration(
               color: c.field,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: c.accent, width: 2),
+              border: Border.all(color: c.accent, width: c.focusWidth),
             ),
             child: Focus(
               onKeyEvent: _renameKeys,

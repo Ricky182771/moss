@@ -77,6 +77,42 @@ class MossText extends ThemeExtension<MossText> {
   /// Pastilla "Búsqueda web": 13/500 en el color de código.
   final TextStyle pill;
 
+  /// Botón verde lleno (Guardar): 14/600.
+  final TextStyle primaryButton;
+
+  /// "Configuración" junto al logo: 18/600.
+  final TextStyle brand;
+
+  /// Título de una sección de Configuración: 28/600.
+  final TextStyle pageTitle;
+
+  /// Texto bajo el título de la sección: 15/1.5, tenue.
+  final TextStyle lead;
+
+  /// Título de una tarjeta: 16/600.
+  final TextStyle cardTitle;
+
+  /// Etiqueta de un campo: 14/500.
+  final TextStyle label;
+
+  /// Nombre de una opción (tema, casilla): 15/500.
+  final TextStyle option;
+
+  /// Texto de un campo: 15.
+  final TextStyle field;
+
+  /// Campo de URL, key o JSON: Geist Mono 15.
+  final TextStyle fieldMono;
+
+  /// Ayuda bajo un campo y notas: 13/1.5, tenue.
+  final TextStyle note;
+
+  /// Estado de una key (`guardada: …abcd`): Geist Mono 13, tenue.
+  final TextStyle noteMono;
+
+  /// Vista previa de la petición: Geist Mono 13/1.6.
+  final TextStyle preview;
+
   const MossText({
     required this.answer,
     required this.bubble,
@@ -101,6 +137,18 @@ class MossText extends ThemeExtension<MossText> {
     required this.toast,
     required this.model,
     required this.pill,
+    required this.primaryButton,
+    required this.brand,
+    required this.pageTitle,
+    required this.lead,
+    required this.cardTitle,
+    required this.label,
+    required this.option,
+    required this.field,
+    required this.fieldMono,
+    required this.note,
+    required this.noteMono,
+    required this.preview,
   });
 
   factory MossText.of(MossColors c) {
@@ -148,6 +196,21 @@ class MossText extends ThemeExtension<MossText> {
       toast: geist(14).copyWith(color: c.background),
       model: mono(13),
       pill: geist(13, weight: FontWeight.w500).copyWith(color: c.code),
+      primaryButton: geist(14, weight: FontWeight.w600),
+      brand: geist(18, weight: FontWeight.w600),
+      pageTitle: geist(
+        28,
+        weight: FontWeight.w600,
+      ).copyWith(letterSpacing: 28 * -0.02),
+      lead: geist(15, height: 1.5).copyWith(color: c.textMuted),
+      cardTitle: geist(16, weight: FontWeight.w600),
+      label: geist(14, weight: FontWeight.w500),
+      option: geist(15, weight: FontWeight.w500),
+      field: geist(15),
+      fieldMono: mono(15),
+      note: geist(13, height: 1.5).copyWith(color: c.textMuted),
+      noteMono: mono(13).copyWith(color: c.textMuted),
+      preview: mono(13, height: 1.6),
     );
   }
 
@@ -165,8 +228,14 @@ extension MossTextExtension on BuildContext {
 
 /// `ThemeData` armado a partir de los tokens.
 class MossTheme {
-  static ThemeData dark() => _build(MossColors.dark, Brightness.dark);
-  static ThemeData light() => _build(MossColors.light, Brightness.light);
+  static ThemeData dark({bool highContrast = false}) => _build(
+    highContrast ? MossColors.darkHigh : MossColors.dark,
+    Brightness.dark,
+  );
+  static ThemeData light({bool highContrast = false}) => _build(
+    highContrast ? MossColors.lightHigh : MossColors.light,
+    Brightness.light,
+  );
 
   static ThemeData _build(MossColors c, Brightness brightness) {
     final text = MossText.of(c);

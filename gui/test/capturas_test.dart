@@ -8,9 +8,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:moss_gui/models/gui_prefs.dart';
 import 'package:moss_gui/screens/error_screen.dart';
 import 'package:moss_gui/strings.dart';
 import 'package:moss_gui/theme/theme.dart';
+import 'package:moss_gui/widgets/settings_form.dart';
 
 import 'fake_server.dart';
 import 'harness.dart';
@@ -375,6 +377,162 @@ void main() {
         ),
       );
       await _shot(tester, 'error-$mode');
+    });
+  }
+
+  // Configuración (G3): cada sección, Más contraste, el texto grande, la
+  // ventana de descartar, un error de guardado, Avanzado y la tarjeta.
+  for (final (mode, choice) in [
+    ('oscuro', ThemeChoice.dark),
+    ('claro', ThemeChoice.light),
+  ]) {
+    Future<FakeServer> config(
+      WidgetTester tester, {
+      String? page,
+      bool highContrast = false,
+      TextSize textSize = TextSize.normal,
+      Size size = _size,
+      Map<String, Object? Function(Map<String, dynamic>)> handlers = const {},
+    }) async {
+      final (_, server) = await startApp(
+        tester,
+        key: _key,
+        size: size,
+        summaries: _summaries,
+        prefs: GuiPrefs(
+          theme: choice,
+          highContrast: highContrast,
+          textSize: textSize,
+        ),
+        handlers: {
+          'settings.provider.get': (_) => providerSettings(
+            provider: 'custom:omniroute',
+            withLab: true,
+            keyStatus: 'guardada: …7c2b',
+          ),
+          'settings.model_params.get': (_) => modelParams(
+            params: const {
+              'temperature': 0.6,
+              'top_p': 0.95,
+              'reasoning': 'high',
+            },
+            extra: '{"chat_template_kwargs": {"clear_thinking": false}}',
+          ),
+          'settings.system_prompt.get': (_) => systemPrompt(
+            mode: 'custom',
+            text:
+                'Eres un asistente para alumnos de bachillerato. Explica '
+                'paso a paso, con ejemplos cortos y en español de México.',
+          ),
+          ...handlers,
+        },
+      );
+      await tester.sendKeyEvent(LogicalKeyboardKey.f2);
+      await tester.pumpAndSettle();
+      if (page != null) {
+        await tester.tap(find.text(page).first);
+        await tester.pumpAndSettle();
+      }
+      return server;
+    }
+
+    for (final (name, page) in [
+      ('proveedor', null),
+      ('colores', Strings.colorsTitle),
+      ('modelo', Strings.modelTitle),
+      ('busqueda', Strings.webSearch),
+    ]) {
+      testWidgets('configuración: $name ($mode)', (tester) async {
+        await config(tester, page: page);
+        await _shot(tester, 'config-$name-$mode');
+      });
+    }
+
+    testWidgets('configuración: más contraste ($mode)', (tester) async {
+      await config(tester, page: Strings.colorsTitle, highContrast: true);
+      await _shot(tester, 'config-contraste-$mode');
+      await tester.tap(find.text(Strings.providerMenu).first);
+      await tester.pumpAndSettle();
+      await _shot(tester, 'config-contraste-proveedor-$mode');
+    });
+
+    testWidgets('configuración: texto grande en 720×520 ($mode)', (
+      tester,
+    ) async {
+      await config(
+        tester,
+        textSize: TextSize.large,
+        size: const Size(720, 520),
+      );
+      await _shot(tester, 'config-grande-$mode');
+    });
+
+    testWidgets('configuración: ¿descartar? ($mode)', (tester) async {
+      await config(tester, page: Strings.colorsTitle);
+      await tester.tap(find.text(Strings.highContrast));
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      await _shot(tester, 'config-descartar-$mode');
+    });
+
+    testWidgets('configuración: error al guardar ($mode)', (tester) async {
+      await config(
+        tester,
+        page: Strings.modelTitle,
+        handlers: {
+          'settings.model_params.check': (_) => {
+            'field_errors': {
+              'top_k': 'Debe ser un número entero entre 1 y 1000.',
+            },
+            'extra_error': null,
+            'preview': null,
+          },
+        },
+      );
+      final topK = find.descendant(
+        of: find.byWidgetPredicate((w) => w is FieldBox && w.label == 'Top K'),
+        matching: find.byType(EditableText),
+      );
+      await tester.ensureVisible(topK);
+      await tester.enterText(topK, '2000');
+      await tester.pumpAndSettle(const Duration(milliseconds: 500));
+      await tester.tap(find.text(Strings.save));
+      await tester.pumpAndSettle();
+      await _shot(tester, 'config-error-$mode');
+    });
+
+    testWidgets('configuración: avanzado con la vista previa ($mode)', (
+      tester,
+    ) async {
+      await config(tester, page: Strings.modelTitle);
+      final advanced = find.text(Strings.advanced);
+      await tester.ensureVisible(advanced);
+      await tester.pumpAndSettle();
+      await tester.tap(advanced);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text(Strings.preview));
+      await tester.pumpAndSettle();
+      await _shot(tester, 'config-avanzado-$mode');
+    });
+
+    testWidgets('chat vacío sin configurar ($mode)', (tester) async {
+      await startApp(
+        tester,
+        key: _key,
+        summaries: _summaries,
+        prefs: GuiPrefs(theme: choice),
+        handlers: {
+          'app.status': (_) => appStatus(
+            ready: false,
+            problem:
+                'Falta la API key de NVIDIA NIM. Agrégala en Configuración '
+                '→ Proveedor.',
+          ),
+        },
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+      await _shot(tester, 'vacio-sin-configurar-$mode');
     });
   }
 }

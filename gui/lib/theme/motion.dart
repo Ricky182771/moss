@@ -8,8 +8,8 @@ class Motion {
   /// Animaciones apagadas: todo dura 0 ms y lo que se repite queda fijo.
   final bool reduced;
 
-  /// Lee `MediaQuery.disableAnimations`. En G3 se suma aquí la opción
-  /// "Reducir animaciones" de `settings.gui`.
+  /// Lee `MediaQuery.disableAnimations`, que `PrefsApp` (main.dart) ya
+  /// enciende también con "Reducir animaciones" de Colores y accesibilidad.
   static Motion of(BuildContext context) =>
       Motion._(MediaQuery.disableAnimationsOf(context));
 
@@ -29,6 +29,9 @@ class Motion {
   Duration get messageIn => _ms(160);
   Duration get word => _ms(120);
   Duration get thinkingFold => _ms(180);
+
+  /// Avanzado en Configuración del modelo: como el bloque Pensamiento.
+  Duration get fold => _ms(180);
   Duration get thinkingAutoFold => _ms(200);
   Duration get copySwap => _ms(120);
   Duration get fieldError => _ms(120);

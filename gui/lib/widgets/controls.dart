@@ -22,6 +22,10 @@ class Pressable extends StatefulWidget {
   final bool selected;
   final FocusNode? focusNode;
 
+  /// Borde de 1 px (los botones con contorno de Configuración).
+  final Color? borderColor;
+  final bool autofocus;
+
   const Pressable({
     super.key,
     required this.onPressed,
@@ -34,6 +38,8 @@ class Pressable extends StatefulWidget {
     this.minHeight = 0,
     this.selected = false,
     this.focusNode,
+    this.borderColor,
+    this.autofocus = false,
   });
 
   @override
@@ -57,6 +63,7 @@ class _PressableState extends State<Pressable> {
       child: FocusableActionDetector(
         enabled: enabled,
         focusNode: widget.focusNode,
+        autofocus: widget.autofocus,
         mouseCursor: enabled ? SystemMouseCursors.click : MouseCursor.defer,
         onShowHoverHighlight: (v) => setState(() => _hover = v),
         onShowFocusHighlight: (v) => setState(() => _focus = v),
@@ -78,10 +85,13 @@ class _PressableState extends State<Pressable> {
                   ? widget.hoverColor ?? c.accentSoft
                   : widget.color ?? Colors.transparent,
               borderRadius: radius,
+              border: widget.borderColor == null
+                  ? null
+                  : Border.all(color: widget.borderColor!),
             ),
             foregroundDecoration: _focus
                 ? BoxDecoration(
-                    border: Border.all(color: c.accent, width: 2),
+                    border: Border.all(color: c.accent, width: c.focusWidth),
                     borderRadius: radius,
                   )
                 : null,

@@ -34,6 +34,32 @@ Escala moss: 50 #EEF4E6 · 100 #D6E6C3 · 200 #B5D395 · 400 #8DBF5F · 500 #6FA
 
 Todos los pares de texto pasan 4.5:1.
 
+**Más contraste** (Colores y accesibilidad; G3, 7 nov 2026): otro juego de tokens (`MossColors.darkHigh` y `lightHigh`), no parches por widget. Los fondos (fondo, barra, campo, acento suave) y el texto sobre acento no cambian; el foco pasa de 2 a 3 px.
+
+| Token | Oscuro | Claro |
+|---|---|---|
+| borde | #6B7D6F | #7D8C81 |
+| texto | #F2F7F3 | #0B110D |
+| texto tenue | #C2CEC5 | #2E3A32 |
+| acento | #A8D47E | #2F5221 |
+| código / palabras clave | #C8E0AE | #213A18 |
+| error | #F7A995 | #8A2A18 |
+
+Razón de contraste más baja de cada texto, contra fondo / barra / campo / acento suave (la última es la más baja):
+
+| Texto | Oscuro | Claro |
+|---|---|---|
+| texto | 17.2 / 15.8 / 14.2 / 12.8 | 19.1 / 17.9 / 16.7 / 15.7 |
+| texto tenue | 11.5 / 10.6 / 9.5 / 8.6 | 11.9 / 11.1 / 10.4 / 9.8 |
+| acento | 11.0 / 10.1 / 9.1 / 8.2 | 8.9 / 8.4 / 7.8 / 7.4 |
+| código | 13.1 / 12.0 / 10.8 / 9.8 | 12.5 / 11.7 / 10.9 / 10.3 |
+| error | 9.8 / 9.1 / 8.1 / 7.3 | 8.7 / 8.1 / 7.6 / 7.1 |
+| texto sobre acento | 11.0 | 8.9 |
+
+Todos pasan 7:1 (lo vigila `test/colors_test.dart`). El borde queda en 4.2:1 (oscuro) y 3.5:1 (claro) sobre el fondo.
+
+**Tamaño del texto:** Chico 90 %, Normal 100 %, Grande 120 % (los tres pasos de la maqueta `Config-colores`), con `TextScaler` sobre toda la app.
+
 ## Principios (1 nov 2026)
 - **No reacomodar toda la interfaz si no hace falta.** La ventana tiene un esqueleto fijo: barra lateral, encabezado, caja del mensaje y barra de Cancelar/Guardar se quedan en su lugar. Cuando el contenido no cabe, **se desplaza solo la zona que lo tiene** (los mensajes, la lista de chats, el panel de una sección de Configuración), con su propia barra de desplazamiento; la ventana nunca se estira ni reparte el contenido en toda el área. Lo mismo para cosas que aparecen o desaparecen (una pastilla, un aviso): ocupan su lugar sin mover lo demás de sitio, salvo cuando lo justifican (la caja crece a dos filas con la búsqueda activa).
 - **Minimalista:** el verde lleno se reserva para lo que de verdad hay que hacer (Guardar en Configuración, "Ir a Configuración"). Botones de la barra y de la caja: sin fondo, con el acento suave al pasar el mouse.
@@ -88,6 +114,7 @@ Todos los pares de texto pasan 4.5:1.
 | Cursor verde al final de la respuesta | parpadeo lento (1 s); fijo con Reducir animaciones | — |
 | "Pensando…" | opacidad que pulsa suave (1.2 s); fija con Reducir animaciones | — |
 | Bloque Pensamiento (plegar/desplegar) | la altura y la flechita gira | 180 ms |
+| Avanzado en Configuración del modelo (G3) | la altura y la flechita gira | 180 ms |
 | Pensamiento que se pliega solo con el primer texto | la altura, **sin que salte el scroll** (la respuesta se queda donde estaba a la vista) | 200 ms |
 | [Copiar] → "Copiado ✓" | fundido del texto del botón; regresa a los 2 s | 120 ms |
 | Error en un campo | el mensaje aparece con opacidad, sin sacudir el campo | 120 ms |

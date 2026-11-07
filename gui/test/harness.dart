@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:moss_gui/main.dart';
+import 'package:moss_gui/models/gui_prefs.dart';
 import 'package:moss_gui/rpc/client.dart';
-import 'package:moss_gui/screens/chat_screen.dart';
+import 'package:moss_gui/screens/home_screen.dart';
 import 'package:moss_gui/state/app_state.dart';
-import 'package:moss_gui/theme/theme.dart';
 
 import 'fake_server.dart';
 
@@ -16,9 +17,18 @@ Future<(AppState, FakeServer)> startApp(
   Size size = const Size(1440, 900),
   bool disableAnimations = false,
   ThemeData? theme,
+  GuiPrefs? prefs,
   Key? key,
   Future<RpcClient> Function()? reconnect,
 }) async {
+  // Por defecto, oscuro.
+  final saved =
+      prefs ??
+      GuiPrefs(
+        theme: theme?.brightness == Brightness.light
+            ? ThemeChoice.light
+            : ThemeChoice.dark,
+      );
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -29,23 +39,47 @@ Future<(AppState, FakeServer)> startApp(
       'chat.send': (_) => {'accepted': true},
       'chat.cancel': (_) => {'cancelled': true},
       'app.status': (_) => appStatus(),
+      'settings.gui.get': (_) => {'value': saved.toJson()},
+      'settings.provider.get': (_) => providerSettings(),
+      'settings.provider.check': (_) => providerCheck(),
+      'settings.search.get': (_) => {
+        'configured': true,
+        'locked': false,
+        'key_status': 'guardada: …9d1e',
+      },
+      'settings.system_prompt.get': (_) => systemPrompt(),
+      'settings.system_prompt.check': (p) => {
+        'error': null,
+        'warning': null,
+        'bytes': (p['text'] as String).length,
+      },
+      'settings.model_params.get': (_) => modelParams(),
+      'settings.model_params.check': (_) => {
+        'field_errors': <String, String>{},
+        'extra_error': null,
+        'preview': '{\n  "model": "z-ai/glm5"\n}',
+      },
+      'models.list': (_) => {
+        'models': ['z-ai/glm5', 'meta/llama-3.3-70b'],
+      },
       ...handlers,
     },
   );
   final client = server.client();
   await client.initialize();
-  final app = AppState(client, reconnect: reconnect);
+  // Como `Boot`: las preferencias guardadas antes del chat.
+  final app = AppState(
+    client,
+    reconnect: reconnect,
+    prefs: ValueNotifier(saved),
+  );
   await app.load('c1');
   await tester.pumpWidget(
     MediaQuery(
       data: MediaQueryData(size: size, disableAnimations: disableAnimations),
       child: RepaintBoundary(
         key: key,
-        child: MaterialApp(
-          theme: theme ?? MossTheme.dark(),
-          debugShowCheckedModeBanner: false,
-          home: ChatScreen(app),
-        ),
+        child: PrefsApp(prefs: app.prefs, home: HomeScreen(app)),
       ),
     ),
   );
@@ -89,6 +123,9 @@ Map<String, Object?> providerSettings({
   String model = 'z-ai/glm5',
   bool baseUrlLocked = false,
   bool modelLocked = false,
+  bool apiKeyLocked = false,
+  String keyStatus = '',
+  bool withLab = false,
 }) => {
   'providers': [
     {
@@ -121,11 +158,97 @@ Map<String, Object?> providerSettings({
       'selectable': false,
       'note': 'sin key',
     },
+    if (withLab)
+      {
+        'id': 'custom:lab',
+        'kind': 'endpoint',
+        'name': 'Servidor del lab',
+        'base_url': 'http://127.0.0.1:8080/v1',
+        'needs_key': false,
+        'key_saved': false,
+        'selectable': true,
+        'note': '',
+      },
   ],
-  'saved': {'provider': provider, 'base_url': '', 'model': model},
+  'saved': {
+    'provider': provider,
+    'base_url': switch (provider) {
+      'custom:omniroute' => 'https://mi-gateway.example/v1',
+      'custom:lab' => 'http://127.0.0.1:8080/v1',
+      _ => '',
+    },
+    'model': model,
+  },
   'effective': {'base_url': '', 'model': model},
-  'locks': {'base_url': baseUrlLocked, 'model': modelLocked, 'api_key': false},
-  'key_status': '',
+  'locks': {
+    'base_url': baseUrlLocked,
+    'model': modelLocked,
+    'api_key': apiKeyLocked,
+  },
+  'key_status': keyStatus,
+};
+
+const kDefaultPrompt =
+    'Eres un asistente útil. Responde en español, de forma clara y concisa.';
+
+Map<String, Object?> systemPrompt({String mode = 'default', String? text}) => {
+  'mode': mode,
+  'text': text ?? (mode == 'default' ? kDefaultPrompt : ''),
+  'default_text': kDefaultPrompt,
+  'max_bytes': 8000,
+  'warning': null,
+};
+
+/// `settings.model_params.get` de NIM con temperatura guardada.
+Map<String, Object?> modelParams({
+  Map<String, Object?> params = const {'temperature': 0.6},
+  String extra = '',
+}) => {
+  'provider': 'nvidia',
+  'model': 'z-ai/glm5',
+  'params': {
+    for (final k in [
+      'reasoning',
+      'temperature',
+      'top_p',
+      'top_k',
+      'max_tokens',
+      'frequency_penalty',
+      'presence_penalty',
+      'seed',
+    ])
+      k: params[k],
+  },
+  'extra': extra,
+  'reasoning_style': 'toggle',
+  'limits': {
+    'temperature': {
+      'min': 0.0,
+      'max': 2.0,
+      'min_exclusive': false,
+      'integer': false,
+    },
+    'top_p': {'min': 0.0, 'max': 1.0, 'min_exclusive': true, 'integer': false},
+    'top_k': {'min': 1, 'max': 1000, 'min_exclusive': false, 'integer': true},
+    'max_tokens': {
+      'min': 1,
+      'max': 1000000,
+      'min_exclusive': false,
+      'integer': true,
+    },
+  },
+  'preview': '{\n  "model": "z-ai/glm5",\n  "temperature": 0.6\n}',
+};
+
+Map<String, Object?> providerCheck({
+  String? error,
+  String? hint,
+  bool canRequestModels = true,
+}) => {
+  'error': error,
+  'hint': hint,
+  'can_request_models': canRequestModels,
+  'dirty': false,
 };
 
 Map<String, Object?> commandList({

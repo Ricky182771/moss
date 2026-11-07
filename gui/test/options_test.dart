@@ -83,7 +83,7 @@ void main() {
     await tester.tap(find.text('NVIDIA NIM'));
     await tester.pump();
     expect(find.text('OmniRoute'), findsOneWidget);
-    expect(find.text('sin key'), findsOneWidget);
+    expect(find.text(Strings.addKeyIn('sin key')), findsOneWidget);
     expect(
       tester.getSemantics(find.text('OmniRoute')),
       isSemantics(isButton: true, hasEnabledState: true, isEnabled: false),

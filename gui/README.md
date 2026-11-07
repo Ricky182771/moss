@@ -74,13 +74,27 @@ flutter run -d linux --profile \
 Añade `--no-enable-impeller` para usar Skia y `GDK_BACKEND=x11` delante
 para XWayland.
 
-## Qué hace (G2)
+## Qué hace (G2 y G3)
 
 - **Opciones** (engranaje a la izquierda de la caja): modelo y proveedor, y el interruptor de la búsqueda web (solo de esta sesión). `/model` sin modelo también la abre.
 - **Buscar chats** (Ctrl+K): por título, sin distinguir mayúsculas ni acentos.
 - **Menú `⋯`** de cada chat (también clic derecho y Shift+F10): Renombrar, Exportar y Borrar.
 - **Menú de `/`**: al escribir `/` al principio de la caja.
 - El texto del modelo aparece por palabra mientras llega.
+- **Configuración** (F2 o la fila de abajo de la barra; Esc vuelve al chat):
+  Proveedor (con tus endpoints), Colores y accesibilidad, Configuración del
+  modelo y Búsqueda web. Cada sección guarda su borrador hasta Guardar o
+  Cancelar; salir con cambios pregunta antes de descartarlos.
+
+### Dónde se guardan las preferencias de la GUI
+
+Lo de Colores y accesibilidad (tema, tamaño del texto, Reducir animaciones y
+Más contraste) va en el `config.json` de Moss, bajo la llave `"gui"`, con
+`settings.gui.set` (`rpc/PROTOCOL.md` §6.7): sigue el modo portable y las
+mismas rutas que lo demás. Es un objeto con `"version": 1`; si falta, es de
+otra versión o trae algo que la GUI no conoce, se usan los valores
+predeterminados. La GUI lo lee antes de dibujar el chat. Las keys nunca van
+ahí: van en `credentials.json`, por `moss-rpc`.
 
 ## Pruebas
 

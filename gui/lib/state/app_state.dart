@@ -5,12 +5,24 @@ import 'package:flutter/services.dart';
 
 import '../models/conversation.dart';
 import '../models/events.dart';
+import '../models/gui_prefs.dart';
 import '../models/settings.dart';
 import '../models/summary.dart';
 import '../rpc/client.dart';
 import '../rpc/errors.dart';
 import '../strings.dart';
 import 'apply.dart';
+import 'settings_state.dart';
+
+/// `settings.gui.get` al arrancar. Si falla o trae algo raro, lo
+/// predeterminado: el arranque no se rompe por las preferencias.
+Future<GuiPrefs> loadGuiPrefs(RpcClient rpc) async {
+  try {
+    return GuiPrefs.fromJson((await rpc.request('settings.gui.get'))['value']);
+  } on Object {
+    return const GuiPrefs();
+  }
+}
 
 /// Un aviso corto. Cada uno es otro objeto, así el mismo texto se repite.
 class Toast {
@@ -37,9 +49,14 @@ class AppState extends ChangeNotifier {
   /// Arranca otro `moss-rpc` cuando el que había se cayó.
   final Future<RpcClient> Function()? reconnect;
 
-  AppState(this._rpc, {this.reconnect}) {
+  AppState(this._rpc, {this.reconnect, ValueNotifier<GuiPrefs>? prefs})
+    : prefs = prefs ?? ValueNotifier(const GuiPrefs()) {
     _attach();
   }
+
+  /// Colores y accesibilidad: lo que se ve (en Configuración, el borrador).
+  /// Es de `MossApp`, que lo libera.
+  final ValueNotifier<GuiPrefs> prefs;
 
   ConversationSnapshot? conversation;
   List<ConversationSummary> summaries = const [];
@@ -56,6 +73,16 @@ class AppState extends ChangeNotifier {
   final searchOn = ValueNotifier<bool>(false);
 
   final openOptions = ValueNotifier<OptionsRequest?>(null);
+
+  /// La sección de Configuración abierta; null en el chat.
+  final settingsOpen = ValueNotifier<SettingsPage?>(null);
+
+  /// `settings.changed` con su sección, para Configuración.
+  final _settingsEvents = StreamController<String>.broadcast(sync: true);
+  Stream<String> get settingsEvents => _settingsEvents.stream;
+
+  void openSettings([SettingsPage page = SettingsPage.provider]) =>
+      settingsOpen.value = page;
 
   /// Para Opciones, que tiene su propio estado (`OptionsState`).
   RpcClient get rpc => _rpc;
@@ -90,11 +117,12 @@ class AppState extends ChangeNotifier {
       await _rpc.request('conversation.get', {'conversation': handle}),
     );
     await _refreshList();
-    await _refreshStatus();
+    await refreshStatus();
     notifyListeners();
   }
 
-  Future<void> _refreshStatus() async {
+  /// `app.status`: `ready`, `problem` y si hay key de búsqueda.
+  Future<void> refreshStatus() async {
     try {
       final r = await _rpc.request('app.status');
       ready = r['ready'] as bool;
@@ -248,7 +276,7 @@ class AppState extends ChangeNotifier {
           await _rpc.request('conversation.open', {'id': id}),
         );
         await _refreshList();
-        await _refreshStatus();
+        await refreshStatus();
         notifyListeners();
       } else {
         await load(init['conversation'] as String);
@@ -304,10 +332,11 @@ class AppState extends ChangeNotifier {
     switch (e) {
       case ConversationsChanged():
         _refreshList().then((_) => notifyListeners(), onError: (_) {});
-      case SettingsChanged(section: 'provider' || 'search'):
-        _refreshStatus().then((_) => notifyListeners(), onError: (_) {});
-      case SettingsChanged():
-        break;
+      case SettingsChanged(:final section):
+        if (!_settingsEvents.isClosed) _settingsEvents.add(section);
+        if (section == 'provider' || section == 'search') {
+          refreshStatus().then((_) => notifyListeners(), onError: (_) {});
+        }
       case ConversationEvent():
         if (e is ChatFinished && e.conversation == conversation?.conversation) {
           if (e.restoreText case final t?) restoreText.value = t;
@@ -360,6 +389,8 @@ class AppState extends ChangeNotifier {
     restoreText.dispose();
     searchOn.dispose();
     openOptions.dispose();
+    settingsOpen.dispose();
+    _settingsEvents.close();
     super.dispose();
   }
 }

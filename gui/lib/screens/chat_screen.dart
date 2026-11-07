@@ -72,6 +72,11 @@ class _ChatScreenState extends State<ChatScreen> {
     ),
   );
 
+  void _settings() {
+    _closeOverlay();
+    app.openSettings();
+  }
+
   void _escape() {
     if (_narrow && _overlay) {
       _closeOverlay();
@@ -92,6 +97,7 @@ class _ChatScreenState extends State<ChatScreen> {
         const SingleActivator(LogicalKeyboardKey.keyB, control: true):
             _toggleSidebar,
         const SingleActivator(LogicalKeyboardKey.keyK, control: true): _search,
+        const SingleActivator(LogicalKeyboardKey.f2): _settings,
         const SingleActivator(LogicalKeyboardKey.escape): _escape,
       },
       child: Material(
@@ -113,6 +119,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   app.newChat();
                 },
                 onSearch: _search,
+                onSettings: _settings,
                 actions: _actions,
                 onOpen: (id) {
                   _closeOverlay();
@@ -303,46 +310,83 @@ class _Main extends StatelessWidget {
   }
 }
 
-/// Logo y "¿En qué te ayudo?". Sin configurar, el `problem` del servidor
-/// debajo, tenue (en G3 será la tarjeta "Ir a Configuración").
+/// Logo y "¿En qué te ayudo?". Sin configurar, la tarjeta con el `problem`
+/// del servidor y "Ir a Configuración" (Proveedor).
 class _EmptyChat extends StatelessWidget {
   final AppState app;
   const _EmptyChat(this.app);
 
   @override
-  Widget build(BuildContext context) => Center(
-    child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 48),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        spacing: 16,
-        children: [
-          const MossLogo(size: 64),
-          Text(
-            Strings.emptyPrompt,
-            style: context.styles.heading,
-            textAlign: TextAlign.center,
-          ),
-          Select(
-            listenable: app,
-            select: () => app.ready ? null : app.problem,
-            builder: (context, problem) => problem == null
-                ? const SizedBox.shrink()
-                : ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 560),
-                    child: Text(
-                      problem,
-                      style: context.styles.row.copyWith(
-                        color: context.colors.textMuted,
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final s = context.styles;
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 48),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          spacing: 16,
+          children: [
+            const MossLogo(size: 64),
+            Text(
+              Strings.emptyPrompt,
+              style: s.heading,
+              textAlign: TextAlign.center,
+            ),
+            Select(
+              listenable: app,
+              select: () => app.ready ? null : app.problem,
+              builder: (context, problem) => problem == null
+                  ? const SizedBox.shrink()
+                  : ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 560),
+                      child: Container(
+                        padding: const EdgeInsets.all(24),
+                        decoration: BoxDecoration(
+                          color: c.sidebar,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: c.border),
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          spacing: 16,
+                          children: [
+                            Semantics(
+                              liveRegion: true,
+                              child: Text(
+                                problem,
+                                style: s.row,
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                            Pressable(
+                              onPressed: app.openSettings,
+                              color: c.accent,
+                              hoverColor: c.accent,
+                              minHeight: 44,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                              ),
+                              child: Center(
+                                widthFactor: 1,
+                                child: Text(
+                                  Strings.goToSettings,
+                                  style: s.primaryButton.copyWith(
+                                    color: c.textOnAccent,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      textAlign: TextAlign.center,
                     ),
-                  ),
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 /// Aviso fijo arriba del chat cuando `moss-rpc` se cae a media sesión.
