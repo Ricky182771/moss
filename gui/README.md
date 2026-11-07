@@ -53,6 +53,23 @@ flutter run -d linux --dart-entrypoint-args=--rpc=$PWD/../build/dev/cli/moss-rpc
 
 Al cerrar la ventana, `pgrep -a moss-rpc` no debe mostrar nada.
 
+## Medir cuadros (`--frame-stats`)
+
+Solo en debug o profile (en release se ignora). Escribe en stderr el
+renderizador (Impeller o Skia) y la frecuencia que reporta la pantalla, y
+luego una línea por cada segundo con cuadros: cuántos, `build` y `raster`
+(promedio y máximo) y el intervalo entre vsyncs (promedio, máximo y cuántos
+pasan de 1.5× lo esperado). Un hueco de más de 250 ms es la app quieta y no
+cuenta. Mide en `--profile`: debug es mucho más lento.
+
+```bash
+flutter run -d linux --profile \
+  -a --rpc=$PWD/../build/dev/cli/moss-rpc -a --frame-stats
+```
+
+Añade `--no-enable-impeller` para usar Skia y `GDK_BACKEND=x11` delante
+para XWayland.
+
 ## Pruebas
 
 Ninguna necesita `moss-rpc` ni red (usan un canal en memoria):
