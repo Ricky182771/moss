@@ -2,6 +2,9 @@
 /// mayúsculas ni acentos: "cancion" encuentra "Canción".
 library;
 
+/// shortcut: solo las letras con acento del español y de las lenguas
+/// cercanas (francés, portugués, alemán); las de otras (ł, š, ő…) no se
+/// pliegan. Si hace falta, normalizar a NFD (sin paquete en Dart: tabla).
 const _plain = {
   'á': 'a', 'à': 'a', 'â': 'a', 'ä': 'a', 'ã': 'a', 'å': 'a', 'ā': 'a', //
   'é': 'e', 'è': 'e', 'ê': 'e', 'ë': 'e', 'ē': 'e', //
@@ -24,8 +27,10 @@ bool _combining(int unit) => unit >= 0x300 && unit <= 0x36F;
     if (_combining(unit)) continue;
     final lower = String.fromCharCode(unit).toLowerCase();
     final plain = _plain[lower] ?? lower;
-    out.write(plain);
-    for (var k = 0; k < plain.length; k++) {
+    for (final u in plain.codeUnits) {
+      // 'İ'.toLowerCase() es "i" con U+0307: la marca tampoco cuenta.
+      if (_combining(u)) continue;
+      out.writeCharCode(u);
       from.add(i);
     }
   }

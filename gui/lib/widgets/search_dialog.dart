@@ -81,7 +81,13 @@ class _SearchDialogState extends State<SearchDialog> {
   @override
   void initState() {
     super.initState();
-    _query.addListener(() => setState(() => _highlight = 0));
+    // Solo al cambiar el texto (mover el cursor también notifica).
+    var last = '';
+    _query.addListener(() {
+      if (_query.text == last) return;
+      last = _query.text;
+      setState(() => _highlight = 0);
+    });
   }
 
   @override

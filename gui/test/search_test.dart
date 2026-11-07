@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:moss_gui/state/title_search.dart';
 import 'package:moss_gui/strings.dart';
+import 'package:moss_gui/widgets/controls.dart';
 import 'package:moss_gui/widgets/search_dialog.dart';
 
 import 'fake_server.dart';
@@ -38,6 +39,7 @@ void main() {
       expect(findInTitle('Otra canción', 'cion'), (8, 12));
       expect(findInTitle('Pingüino', 'guino'), (3, 8));
       expect(findInTitle('Año nuevo', 'ano'), (0, 3));
+      expect(findInTitle('İstanbul', 'istanbul'), (0, 8));
     });
 
     test('acento escrito aparte (marca combinante)', () {
@@ -61,7 +63,10 @@ void main() {
     await _open(tester);
     expect(find.byType(SearchDialog), findsOneWidget);
     // Sin escribir: todos los legibles, por grupo.
-    expect(find.text('HOY'), findsWidgets);
+    expect(_inDialog(find.text('HOY')), findsOneWidget);
+    expect(_inDialog(find.text('AYER')), findsOneWidget);
+    // El ilegible ("d", sin título) no sale: solo tres filas.
+    expect(_inDialog(find.byType(Pressable)), findsNWidgets(3));
     expect(
       find.descendant(
         of: find.byType(SearchDialog),
@@ -121,6 +126,7 @@ void main() {
       (r) => r['method'] == 'conversation.open',
     );
     expect(open['params'], {'id': 'c'});
+    expect(FocusManager.instance.primaryFocus?.debugLabel, 'Mensaje');
   });
 
   testWidgets('Esc cierra y el foco vuelve a donde estaba', (tester) async {
