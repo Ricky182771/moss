@@ -170,7 +170,15 @@ Map<String, Object?> providerSettings({
         'note': '',
       },
   ],
-  'saved': {'provider': provider, 'base_url': '', 'model': model},
+  'saved': {
+    'provider': provider,
+    'base_url': switch (provider) {
+      'custom:omniroute' => 'https://mi-gateway.example/v1',
+      'custom:lab' => 'http://127.0.0.1:8080/v1',
+      _ => '',
+    },
+    'model': model,
+  },
   'effective': {'base_url': '', 'model': model},
   'locks': {
     'base_url': baseUrlLocked,

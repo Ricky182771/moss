@@ -7,3 +7,5 @@
   - `Chat-oscuro.png` muestra el menú `⋯` abierto (llega en G2).
 
 Cada PR de la GUI agrega aquí las maquetas que necesita (Configuración en G3, Telegram en G4, Buscar chats en G2).
+
+- G3 agregó `Config-proveedor`, `Config-colores`, `Config-modelo` y `Config-busqueda`, copiadas del canvas. Sus PNG no están: no hubo navegador para dibujarlas. Las capturas de la GUI misma salen de `flutter test --tags capturas --run-skipped` (`gui/README.md`).
