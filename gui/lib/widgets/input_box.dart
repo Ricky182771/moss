@@ -7,6 +7,7 @@ import '../theme/colors.dart';
 import '../theme/motion.dart';
 import '../theme/theme.dart';
 import 'controls.dart';
+import 'select.dart';
 
 /// Caja del mensaje: una fila con el texto y Enviar o Detener, y la ayuda.
 class InputBox extends StatefulWidget {
@@ -130,9 +131,11 @@ class _InputBoxState extends State<InputBox> {
                         ),
                       ),
                     ),
-                    ListenableBuilder(
+                    // Solo cambia con la fase o al vaciarse la caja.
+                    Select(
                       listenable: Listenable.merge([app, _text]),
-                      builder: (context, _) => app.busy
+                      select: () => (app.busy, _text.text.trim().isEmpty),
+                      builder: (context, v) => v.$1
                           ? IconAction(
                               label: Strings.stop,
                               onPressed: app.cancel,
@@ -144,15 +147,11 @@ class _InputBoxState extends State<InputBox> {
                             )
                           : IconAction(
                               label: Strings.send,
-                              onPressed: _text.text.trim().isEmpty
-                                  ? null
-                                  : _send,
+                              onPressed: v.$2 ? null : _send,
                               icon: Icon(
                                 Icons.arrow_upward_rounded,
                                 size: 22,
-                                color: _text.text.trim().isEmpty
-                                    ? c.textMuted
-                                    : c.accent,
+                                color: v.$2 ? c.textMuted : c.accent,
                               ),
                             ),
                     ),

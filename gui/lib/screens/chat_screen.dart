@@ -10,6 +10,7 @@ import '../widgets/controls.dart';
 import '../widgets/input_box.dart';
 import '../widgets/logo.dart';
 import '../widgets/message_list.dart';
+import '../widgets/select.dart';
 import '../widgets/sidebar.dart';
 import '../widgets/toast.dart';
 
@@ -76,11 +77,13 @@ class _ChatScreenState extends State<ChatScreen> {
             _narrow = box.maxWidth < kNarrowWidth;
             // Al ensanchar, la barra encima se cierra (no reaparece sola).
             if (!_narrow) _overlay = false;
-            final sidebar = ListenableBuilder(
+            // Solo con la lista (conversations.changed) o el chat abierto.
+            final sidebar = Select(
               listenable: app,
-              builder: (context, _) => Sidebar(
-                summaries: app.summaries,
-                openId: app.conversation?.id,
+              select: () => (app.summaries, app.conversation?.id),
+              builder: (context, v) => Sidebar(
+                summaries: v.$1,
+                openId: v.$2,
                 onNewChat: () {
                   _closeOverlay();
                   app.newChat();
@@ -185,86 +188,91 @@ class _Main extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     final s = context.styles;
-    return ListenableBuilder(
-      listenable: app,
-      builder: (context, _) {
-        final conv = app.conversation;
-        final title = conv == null || conv.title.isEmpty
-            ? Strings.newChat
-            : conv.title;
-        return Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-              decoration: BoxDecoration(
-                border: Border(bottom: BorderSide(color: c.border)),
+    // Cada parte escucha solo lo suyo: un trozo de respuesta reconstruye los
+    // mensajes, no el encabezado ni la caja.
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: c.border)),
+          ),
+          child: Row(
+            spacing: 12,
+            children: [
+              IconAction(
+                label: sidebarOpen ? Strings.hideSidebar : Strings.showSidebar,
+                labelBelow: true,
+                onPressed: onToggleSidebar,
+                icon: SidebarIcon(color: c.textMuted),
               ),
-              child: Row(
-                spacing: 12,
-                children: [
-                  IconAction(
-                    label: sidebarOpen
-                        ? Strings.hideSidebar
-                        : Strings.showSidebar,
-                    labelBelow: true,
-                    onPressed: onToggleSidebar,
-                    icon: SidebarIcon(color: c.textMuted),
-                  ),
-                  Expanded(
-                    child: Semantics(
-                      header: true,
-                      child: Text(
-                        title,
-                        style: s.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+              Expanded(
+                child: Select(
+                  listenable: app,
+                  select: () => app.conversation?.title ?? '',
+                  builder: (context, title) => Semantics(
+                    header: true,
+                    child: Text(
+                      title.isEmpty ? Strings.newChat : title,
+                      style: s.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  Pressable(
-                    onPressed: app.export,
-                    minHeight: 40,
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      spacing: 8,
-                      children: [
-                        Icon(Icons.download_rounded, size: 18, color: c.text),
-                        Text(Strings.export, style: s.row),
-                      ],
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
-            Expanded(
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: conv == null || conv.entries.isEmpty
-                        ? const _EmptyChat()
-                        : MessageList(conv),
-                  ),
-                  if (app.disconnected)
-                    Positioned(
-                      top: 12,
-                      left: 24,
-                      right: 24,
-                      child: Center(child: _Disconnected(app)),
-                    ),
-                  Positioned(
-                    left: 24,
-                    right: 24,
-                    bottom: 12,
-                    child: Center(child: ToastHost(app.toast)),
-                  ),
-                ],
+              Pressable(
+                onPressed: app.export,
+                minHeight: 40,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  spacing: 8,
+                  children: [
+                    Icon(Icons.download_rounded, size: 18, color: c.text),
+                    Text(Strings.export, style: s.row),
+                  ],
+                ),
               ),
-            ),
-            InputBox(app),
-          ],
-        );
-      },
+            ],
+          ),
+        ),
+        Expanded(
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: Select(
+                  listenable: app,
+                  select: () => app.conversation,
+                  builder: (context, conv) =>
+                      conv == null || conv.entries.isEmpty
+                      ? const _EmptyChat()
+                      : MessageList(conv),
+                ),
+              ),
+              Positioned(
+                top: 12,
+                left: 24,
+                right: 24,
+                child: Select(
+                  listenable: app,
+                  select: () => app.disconnected,
+                  builder: (context, disconnected) => disconnected
+                      ? Center(child: _Disconnected(app))
+                      : const SizedBox.shrink(),
+                ),
+              ),
+              Positioned(
+                left: 24,
+                right: 24,
+                bottom: 12,
+                child: Center(child: ToastHost(app.toast)),
+              ),
+            ],
+          ),
+        ),
+        InputBox(app),
+      ],
     );
   }
 }

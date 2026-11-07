@@ -44,6 +44,25 @@ class _MessageListState extends State<MessageList> {
   bool _pinned = true;
   bool _programmatic = false;
 
+  /// La vista de cada entrada, por índice. `applyEvent` deja idénticas las
+  /// entradas que no cambian; con la misma instancia del widget, Flutter no
+  /// las reconstruye y un trozo nuevo reconstruye solo la última.
+  final _views = <(Entry, Widget)>[];
+
+  Widget _view(int i, Entry e) {
+    if (i < _views.length && identical(_views[i].$1, e)) return _views[i].$2;
+    final w = EntryView(
+      e,
+      key: ValueKey('${widget.conversation.conversation}/$i'),
+    );
+    if (i < _views.length) {
+      _views[i] = (e, w);
+    } else {
+      _views.add((e, w));
+    }
+    return w;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -59,6 +78,10 @@ class _MessageListState extends State<MessageList> {
         (now.entries.length > old.conversation.entries.length &&
             now.entries.last.kind == EntryKind.user);
     if (sentOrSwitched) _pinned = true;
+    if (now.conversation != old.conversation.conversation) _views.clear();
+    if (_views.length > now.entries.length) {
+      _views.removeRange(now.entries.length, _views.length);
+    }
     _stickAfterFrame();
   }
 
@@ -139,8 +162,7 @@ class _MessageListState extends State<MessageList> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   spacing: 28,
                   children: [
-                    for (final (i, e) in entries.indexed)
-                      EntryView(e, key: ValueKey('${conv.conversation}/$i')),
+                    for (final (i, e) in entries.indexed) _view(i, e),
                     if (phase != null)
                       AssistantRow(
                         child: Semantics(liveRegion: true, child: phase),

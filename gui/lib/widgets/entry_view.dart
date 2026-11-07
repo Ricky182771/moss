@@ -178,6 +178,24 @@ class _ThoughtViewState extends State<ThoughtView>
   late final _fold = AnimationController(vsync: this, value: _open ? 1 : 0)
     ..addListener(_keepAnswerInPlace);
   late final _curved = CurvedAnimation(parent: _fold, curve: Motion.enter);
+
+  /// Plegado del todo: no se arma (ni se parsea) el Markdown.
+  bool _shut = false;
+
+  /// El Markdown del pensamiento se reusa mientras no cambie su texto.
+  String? _shownFor;
+  Widget? _shown;
+
+  @override
+  void initState() {
+    super.initState();
+    _shut = _fold.isDismissed;
+    _fold.addStatusListener((s) {
+      final shut = s == AnimationStatus.dismissed;
+      if (shut != _shut) setState(() => _shut = shut);
+    });
+  }
+
   bool _autoFolding = false;
   double _lastFold = 1;
 
@@ -228,7 +246,12 @@ class _ThoughtViewState extends State<ThoughtView>
     final s = context.styles;
     // También mientras se pliega solo, para que no crezca antes de plegarse.
     final live = (_live(widget.entry) && _userOpen == null) || _autoFolding;
-    final text = MarkdownView(widget.entry.reasoning, thought: true);
+    final reasoning = widget.entry.reasoning;
+    if (!identical(reasoning, _shownFor)) {
+      _shownFor = reasoning;
+      _shown = MarkdownView(reasoning, thought: true);
+    }
+    final text = _shown!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -266,26 +289,29 @@ class _ThoughtViewState extends State<ThoughtView>
         SizeTransition(
           sizeFactor: _curved,
           alignment: AlignmentDirectional.topStart,
-          child: Padding(
-            key: _content,
-            padding: const EdgeInsets.only(top: 6, left: 22),
-            child: live
-                // Las últimas ~6 líneas mientras llega.
-                ? ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxHeight: s.thought.fontSize! * s.thought.height! * 6,
-                    ),
-                    child: ClipRect(
-                      child: OverflowBox(
-                        alignment: Alignment.bottomLeft,
-                        maxHeight: double.infinity,
-                        fit: OverflowBoxFit.deferToChild,
-                        child: text,
-                      ),
-                    ),
-                  )
-                : text,
-          ),
+          child: _shut && !_open
+              ? const SizedBox(width: double.infinity)
+              : Padding(
+                  key: _content,
+                  padding: const EdgeInsets.only(top: 6, left: 22),
+                  child: live
+                      // Las últimas ~6 líneas mientras llega.
+                      ? ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxHeight:
+                                s.thought.fontSize! * s.thought.height! * 6,
+                          ),
+                          child: ClipRect(
+                            child: OverflowBox(
+                              alignment: Alignment.bottomLeft,
+                              maxHeight: double.infinity,
+                              fit: OverflowBoxFit.deferToChild,
+                              child: text,
+                            ),
+                          ),
+                        )
+                      : text,
+                ),
         ),
       ],
     );
