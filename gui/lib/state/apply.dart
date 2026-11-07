@@ -52,6 +52,10 @@ ConversationSnapshot? applyEvent(ConversationSnapshot s, ConversationEvent e) {
 }
 
 /// "Pensamiento · N palabras", contado como la TUI (`reasoning_summary`).
+///
+/// shortcut: copia la lógica de la TUI (`cli/src/conversation.cpp`); lo
+/// correcto es que `moss-rpc` mande el resumen en la entrada (cambio de
+/// protocolo, fuera de G1).
 String thoughtSummary(String reasoning) {
   final words = RegExp(r'[^ \n\t\r]+').allMatches(reasoning).length;
   final digits = words.toString().replaceAllMapped(
