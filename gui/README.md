@@ -74,6 +74,14 @@ flutter run -d linux --profile \
 Añade `--no-enable-impeller` para usar Skia y `GDK_BACKEND=x11` delante
 para XWayland.
 
+## Qué hace (G2)
+
+- **Opciones** (engranaje a la izquierda de la caja): modelo y proveedor, y el interruptor de la búsqueda web (solo de esta sesión). `/model` sin modelo también la abre.
+- **Buscar chats** (Ctrl+K): por título, sin distinguir mayúsculas ni acentos.
+- **Menú `⋯`** de cada chat (también clic derecho y Shift+F10): Renombrar, Exportar y Borrar.
+- **Menú de `/`**: al escribir `/` al principio de la caja.
+- El texto del modelo aparece por palabra mientras llega.
+
 ## Pruebas
 
 Ninguna necesita `moss-rpc` ni red (usan un canal en memoria):
