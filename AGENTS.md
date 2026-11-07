@@ -11,6 +11,7 @@ Moss es un chatbot tipo asistente general que corre en la terminal (pantalla com
 - **Interfaz (`cli/`)**: ejecutable con FTXUI. **No se toca hasta el hito 3.**
 - **RPC (`rpc/`)**: ejecutable `moss-rpc`, la app sin pantalla por JSON-RPC 2.0 sobre stdin/stdout, para la interfaz gráfica (Flutter) y otras interfaces. Usa la misma lógica que la TUI (`Session`), sin FTXUI ni addons. Protocolo en `rpc/PROTOCOL.md`.
 - **Addons (`addons/`)**: bots que usan el mismo núcleo (hoy, Telegram), compilados por defecto solo en Linux; la app los arranca (`moss telegram`) y los configura en F2 → Addons (sección 14). `core` no sabe que existen; de `addons/`, `cli/` solo usa `chatbot::addon_settings`.
+- **Interfaz gráfica (`gui/`)**: app de Flutter (`moss-gui`) que arranca `moss-rpc` como proceso hijo; sin lógica del núcleo (sección 16).
 - **Servidor**: API de NVIDIA NIM (plan gratuito), compatible con OpenAI: `POST {base_url}/chat/completions`.
 
 ## 2. Cómo debes comportarte
@@ -40,6 +41,7 @@ Lee la guía correspondiente antes de hacer cambios:
 | Addons | `guias/14-addons.md` |
 | `rpc/` | `rpc/PROTOCOL.md` y `guias/05-estructura.md` |
 | Presets, compilación, pruebas o CI | `guias/11-compilacion.md` |
+| `gui/` (Flutter) | `gui/diseno/DISENO.md`, `guias/16-gui.md` y `rpc/PROTOCOL.md` |
 
 ## 3. Alcance por hitos
 
@@ -85,6 +87,10 @@ moss/
 │   ├── settings/
 │   ├── common/
 │   └── telegram/
+├── gui/
+│   ├── diseno/
+│   ├── lib/
+│   └── test/
 ├── tools/
 │   └── windows-dist/
 ├── tests/
@@ -95,6 +101,7 @@ moss/
 - `chatbot_core` (namespace `moss`) no depende de FTXUI ni addons, ni usa la terminal. `chatbot_markdown` (`chatbot::markdown`, namespace `chatbot::md`) no depende de core ni FTXUI; md4c en privado. El dibujo de markdown también usa `chatbot::md`.
 - `chatbot_cli_lib` solo depende de `chatbot::core`, `chatbot::markdown`, `chatbot::addon_settings` y nlohmann/json privado; sin FTXUI ni includes de `core/src`.
 - RPC solo depende de `chatbot_cli_lib` (con su `chatbot::addon_settings`, como `cli/`) y nlohmann/json; nunca FTXUI, `chatbot_cli_ui` ni addons (`chatbot::bot`, Telegram). Siempre se compila, también en Windows y sin addons. **Todo cambio de protocolo se documenta en `rpc/PROTOCOL.md` en el mismo PR**, incluida su tabla de estado.
+- `gui/` no es target de CMake: habla con `moss-rpc` solo por `rpc/PROTOCOL.md` (sección 16).
 - `chatbot_cli_ui`: `chatbot_cli_lib`, `ftxui::dom` y `ftxui::screen`; dibuja sin terminal. Solo `moss` y `chatbot_ui_tests` enlazan `ftxui::component`.
 - **Lo nuevo que no dependa de FTXUI va en `Session`, no en `main.cpp`.** Solo desde el hilo de interfaz, con entorno inyectado. TUI y RPC comparten arranque. `Session` se destruye antes de `screen`.
 - Plataforma elegida por CMake, sin `#ifdef` en lógica; `<windows.h>` solo en `.cpp` de Windows. Strings UTF-8, llamadas Win32 W; escritura atómica común.
@@ -195,8 +202,15 @@ cmake --preset dev     && cmake --build --preset dev     && ctest --preset dev  
 cmake --preset release && cmake --build --preset release && ctest --preset release --output-on-failure
 ```
 
+GUI (Flutter 3.47.9, en `gui/`; dependencias de Linux en `gui/README.md`):
+
+```bash
+cd gui && flutter pub get && dart format --output=none --set-exit-if-changed . && flutter analyze && flutter test
+cd gui && flutter build linux --release   # una vez, al final
+```
+
 - Comprobar también el loop real de FTXUI con `./build/tsan/cli/moss`, conversación y cancelación manuales, sin `WARNING: ThreadSanitizer` (API real solo con permiso).
-- CI: GCC en los cuatro presets, Clang dev/release, dev sin addons, Windows dev/release; **sin keys ni API real**. TSan: `vm.mmap_rnd_bits=28`.
+- CI: GCC en los cuatro presets, Clang dev/release, dev sin addons, Windows dev/release, `gui` (Flutter en Linux); **sin keys ni API real**. TSan: `vm.mmap_rnd_bits=28`.
 - Latencia de cancelación **< 2 s en todos los presets**, incluido apagado y destructores. Las pruebas de tiempo siempre miden y reportan con `WARN`; los demás límites de rendimiento fallan solo con `CHATBOT_STRICT_PERF=1` (CI solo release). Las esperas funcionales entre hilos siempre son obligatorias.
 - No desactivar comprobaciones de dependencias/includes ni permitir licencias ausentes en el ZIP.
 
@@ -245,3 +259,15 @@ Definidos en `.claude/agents/`, con modelos más baratos para bajar el consumo p
 - **`reviewer`** (sonnet, no edita): antes de dar algo por terminado, revisa el diff contra este archivo y devuelve hallazgos bloqueantes o menores.
 
 El agente principal no corre builds ni lee salidas largas directamente si `test-runner` puede hacerlo. La regla 3 (mostrar la salida real) se cumple con las líneas que `test-runner` copia tal cual: comandos, códigos de salida, resumen de ctest, warnings, errores y reportes de sanitizador.
+
+## 16. Interfaz gráfica (Flutter)
+
+- **`gui/diseno/DISENO.md` manda**, luego las maquetas de `gui/diseno/maquetas/`. Si no coinciden, gana `DISENO.md` y se anota en el PR.
+- Colores solo en `MossColors`, estilos de texto en `MossText`, textos en `strings.dart`. **Duraciones y curvas de animación solo en `motion.dart`** (`Motion.of(context)`, 0 ms con Reducir animaciones). Los tiempos de espera del proceso, que no son animaciones, son constantes con nombre en `rpc/client.dart`. Nada de colores, tamaños de letra ni duraciones escritos a mano.
+- **Nada de lógica del núcleo en Dart:** todo va por `moss-rpc` (`rpc/PROTOCOL.md`). Si falta algo, se pide un campo o método en el protocolo en su propio PR; no se copia la regla. Las copias que quedan se marcan con `shortcut:` y son deuda.
+- Estado con `ChangeNotifier`/`ValueNotifier`, sin paquetes de estado. **Dependencias mínimas y justificadas en el PR:** `json_rpc_2`, `stream_channel`, `flutter_markdown_plus`, `markdown` y `url_launcher`. Cualquier otra se pregunta antes.
+- `moss-rpc` con `--rpc=<ruta>` o junto al ejecutable, nunca del `PATH`. `initialize` con tiempo límite; al cerrar, `shutdown`, `exit` y `kill` a los 3 s: nunca queda huérfano.
+- Botones de solo ícono con `Semantics` y etiqueta; foco visible. Markdown sin cargar imágenes; enlaces solo `http`/`https`. Ningún secreto en pantalla ni en registros.
+- Pruebas sin `moss-rpc` ni red (canal en memoria). Las capturas solo a mano. La prueba a mano usa `tools/fake-llm.py` y directorios en `/tmp`, nunca la configuración ni las keys del usuario.
+
+Detalle: guias/16-gui.md

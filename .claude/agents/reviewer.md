@@ -44,6 +44,7 @@ Para entender el contexto de una línea, abre el archivo con Read (solo el rango
 - Plataforma elegida por CMake, sin `#ifdef` en la lógica; `<windows.h>` solo en `.cpp` de Windows.
 - Colores solo en `Theme`/`Palette`. Texto externo pasa por `md::sanitize`; URL además por `hyperlink_target`.
 - Addons (§14): core y markdown no conocen addons; `cli/` solo usa `chatbot::addon_settings`, nunca bot ni telegram.
+- **GUI (§16):** `gui/diseno/DISENO.md` manda; tokens y `motion.dart`; ningún color, tamaño de letra ni duración escritos a mano fuera de ellos; `Semantics` y etiqueta en todo botón de solo ícono; ninguna lógica del núcleo copiada a Dart (todo va por RPC); ningún secreto en pantalla ni en registros.
 
 **Núcleo (§6).** `Result<T>` sobre `std::variant<T, ChatError>`; las excepciones nunca cruzan la API pública; errores por `ErrorKind`, nunca por su texto.
 

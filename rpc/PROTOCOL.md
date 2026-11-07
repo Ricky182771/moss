@@ -204,7 +204,7 @@ La GUI mantiene una **copia exacta** de `Conversation::entries()`. Las entradas 
 ```jsonc
 // Entry
 {"kind":"assistant",        // user | assistant | error | notice | sources
- "text":"...",               // markdown crudo; la GUI lo dibuja (gpt_markdown)
+ "text":"...",               // markdown crudo; la GUI lo dibuja (flutter_markdown_plus)
  "in_progress":false,
  "incomplete":false,
  "cancelled":false,

@@ -1,0 +1,5 @@
+# La prueba de capturas escribe PNG en /tmp/moss-capturas/ y solo corre a mano:
+#   flutter test --tags capturas --run-skipped
+tags:
+  capturas:
+    skip: "Solo a mano: flutter test --tags capturas --run-skipped"

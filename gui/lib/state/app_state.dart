@@ -1,0 +1,266 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+
+import '../models/conversation.dart';
+import '../models/events.dart';
+import '../models/summary.dart';
+import '../rpc/client.dart';
+import '../rpc/errors.dart';
+import '../strings.dart';
+import 'apply.dart';
+
+/// Un aviso corto. Cada uno es otro objeto, así el mismo texto se repite.
+class Toast {
+  final String text;
+  Toast(this.text);
+}
+
+/// Estado de la app sobre `moss-rpc`: la lista de chats y la conversación
+/// abierta, copiada de los eventos (PROTOCOL.md §5).
+class AppState extends ChangeNotifier {
+  RpcClient _rpc;
+
+  /// Arranca otro `moss-rpc` cuando el que había se cayó.
+  final Future<RpcClient> Function()? reconnect;
+
+  AppState(this._rpc, {this.reconnect}) {
+    _attach();
+  }
+
+  ConversationSnapshot? conversation;
+  List<ConversationSummary> summaries = const [];
+
+  /// `moss-rpc` se cayó a media sesión.
+  bool disconnected = false;
+
+  /// Error de JSON-RPC que va junto a la caja (Busy, vacío, sin configurar).
+  final inputError = ValueNotifier<String?>(null);
+  final toast = ValueNotifier<Toast?>(null);
+
+  /// Texto que vuelve a la caja tras un error o una cancelación.
+  final restoreText = ValueNotifier<String?>(null);
+
+  /// Eventos que llegan mientras se espera un `conversation.get`.
+  List<ConversationEvent>? _pending;
+
+  /// Hay una búsqueda o una respuesta en curso.
+  bool get busy => (conversation?.phase ?? Phase.idle) != Phase.idle;
+
+  void _attach() {
+    final rpc = _rpc;
+    rpc.onEvents(RpcEvent.methods, (m, p) => _onEvent(RpcEvent.parse(m, p)));
+    rpc.done.then((_) {
+      if (identical(rpc, _rpc) && !_closing) {
+        disconnected = true;
+        notifyListeners();
+      }
+    });
+  }
+
+  /// Carga la conversación abierta ([handle], de `initialize`) y la lista.
+  Future<void> load(String handle) async {
+    conversation = ConversationSnapshot.fromJson(
+      await _rpc.request('conversation.get', {'conversation': handle}),
+    );
+    await _refreshList();
+    notifyListeners();
+  }
+
+  Future<void> _refreshList() async {
+    final r = await _rpc.request('conversations.list');
+    summaries = [
+      for (final i in r['items'] as List)
+        ConversationSummary.fromJson(i as Map<String, dynamic>),
+    ];
+  }
+
+  // Acciones ----------------------------------------------------------------
+
+  /// Envía lo de la caja. Devuelve si hay que vaciarla.
+  Future<bool> submit(String text) async {
+    final c = conversation;
+    if (c == null) return false;
+    inputError.value = null;
+    try {
+      if (!text.startsWith('/')) {
+        await _rpc.request('chat.send', {
+          'conversation': c.conversation,
+          'text': text,
+        });
+        return true;
+      }
+      final r = await _rpc.request('commands.run', {
+        'conversation': c.conversation,
+        'text': text,
+      });
+      switch (r['kind']) {
+        case 'copy':
+          await Clipboard.setData(ClipboardData(text: r['text'] as String));
+        case 'status':
+          toast.value = Toast(r['message'] as String);
+        case 'model_picker':
+          toast.value = Toast(Strings.modelPickerHint);
+        // message, search, save, export y model: lo demás llega en eventos.
+      }
+      return r['clear'] == true;
+    } on RpcError catch (e) {
+      _showError(e, fromInput: true);
+    } on StateError {
+      // El canal se cerró: `done` ya marcó `disconnected`.
+    }
+    return false;
+  }
+
+  Future<void> cancel() async {
+    final c = conversation;
+    if (c == null || !busy) return;
+    await _call(
+      () => _rpc.request('chat.cancel', {'conversation': c.conversation}),
+    );
+  }
+
+  Future<void> newChat() => _replace(() => _rpc.request('conversation.new'));
+
+  Future<void> open(String id) {
+    if (id == conversation?.id) return Future.value();
+    return _replace(() => _rpc.request('conversation.open', {'id': id}));
+  }
+
+  Future<void> export() async {
+    final c = conversation;
+    if (c == null) return;
+    await _call(() async {
+      final r = await _rpc.request('conversation.export', {
+        'conversation': c.conversation,
+      });
+      toast.value = Toast(r['message'] as String);
+    });
+  }
+
+  /// Arranca otro `moss-rpc` y vuelve a abrir la conversación, si tenía id.
+  Future<void> retry() async {
+    final make = reconnect;
+    if (make == null) return;
+    final id = conversation?.id;
+    RpcClient? rpc;
+    try {
+      rpc = await make();
+      final init = await rpc.initialize();
+      _rpc = rpc;
+      _attach();
+      disconnected = false;
+      if (id != null) {
+        conversation = ConversationSnapshot.fromJson(
+          await _rpc.request('conversation.open', {'id': id}),
+        );
+        await _refreshList();
+        notifyListeners();
+      } else {
+        await load(init['conversation'] as String);
+      }
+    } catch (e) {
+      if (!identical(rpc, _rpc)) await rpc?.close(); // Que no quede huérfano.
+      toast.value = Toast(switch (e) {
+        RpcError() => e.displayMessage,
+        RpcStartError(timedOut: true) => Strings.rpcNotResponding,
+        RpcStartError(:final detail) => detail ?? Strings.rpcCannotStart,
+        _ => Strings.rpcCannotStart,
+      });
+    }
+  }
+
+  bool _closing = false;
+
+  Future<void> close() {
+    _closing = true;
+    return _rpc.close();
+  }
+
+  Future<void> _replace(Future<Map<String, dynamic>> Function() call) =>
+      _call(() async {
+        conversation = ConversationSnapshot.fromJson(await call());
+        inputError.value = null;
+        notifyListeners();
+      });
+
+  Future<void> _call(Future<void> Function() f) async {
+    try {
+      await f();
+    } on RpcError catch (e) {
+      _showError(e);
+    } on StateError {
+      // El canal se cerró: `done` ya marcó `disconnected`.
+    }
+  }
+
+  /// Lo escrito en la caja (vacío, sin configurar, sin key) y Busy van junto
+  /// a la caja; lo demás (Exportar, abrir), como aviso corto.
+  void _showError(RpcError e, {bool fromInput = false}) {
+    if (e.code == RpcError.busy || (fromInput && e.belongsToInput)) {
+      inputError.value = e.displayMessage;
+    } else {
+      toast.value = Toast(e.displayMessage);
+    }
+  }
+
+  // Eventos -----------------------------------------------------------------
+
+  void _onEvent(RpcEvent e) {
+    switch (e) {
+      case ConversationsChanged():
+        _refreshList().then((_) => notifyListeners(), onError: (_) {});
+      case ConversationEvent():
+        if (e is ChatFinished && e.conversation == conversation?.conversation) {
+          if (e.restoreText case final t?) restoreText.value = t;
+        }
+        _applyOrResync(e);
+    }
+  }
+
+  void _applyOrResync(ConversationEvent e) {
+    final c = conversation;
+    if (c == null) return;
+    if (_pending case final pending?) {
+      pending.add(e);
+      return;
+    }
+    final next = applyEvent(c, e);
+    if (next == null) {
+      _resync(c.conversation);
+    } else if (!identical(next, c)) {
+      conversation = next;
+      notifyListeners();
+    }
+  }
+
+  /// Hueco de `rev`: `conversation.get` y luego lo que llegó mientras.
+  Future<void> _resync(String handle) async {
+    final pending = _pending = [];
+    try {
+      var s = ConversationSnapshot.fromJson(
+        await _rpc.request('conversation.get', {'conversation': handle}),
+      );
+      for (final e in pending) {
+        s = applyEvent(s, e) ?? s;
+      }
+      if (s.conversation == conversation?.conversation) {
+        conversation = s;
+        notifyListeners();
+      }
+    } on Object {
+      // Otra conversación la reemplazó o el canal se cerró.
+    } finally {
+      _pending = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    inputError.dispose();
+    toast.dispose();
+    restoreText.dispose();
+    super.dispose();
+  }
+}
