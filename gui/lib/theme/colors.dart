@@ -23,6 +23,12 @@ class MossColors extends ThemeExtension<MossColors> {
   final Color code;
   final Color error;
 
+  /// Sombra de las ventanas que flotan (Opciones, menús).
+  final Color shadow;
+
+  /// Fondo oscurecido detrás de una ventana (Buscar chats).
+  final Color scrim;
+
   const MossColors({
     required this.background,
     required this.sidebar,
@@ -35,6 +41,8 @@ class MossColors extends ThemeExtension<MossColors> {
     required this.accentSoft,
     required this.code,
     required this.error,
+    required this.shadow,
+    required this.scrim,
   });
 
   static const dark = MossColors(
@@ -49,6 +57,8 @@ class MossColors extends ThemeExtension<MossColors> {
     accentSoft: Color(0xFF22301F),
     code: Color(0xFFB5D395),
     error: Color(0xFFE8836B),
+    shadow: Color(0x73000000), // rgba(0,0,0,.45) de las maquetas
+    scrim: Color(0x9E050806), // rgba(5,8,6,.62) de Config-registro
   );
 
   static const light = MossColors(
@@ -63,6 +73,9 @@ class MossColors extends ThemeExtension<MossColors> {
     accentSoft: Color(0xFFE3ECD9),
     code: Color(0xFF2F5221),
     error: Color(0xFFB3402A),
+    // Las maquetas claras no tienen ventanas flotantes: el texto, más suave.
+    shadow: Color(0x2917201A),
+    scrim: Color(0x4D17201A),
   );
 
   @override

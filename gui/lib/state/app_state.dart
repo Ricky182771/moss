@@ -17,6 +17,17 @@ class Toast {
   Toast(this.text);
 }
 
+/// Pide abrir Opciones (`/model` sin modelo), en los modelos de [provider] o,
+/// con null, en la lista de proveedores. Cada uno es otro objeto.
+class OptionsRequest {
+  final String? provider;
+  OptionsRequest(this.provider);
+}
+
+/// Con la búsqueda activa, el texto va como lo muestra la TUI (PROTOCOL.md
+/// §6.3: `text` es lo que se ve y se guarda; `search`, la consulta).
+const _searchCommand = '/buscar';
+
 /// Estado de la app sobre `moss-rpc`: la lista de chats y la conversación
 /// abierta, copiada de los eventos (PROTOCOL.md §5).
 class AppState extends ChangeNotifier {
@@ -34,6 +45,19 @@ class AppState extends ChangeNotifier {
 
   /// `moss-rpc` se cayó a media sesión.
   bool disconnected = false;
+
+  /// De `app.status`: si falta configurar, el `problem` va en el chat vacío.
+  bool ready = true;
+  String? problem;
+
+  /// El interruptor "Buscar en la web" de Opciones. Solo de esta sesión de la
+  /// GUI: no se guarda.
+  final searchOn = ValueNotifier<bool>(false);
+
+  final openOptions = ValueNotifier<OptionsRequest?>(null);
+
+  /// Para Opciones, que tiene su propio estado (`OptionsState`).
+  RpcClient get rpc => _rpc;
 
   /// Error de JSON-RPC que va junto a la caja (Busy, vacío, sin configurar).
   final inputError = ValueNotifier<String?>(null);
@@ -65,7 +89,18 @@ class AppState extends ChangeNotifier {
       await _rpc.request('conversation.get', {'conversation': handle}),
     );
     await _refreshList();
+    await _refreshStatus();
     notifyListeners();
+  }
+
+  Future<void> _refreshStatus() async {
+    try {
+      final r = await _rpc.request('app.status');
+      ready = r['ready'] as bool;
+      problem = r['problem'] as String?;
+    } on RpcError {
+      // Sin estado, el chat vacío no muestra el problema.
+    }
   }
 
   Future<void> _refreshList() async {
@@ -85,9 +120,11 @@ class AppState extends ChangeNotifier {
     inputError.value = null;
     try {
       if (!text.startsWith('/')) {
+        final search = searchOn.value;
         await _rpc.request('chat.send', {
           'conversation': c.conversation,
-          'text': text,
+          'text': search ? '$_searchCommand $text' : text,
+          if (search) 'search': text,
         });
         return true;
       }
@@ -101,7 +138,7 @@ class AppState extends ChangeNotifier {
         case 'status':
           toast.value = Toast(r['message'] as String);
         case 'model_picker':
-          toast.value = Toast(Strings.modelPickerHint);
+          openOptions.value = OptionsRequest(r['provider'] as String?);
         // message, search, save, export y model: lo demás llega en eventos.
       }
       return r['clear'] == true;
@@ -156,6 +193,7 @@ class AppState extends ChangeNotifier {
           await _rpc.request('conversation.open', {'id': id}),
         );
         await _refreshList();
+        await _refreshStatus();
         notifyListeners();
       } else {
         await load(init['conversation'] as String);
@@ -211,6 +249,10 @@ class AppState extends ChangeNotifier {
     switch (e) {
       case ConversationsChanged():
         _refreshList().then((_) => notifyListeners(), onError: (_) {});
+      case SettingsChanged(section: 'provider' || 'search'):
+        _refreshStatus().then((_) => notifyListeners(), onError: (_) {});
+      case SettingsChanged():
+        break;
       case ConversationEvent():
         if (e is ChatFinished && e.conversation == conversation?.conversation) {
           if (e.restoreText case final t?) restoreText.value = t;
@@ -261,6 +303,8 @@ class AppState extends ChangeNotifier {
     inputError.dispose();
     toast.dispose();
     restoreText.dispose();
+    searchOn.dispose();
+    openOptions.dispose();
     super.dispose();
   }
 }

@@ -32,7 +32,22 @@ class Strings {
   static const send = 'Enviar';
   static const stop = 'Detener';
   static const help = 'Enter envía · Shift+Enter nueva línea · / comandos';
-  static const modelPickerHint = 'Escribe /model <proveedor> <modelo>.';
+
+  // Opciones
+  static const options = 'Opciones';
+  static const modelSection = 'Modelo';
+  static const providers = 'Proveedores';
+  static String modelsOf(String provider) => 'Modelos de $provider';
+  static const filterModels = 'Filtrar modelos';
+  static const filterProviders = 'Filtrar proveedores';
+  static const loadingModels = 'Cargando modelos…';
+  static const noMatches = 'Sin coincidencias';
+  static const typeModel = 'Escribe el modelo y presiona Enter';
+  static String lockedBy(String variable) => 'Fijado por $variable';
+  static const searchWeb = 'Buscar en la web';
+  static const searchWebHint = 'Responde con fuentes citadas';
+  static const webSearch = 'Búsqueda web';
+  static const removeWebSearch = 'Quitar la búsqueda web';
 
   // moss-rpc
   static const rpcNotFound = 'No se encontró moss-rpc';

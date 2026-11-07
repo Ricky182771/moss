@@ -28,6 +28,7 @@ Future<(AppState, FakeServer)> startApp(
       'conversations.list': (_) => {'items': summaries},
       'chat.send': (_) => {'accepted': true},
       'chat.cancel': (_) => {'cancelled': true},
+      'app.status': (_) => appStatus(),
       ...handlers,
     },
   );
@@ -67,3 +68,86 @@ Map<String, Object?> longChat({
     ],
   );
 }
+
+Map<String, Object?> appStatus({
+  bool ready = true,
+  String? problem,
+  bool hasSearchKey = true,
+}) => {
+  'ready': ready,
+  'problem': problem,
+  'busy': false,
+  'conversation': 'c1',
+  'env_locks': <String>[],
+  'has_search_key': hasSearchKey,
+};
+
+/// `settings.provider.get` con NVIDIA NIM (con key), Gemini (con key) y un
+/// endpoint sin key.
+Map<String, Object?> providerSettings({
+  String provider = 'nvidia',
+  String model = 'z-ai/glm5',
+  bool baseUrlLocked = false,
+  bool modelLocked = false,
+}) => {
+  'providers': [
+    {
+      'id': 'nvidia',
+      'kind': 'builtin',
+      'name': 'NVIDIA NIM',
+      'base_url': 'https://integrate.api.nvidia.com/v1',
+      'needs_key': true,
+      'key_saved': true,
+      'selectable': true,
+      'note': '',
+    },
+    {
+      'id': 'gemini',
+      'kind': 'builtin',
+      'name': 'Google Gemini',
+      'base_url': 'https://generativelanguage.googleapis.com/v1beta/openai',
+      'needs_key': true,
+      'key_saved': true,
+      'selectable': true,
+      'note': '',
+    },
+    {
+      'id': 'custom:omniroute',
+      'kind': 'endpoint',
+      'name': 'OmniRoute',
+      'base_url': 'https://mi-gateway.example/v1',
+      'needs_key': true,
+      'key_saved': false,
+      'selectable': false,
+      'note': 'sin key',
+    },
+  ],
+  'saved': {'provider': provider, 'base_url': '', 'model': model},
+  'effective': {'base_url': '', 'model': model},
+  'locks': {'base_url': baseUrlLocked, 'model': modelLocked, 'api_key': false},
+  'key_status': '',
+};
+
+Map<String, Object?> commandList({
+  String searchNote = '',
+  String modelNote = '',
+}) => {
+  'commands': [
+    {
+      'name': '/buscar',
+      'arguments': '<consulta>',
+      'description': 'Busca en la web y responde con fuentes citadas',
+      'needs_argument': true,
+      'available': searchNote.isEmpty,
+      'note': searchNote,
+    },
+    {
+      'name': '/model',
+      'arguments': '[proveedor] [modelo]',
+      'description': 'Cambia de modelo',
+      'needs_argument': false,
+      'available': modelNote.isEmpty,
+      'note': modelNote,
+    },
+  ],
+};

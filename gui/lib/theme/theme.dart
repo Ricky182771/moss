@@ -71,6 +71,12 @@ class MossText extends ThemeExtension<MossText> {
   /// Aviso corto: 14.
   final TextStyle toast;
 
+  /// Modelo en la lista de Opciones: Geist Mono 13.
+  final TextStyle model;
+
+  /// Pastilla "Búsqueda web": 13/500 en el color de código.
+  final TextStyle pill;
+
   const MossText({
     required this.answer,
     required this.bubble,
@@ -93,6 +99,8 @@ class MossText extends ThemeExtension<MossText> {
     required this.help,
     required this.tooltip,
     required this.toast,
+    required this.model,
+    required this.pill,
   });
 
   factory MossText.of(MossColors c) {
@@ -138,6 +146,8 @@ class MossText extends ThemeExtension<MossText> {
       help: geist(12).copyWith(color: c.textMuted),
       tooltip: geist(12, weight: FontWeight.w500).copyWith(color: c.background),
       toast: geist(14).copyWith(color: c.background),
+      model: mono(13),
+      pill: geist(13, weight: FontWeight.w500).copyWith(color: c.code),
     );
   }
 

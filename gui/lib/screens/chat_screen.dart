@@ -246,7 +246,7 @@ class _Main extends StatelessWidget {
                   select: () => app.conversation,
                   builder: (context, conv) =>
                       conv == null || conv.entries.isEmpty
-                      ? const _EmptyChat()
+                      ? _EmptyChat(app)
                       : MessageList(conv),
                 ),
               ),
@@ -277,8 +277,11 @@ class _Main extends StatelessWidget {
   }
 }
 
+/// Logo y "¿En qué te ayudo?". Sin configurar, el `problem` del servidor
+/// debajo, tenue (en G3 será la tarjeta "Ir a Configuración").
 class _EmptyChat extends StatelessWidget {
-  const _EmptyChat();
+  final AppState app;
+  const _EmptyChat(this.app);
 
   @override
   Widget build(BuildContext context) => Center(
@@ -293,6 +296,22 @@ class _EmptyChat extends StatelessWidget {
             Strings.emptyPrompt,
             style: context.styles.heading,
             textAlign: TextAlign.center,
+          ),
+          Select(
+            listenable: app,
+            select: () => app.ready ? null : app.problem,
+            builder: (context, problem) => problem == null
+                ? const SizedBox.shrink()
+                : ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 560),
+                    child: Text(
+                      problem,
+                      style: context.styles.row.copyWith(
+                        color: context.colors.textMuted,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
           ),
         ],
       ),

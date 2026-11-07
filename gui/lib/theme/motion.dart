@@ -43,4 +43,7 @@ class Motion {
   static const Duration tooltipDelay = Duration(milliseconds: 400);
   static const Duration toastVisible = Duration(seconds: 4);
   static const Duration copiedVisible = Duration(seconds: 2);
+
+  /// "Cargando modelos…" solo si tarda más que esto.
+  static const Duration loadingDelay = Duration(milliseconds: 300);
 }
