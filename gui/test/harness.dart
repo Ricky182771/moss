@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:moss_gui/rpc/client.dart';
 import 'package:moss_gui/screens/chat_screen.dart';
 import 'package:moss_gui/state/app_state.dart';
 import 'package:moss_gui/theme/theme.dart';
@@ -16,6 +17,7 @@ Future<(AppState, FakeServer)> startApp(
   bool disableAnimations = false,
   ThemeData? theme,
   Key? key,
+  Future<RpcClient> Function()? reconnect,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -31,7 +33,7 @@ Future<(AppState, FakeServer)> startApp(
   );
   final client = server.client();
   await client.initialize();
-  final app = AppState(client);
+  final app = AppState(client, reconnect: reconnect);
   await app.load('c1');
   await tester.pumpWidget(
     MediaQuery(

@@ -17,11 +17,15 @@ import 'indicators.dart';
 /// llega. Nunca se dibuja: la reemplaza [StreamCursor].
 const _cursorMark = '\uE000';
 
-/// Abre en el navegador solo enlaces `http` y `https`.
-Future<void> openLink(String? href) async {
+/// Abre en el navegador solo enlaces `http` y `https`. [launch] es para las
+/// pruebas.
+Future<void> openLink(
+  String? href, {
+  Future<bool> Function(Uri) launch = launchUrl,
+}) async {
   final uri = Uri.tryParse(href ?? '');
   if (uri == null || !(uri.isScheme('http') || uri.isScheme('https'))) return;
-  await launchUrl(uri);
+  await launch(uri);
 }
 
 /// Markdown de una respuesta o de su pensamiento. El texto se selecciona con
