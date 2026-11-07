@@ -7,6 +7,7 @@ import '../theme/colors.dart';
 import '../theme/motion.dart';
 import '../theme/theme.dart';
 import '../widgets/controls.dart';
+import '../widgets/delete_dialog.dart';
 import '../widgets/input_box.dart';
 import '../widgets/logo.dart';
 import '../widgets/message_list.dart';
@@ -50,10 +51,26 @@ class _ChatScreenState extends State<ChatScreen> {
     if (_overlay) setState(() => _overlay = false);
   }
 
-  void _search() {
-    _closeOverlay();
-    showSearchDialog(context, summaries: app.summaries, onOpen: app.open);
-  }
+  /// La barra encima (ventana angosta) se queda abierta detrás: así el foco
+  /// vuelve a "Buscar chats" con Esc; se cierra al abrir un chat.
+  void _search() => showSearchDialog(
+    context,
+    summaries: app.summaries,
+    onOpen: (id) {
+      _closeOverlay();
+      app.open(id);
+    },
+  );
+
+  late final _actions = ChatActions(
+    rename: app.rename,
+    export: (id) => app.export(id: id),
+    delete: (item) => confirmDelete(
+      context,
+      title: item.title.isEmpty ? item.id : item.title,
+      delete: () => app.delete(item.id),
+    ),
+  );
 
   void _escape() {
     if (_narrow && _overlay) {
@@ -96,6 +113,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   app.newChat();
                 },
                 onSearch: _search,
+                actions: _actions,
                 onOpen: (id) {
                   _closeOverlay();
                   app.open(id);
@@ -230,7 +248,7 @@ class _Main extends StatelessWidget {
                 ),
               ),
               Pressable(
-                onPressed: app.export,
+                onPressed: () => app.export(),
                 minHeight: 40,
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: Row(

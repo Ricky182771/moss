@@ -12,6 +12,15 @@ class Strings {
   static const noChatsFound = 'Ningún chat coincide';
   static const chats = 'Chats';
   static const withWebSearch = 'Con búsqueda web';
+  static String moreOptions(String title) => 'Más opciones de «$title»';
+  static const chatMenu = 'Opciones del chat';
+  static const rename = 'Renombrar';
+  static const chatTitle = 'Título del chat';
+  static const delete = 'Borrar…';
+  static String deleteQuestion(String title) => '¿Borrar «$title»?';
+  static const cannotUndo = 'No se puede deshacer.';
+  static const cancel = 'Cancelar';
+  static const confirmDelete = 'Borrar';
 
   // Encabezado
   static const hideSidebar = 'Ocultar barra lateral (Ctrl+B)';

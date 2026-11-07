@@ -123,17 +123,27 @@ class _HoverLabelState extends State<HoverLabel>
     });
   Timer? _timer;
 
+  /// Guardado aquí: el foco puede cambiar mientras el botón se desmonta, y
+  /// entonces ya no se puede leer el contexto.
+  Duration _duration = Duration.zero;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _duration = Motion.of(context).tooltip;
+  }
+
   void _show() {
     _timer?.cancel();
     if (!mounted) return;
     _portal.show();
-    _anim.duration = Motion.of(context).tooltip;
+    _anim.duration = _duration;
     _anim.forward();
   }
 
   void _hide() {
     _timer?.cancel();
-    _anim.duration = Motion.of(context).tooltip;
+    _anim.duration = _duration;
     _anim.reverse();
   }
 
@@ -226,6 +236,7 @@ class IconAction extends StatelessWidget {
   /// Fondo fijo (el engranaje con Opciones abierta).
   final Color? color;
   final double size;
+  final double? radius;
 
   const IconAction({
     super.key,
@@ -236,6 +247,7 @@ class IconAction extends StatelessWidget {
     this.focusNode,
     this.color,
     this.size = 44,
+    this.radius,
   });
 
   @override
@@ -248,7 +260,7 @@ class IconAction extends StatelessWidget {
         label: label,
         focusNode: focusNode,
         color: color,
-        radius: size < 44 ? size / 2 : 10,
+        radius: radius ?? (size < 44 ? size / 2 : 10),
         child: SizedBox.square(
           dimension: size,
           child: Center(child: ExcludeSemantics(child: icon)),

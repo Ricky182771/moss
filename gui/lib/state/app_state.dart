@@ -169,15 +169,47 @@ class AppState extends ChangeNotifier {
     return _replace(() => _rpc.request('conversation.open', {'id': id}));
   }
 
-  Future<void> export() async {
+  /// Exporta la abierta o, con [id], la guardada (menú `⋯`). Aviso corto.
+  Future<void> export({String? id}) async {
     final c = conversation;
-    if (c == null) return;
+    if (id == null && c == null) return;
     await _call(() async {
-      final r = await _rpc.request('conversation.export', {
-        'conversation': c.conversation,
-      });
+      final r = await _rpc.request(
+        'conversation.export',
+        id != null ? {'id': id} : {'conversation': c!.conversation},
+      );
       toast.value = Toast(r['message'] as String);
     });
+  }
+
+  /// `conversation.rename`. Devuelve el error del servidor (va debajo del
+  /// campo) o null; el título nuevo llega con `conversations.changed`.
+  Future<String?> rename(String id, String title) => _ask(
+    () => _rpc.request('conversation.rename', {'id': id, 'title': title}),
+  );
+
+  /// `conversation.delete`. Si era la abierta, se queda `replaced_by`.
+  /// Devuelve el error (Busy…) para la ventana de confirmación, o null.
+  Future<String?> delete(String id) => _ask(() async {
+    final r = await _rpc.request('conversation.delete', {'id': id});
+    if (r['replaced_by'] case final Map<String, dynamic> s) {
+      conversation = ConversationSnapshot.fromJson(s);
+      inputError.value = null;
+      notifyListeners();
+    }
+    return r;
+  });
+
+  /// Una petición cuyo error se muestra junto a lo que la causó.
+  Future<String?> _ask(Future<Object?> Function() f) async {
+    try {
+      await f();
+      return null;
+    } on RpcError catch (e) {
+      return e.displayMessage;
+    } on StateError {
+      return null; // El canal se cerró: `done` ya marcó `disconnected`.
+    }
   }
 
   /// Arranca otro `moss-rpc` y vuelve a abrir la conversación, si tenía id.
