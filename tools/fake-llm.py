@@ -55,6 +55,7 @@ def chunks(text, size):
 
 class Handler(BaseHTTPRequestHandler):
     opts = None  # argparse.Namespace, lo pone main()
+    server_version = "fake-llm"  # run-fake.sh lo busca en la cabecera Server.
 
     def log_message(self, fmt, *args):  # Sin la conversación en el registro.
         sys.stderr.write("fake-llm: %s %s\n" % (self.command, self.path))
