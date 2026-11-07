@@ -66,6 +66,42 @@ void main() {
     expect(app.searchOn.value, isFalse); // Solo se habilita, no se enciende.
   });
 
+  testWidgets('al guardar, el interruptor de Opciones se habilita solo', (
+    tester,
+  ) async {
+    var configured = false;
+    final (_, server) = await startApp(
+      tester,
+      handlers: {
+        'app.status': (_) => appStatus(hasSearchKey: configured),
+        'settings.provider.get': (_) => providerSettings(),
+        'commands.list': (_) => commandList(),
+        'settings.search.get': (_) => {
+          'configured': configured,
+          'locked': false,
+          'key_status': '',
+        },
+        'settings.search.save': (_) {
+          configured = true;
+          return {'saved': true};
+        },
+      },
+    );
+    await _openSearch(tester);
+    await tester.enterText(_keyField, _key);
+    await tester.pump();
+    await tester.tap(find.text(Strings.save));
+    await tester.pumpAndSettle();
+    server.notify('settings.changed', {'section': 'search'});
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.bySemanticsLabel(Strings.options));
+    await tester.pumpAndSettle();
+    expect(tester.widget<Switch>(find.byType(Switch)).onChanged, isNotNull);
+  });
+
   testWidgets('el error del servidor va junto al campo', (tester) async {
     await startApp(
       tester,
