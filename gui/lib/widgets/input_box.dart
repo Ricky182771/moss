@@ -39,13 +39,19 @@ class _InputBoxState extends State<InputBox> {
   /// cerrándose).
   int _opened = 0;
 
-  void _openOptions(OptionsRequest? request) => setState(() {
-    _opened++;
-    _request = request;
-    _optionsOpen = true;
-  });
+  void _openOptions(OptionsRequest? request) {
+    setState(() {
+      _opened++;
+      _request = request;
+      _optionsOpen = true;
+    });
+    _syncSlash();
+  }
 
-  void _closeOptions() => setState(() => _optionsOpen = false);
+  void _closeOptions() {
+    setState(() => _optionsOpen = false);
+    _syncSlash();
+  }
 
   /// `/model` sin modelo abre Opciones.
   void _onOptionsRequest() {
@@ -56,8 +62,10 @@ class _InputBoxState extends State<InputBox> {
   // Menú de / (como la TUI: cli/src/command_menu.cpp)
   final _slashLink = LayerLink();
 
-  /// `commands.list`, pedido al abrir el menú (no en cada tecla).
+  /// `commands.list`, pedido al abrir el menú (no en cada tecla). Al
+  /// reabrirlo se ve la lista anterior hasta que llega la nueva.
   List<CommandInfo>? _commands;
+  int _slashGeneration = 0;
 
   /// Esc lo cerró; vuelve a salir al cambiar el texto.
   bool _slashDismissed = false;
@@ -78,11 +86,13 @@ class _InputBoxState extends State<InputBox> {
   /// Abre o cierra el menú según el texto y el foco; al abrirlo, pide la
   /// lista.
   void _syncSlash() {
+    if (!mounted) return;
     final open = _slashOpen;
     if (open && !_slashWasOpen) {
-      _commands = null;
+      final generation = ++_slashGeneration;
       widget.app.commands().then((list) {
-        if (!mounted) return;
+        // Una respuesta de una apertura anterior no cuenta.
+        if (!mounted || generation != _slashGeneration) return;
         setState(() {
           _commands = list;
           _slashIndex = firstEnabled(
@@ -118,7 +128,9 @@ class _InputBoxState extends State<InputBox> {
     final m = _matches;
     final i = _slashIndex;
     final picked = i >= 0 && i < m.length && m[i].available ? m[i] : null;
+    final keys = HardwareKeyboard.instance;
     if (key == LogicalKeyboardKey.tab) {
+      if (keys.isShiftPressed) return KeyEventResult.ignored;
       if (picked != null && e is KeyDownEvent) _complete(picked);
       return m.isEmpty ? KeyEventResult.ignored : KeyEventResult.handled;
     }
@@ -127,7 +139,11 @@ class _InputBoxState extends State<InputBox> {
         key == LogicalKeyboardKey.numpadEnter;
     if (enter) {
       // Sin nada que elegir, Enter manda lo escrito, como siempre.
-      if (picked == null || HardwareKeyboard.instance.isShiftPressed) {
+      if (picked == null ||
+          keys.isShiftPressed ||
+          keys.isControlPressed ||
+          keys.isAltPressed ||
+          keys.isMetaPressed) {
         return KeyEventResult.ignored;
       }
       if (e is KeyDownEvent) {
@@ -149,6 +165,7 @@ class _InputBoxState extends State<InputBox> {
       move: (n) => setState(() => _slashIndex = n),
       activate: null,
       enabled: (n) => _canPick(m, n),
+      wrap: true,
     );
   }
 

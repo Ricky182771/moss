@@ -113,6 +113,16 @@ void main() {
     expect(server.methods, isNot(contains('commands.run')));
   });
 
+  testWidgets('↑ en la primera da la vuelta a la última', (tester) async {
+    await _start(tester);
+    await _type(tester, '/');
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pumpAndSettle();
+    final box = tester.widget<TextField>(find.byType(TextField).first);
+    expect(box.controller!.text, '/model ');
+  });
+
   testWidgets('Enter completa /buscar y manda /exportar', (tester) async {
     final server = await _start(tester);
     await _type(tester, '/bu');

@@ -11,6 +11,7 @@ KeyEventResult listKeys(
   required ValueChanged<int> move,
   required VoidCallback? activate,
   bool Function(int i)? enabled,
+  bool wrap = false,
 }) {
   if (e is KeyUpEvent) return KeyEventResult.ignored;
   final key = e.logicalKey;
@@ -20,7 +21,15 @@ KeyEventResult listKeys(
       ? -1
       : 0;
   if (step != 0) {
-    for (var i = index + step; i >= 0 && i < count; i += step) {
+    // Con [wrap], de la última a la primera y al revés (menú de `/`, como la
+    // TUI).
+    for (var k = 1; k <= count; k++) {
+      var i = index + step * k;
+      if (wrap) {
+        i %= count;
+      } else if (i < 0 || i >= count) {
+        break;
+      }
       if (enabled?.call(i) ?? true) {
         move(i);
         break;
