@@ -57,6 +57,18 @@ tools/run-fake.sh --perfil --frame-stats       # el bundle de profile
 Al cerrar la ventana revisa `pgrep -a moss-rpc`; si quedó alguno, el script
 lo muestra y sale con 1.
 
+**Tu bot real no se toca.** `HOME` y `XDG_*` aislados no bastan: `systemctl
+--user` habla con tu sesión por D-Bus. Por eso la GUI arranca un envoltorio
+(`/tmp/moss-prueba/moss-rpc`) que deja a `moss-rpc` sin
+`DBUS_SESSION_BUS_ADDRESS` ni `XDG_RUNTIME_DIR` (solo a él: la GUI los
+necesita para Wayland). Sin bus, `service.status` dice "No hay systemd de
+usuario en esta sesión." y `service.apply` (al guardar Telegram) responde
+`-32006`. `journalctl --user` no usa el bus (lee los archivos del journal) y
+`loginctl` usa el del sistema, así que el envoltorio pone primero en el
+`PATH` los falsos de `tools/fake-bin/`: Ver registro muestra un registro de
+ejemplo (ayer y hoy, con errores, una línea fatal y una sin formato), nunca
+el tuyo, y el linger siempre es "no".
+
 ## Medir cuadros (`--frame-stats`)
 
 Solo en debug o profile (en release se ignora). Escribe en stderr el
@@ -74,7 +86,7 @@ flutter run -d linux --profile \
 Añade `--no-enable-impeller` para usar Skia y `GDK_BACKEND=x11` delante
 para XWayland.
 
-## Qué hace (G2 y G3)
+## Qué hace (G2, G3 y G4)
 
 - **Opciones** (engranaje a la izquierda de la caja): modelo y proveedor, y el interruptor de la búsqueda web (solo de esta sesión). `/model` sin modelo también la abre.
 - **Buscar chats** (Ctrl+K): por título, sin distinguir mayúsculas ni acentos.
@@ -83,8 +95,15 @@ para XWayland.
 - El texto del modelo aparece por palabra mientras llega.
 - **Configuración** (F2 o la fila de abajo de la barra; Esc vuelve al chat):
   Proveedor (con tus endpoints), Colores y accesibilidad, Configuración del
-  modelo y Búsqueda web. Cada sección guarda su borrador hasta Guardar o
-  Cancelar; salir con cambios pregunta antes de descartarlos.
+  modelo, Búsqueda web y Addons · Telegram. Cada sección guarda su borrador
+  hasta Guardar o Cancelar; salir con cambios pregunta antes de descartarlos.
+- **Telegram** (solo Linux; en Windows la sección solo dice que el bot
+  funciona en Linux): el estado del servicio al pie del menú; Servicio
+  (instalación, estado, Reiniciar, Actualizar estado, Ver registro), Bot,
+  Acceso (con Generar código), Límites e Invitados (Quitar, al momento).
+  Guardar no reinicia el bot: después pregunta lo que haga falta (llaves que
+  se descartarían, "¿Reiniciar ahora?", reemplazar un servicio hecho a mano)
+  y aplica lo guardado al servicio.
 
 ### Dónde se guardan las preferencias de la GUI
 
