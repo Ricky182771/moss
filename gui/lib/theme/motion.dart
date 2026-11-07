@@ -29,6 +29,9 @@ class Motion {
   Duration get messageIn => _ms(160);
   Duration get word => _ms(120);
   Duration get thinkingFold => _ms(180);
+
+  /// Avanzado en Configuración del modelo: como el bloque Pensamiento.
+  Duration get fold => _ms(180);
   Duration get thinkingAutoFold => _ms(200);
   Duration get copySwap => _ms(120);
   Duration get fieldError => _ms(120);

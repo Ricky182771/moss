@@ -29,6 +29,7 @@ class Strings {
 
   // Chat
   static const emptyPrompt = '¿En qué te ayudo?';
+  static const goToSettings = 'Ir a Configuración';
   static const searching = 'Buscando en la web…';
   static const thinking = 'Pensando…';
   static String thoughtSummary(String count, bool one) =>
@@ -62,6 +63,7 @@ class Strings {
   static const noMatches = 'Sin coincidencias';
   static const typeModel = 'Escribe el modelo y presiona Enter';
   static String lockedBy(String variable) => 'Fijado por $variable';
+  static String addKeyIn(String note) => '$note · agrégala en Configuración';
   static const searchWeb = 'Buscar en la web';
   static const searchWebHint = 'Responde con fuentes citadas';
   static const noSearchKey = 'Falta la key de búsqueda';
@@ -149,6 +151,70 @@ class Strings {
   static const searchEnvHelp =
       'Si la variable CHAT_SEARCH_API_KEY está definida, se usa esa y aquí no '
       'se puede cambiar.';
+  static String modelTitleFor(String model, String provider) =>
+      'Configuración del modelo — $model ($provider)';
+  static const systemPrompt = 'Instrucciones del sistema';
+  static const forAllModels = 'Para todos los modelos';
+  static const promptMode = 'Modo de las instrucciones';
+  static const promptDefault = 'Predeterminadas';
+  static const promptNone = 'Ninguna';
+  static const promptCustom = 'Personalizadas';
+  static const promptText = 'Instrucciones';
+  static String bytesCounter(String bytes, String max) => '$bytes / $max bytes';
+  static const restorePrompt = 'Restaurar predeterminadas';
+  static const modelParams = 'Ajustes del modelo';
+  static const goToProvider = 'Ir a Proveedor';
+  static String paramsOf(String model) => 'Ajustes de $model';
+  static String paramsNote(String provider) =>
+      '$provider · Vacío = predeterminado del modelo: no se manda.';
+  static const restoreAll = 'Restaurar todo';
+  static const reasoning = 'Razonamiento';
+  static const reasoningDefault = 'Predeterminado';
+  static const reasoningOff = 'Apagado';
+  static const reasoningLow = 'Bajo';
+  static const reasoningMedium = 'Medio';
+  static const reasoningHigh = 'Alto';
+
+  /// shortcut: copia los textos de la TUI (`cli/src/model_params_form.cpp`,
+  /// `reasoning_help`) por `reasoning_style`; en `effort` va el genérico, sin
+  /// el caso de OpenRouter (`reasoning.effort`). Lo correcto es que
+  /// `settings.model_params.get` mande el texto, en un PR de protocolo.
+  static String? reasoningHelp(String style) => switch (style) {
+    'toggle' =>
+      'En NIM, Bajo, Medio y Alto solo lo encienden (enable_thinking); '
+          'Apagado lo apaga.',
+    'budget' =>
+      'Bajo, Medio y Alto dan 1024, 4096 y 16384 tokens para pensar; '
+          'Apagado no manda nada.',
+    'effort' =>
+      'Manda reasoning_effort (Apagado: "none"). No todos los modelos lo '
+          'aceptan.',
+    _ => null,
+  };
+  static const topKNote =
+      'Top K no es del estándar de OpenAI: no todos los proveedores lo '
+      'aceptan.';
+  static String paramLabel(String key) => switch (key) {
+    'temperature' => 'Temperatura',
+    'top_p' => 'Top P',
+    'top_k' => 'Top K',
+    'max_tokens' => 'Máx. tokens de salida',
+    'frequency_penalty' => 'Penalización por frecuencia',
+    'presence_penalty' => 'Penalización por presencia',
+    'seed' => 'Semilla',
+    _ => key,
+  };
+  static const paramDefault = 'Predeterminado';
+  static String range(String min, String max, {required bool exclusive}) =>
+      exclusive ? 'más de $min, hasta $max' : '$min a $max';
+  static const advanced = 'Avanzado';
+  static const advancedNote = 'JSON que se mezcla al final';
+  static const extraJson = 'JSON avanzado';
+  static const extraHelp =
+      'Gana sobre el formulario; null quita una llave. No se pueden cambiar '
+      'model, messages ni stream.';
+  static const preview = 'Vista previa de lo que se envía';
+  static const previewLabel = 'Vista previa del cuerpo de la petición';
   static const modelsFailed = 'No se pudieron pedir los modelos.';
   static const envBaseUrl = 'CHAT_BASE_URL';
   static const envModel = 'CHAT_MODEL';

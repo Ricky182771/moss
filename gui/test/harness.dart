@@ -47,6 +47,18 @@ Future<(AppState, FakeServer)> startApp(
         'locked': false,
         'key_status': 'guardada: …9d1e',
       },
+      'settings.system_prompt.get': (_) => systemPrompt(),
+      'settings.system_prompt.check': (p) => {
+        'error': null,
+        'warning': null,
+        'bytes': (p['text'] as String).length,
+      },
+      'settings.model_params.get': (_) => modelParams(),
+      'settings.model_params.check': (_) => {
+        'field_errors': <String, String>{},
+        'extra_error': null,
+        'preview': '{\n  "model": "z-ai/glm5"\n}',
+      },
       'models.list': (_) => {
         'models': ['z-ai/glm5', 'meta/llama-3.3-70b'],
       },
@@ -166,6 +178,58 @@ Map<String, Object?> providerSettings({
     'api_key': apiKeyLocked,
   },
   'key_status': keyStatus,
+};
+
+const kDefaultPrompt =
+    'Eres un asistente útil. Responde en español, de forma clara y concisa.';
+
+Map<String, Object?> systemPrompt({String mode = 'default', String? text}) => {
+  'mode': mode,
+  'text': text ?? (mode == 'default' ? kDefaultPrompt : ''),
+  'default_text': kDefaultPrompt,
+  'max_bytes': 8000,
+  'warning': null,
+};
+
+/// `settings.model_params.get` de NIM con temperatura guardada.
+Map<String, Object?> modelParams({
+  Map<String, Object?> params = const {'temperature': 0.6},
+  String extra = '',
+}) => {
+  'provider': 'nvidia',
+  'model': 'z-ai/glm5',
+  'params': {
+    for (final k in [
+      'reasoning',
+      'temperature',
+      'top_p',
+      'top_k',
+      'max_tokens',
+      'frequency_penalty',
+      'presence_penalty',
+      'seed',
+    ])
+      k: params[k],
+  },
+  'extra': extra,
+  'reasoning_style': 'toggle',
+  'limits': {
+    'temperature': {
+      'min': 0.0,
+      'max': 2.0,
+      'min_exclusive': false,
+      'integer': false,
+    },
+    'top_p': {'min': 0.0, 'max': 1.0, 'min_exclusive': true, 'integer': false},
+    'top_k': {'min': 1, 'max': 1000, 'min_exclusive': false, 'integer': true},
+    'max_tokens': {
+      'min': 1,
+      'max': 1000000,
+      'min_exclusive': false,
+      'integer': true,
+    },
+  },
+  'preview': '{\n  "model": "z-ai/glm5",\n  "temperature": 0.6\n}',
 };
 
 Map<String, Object?> providerCheck({

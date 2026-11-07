@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../state/app_state.dart';
 import '../state/colors_section.dart';
+import '../state/model_section.dart';
 import '../state/provider_section.dart';
 import '../state/search_section.dart';
 import '../state/settings_state.dart';
@@ -14,6 +15,7 @@ import '../widgets/colors_panel.dart';
 import '../widgets/controls.dart';
 import '../widgets/delete_dialog.dart';
 import '../widgets/logo.dart';
+import '../widgets/model_panel.dart';
 import '../widgets/provider_panel.dart';
 import '../widgets/search_panel.dart';
 import '../widgets/sidebar.dart' show kSidebarWidth;
@@ -39,6 +41,7 @@ class SettingsPanel {
 Map<SettingsPage, SettingsSection> _sections(AppState app) => {
   SettingsPage.provider: ProviderSection(app),
   SettingsPage.colors: ColorsSection(app),
+  SettingsPage.model: ModelSection(app),
   SettingsPage.search: SearchSection(app),
 };
 
@@ -56,10 +59,15 @@ SettingsPanel _panel(SettingsPage page, SettingsSection? section) =>
         lead: Strings.colorsLead,
         body: (_) => ColorsPanel(section! as ColorsSection),
       ),
-      SettingsPage.model => const SettingsPanel(
+      SettingsPage.model => SettingsPanel(
         menu: Strings.modelTitle,
-        title: Strings.modelTitle,
+        title: switch (section) {
+          ModelSection(loaded: true, noModel: null, :final model) =>
+            Strings.modelTitleFor(model, section.providerName),
+          _ => Strings.modelTitle,
+        },
         lead: Strings.modelLead,
+        body: (_) => ModelPanel(section! as ModelSection),
       ),
       SettingsPage.search => SettingsPanel(
         menu: Strings.webSearch,

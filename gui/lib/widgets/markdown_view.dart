@@ -178,11 +178,16 @@ class CodeBlock extends StatefulWidget {
   final String code;
   final bool cursor;
 
+  /// Con alto máximo, el código se desplaza en su propia zona (la vista
+  /// previa de Configuración del modelo).
+  final double? maxHeight;
+
   const CodeBlock({
     super.key,
     required this.language,
     required this.code,
     this.cursor = false,
+    this.maxHeight,
   });
 
   @override
@@ -207,6 +212,13 @@ class _CodeBlockState extends State<CodeBlock> {
     _timer?.cancel();
     super.dispose();
   }
+
+  Widget _scrollY(Widget child) => widget.maxHeight == null
+      ? child
+      : ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: widget.maxHeight!),
+          child: Scrollbar(child: SingleChildScrollView(child: child)),
+        );
 
   @override
   Widget build(BuildContext context) {
@@ -267,21 +279,23 @@ class _CodeBlockState extends State<CodeBlock> {
               ),
             ),
           ),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            child: Text.rich(
-              TextSpan(
-                text: widget.code,
-                children: [
-                  if (widget.cursor)
-                    const WidgetSpan(
-                      alignment: PlaceholderAlignment.middle,
-                      child: StreamCursor(),
-                    ),
-                ],
+          _scrollY(
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: Text.rich(
+                TextSpan(
+                  text: widget.code,
+                  children: [
+                    if (widget.cursor)
+                      const WidgetSpan(
+                        alignment: PlaceholderAlignment.middle,
+                        child: StreamCursor(),
+                      ),
+                  ],
+                ),
+                style: s.code,
               ),
-              style: s.code,
             ),
           ),
         ],
