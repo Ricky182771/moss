@@ -42,6 +42,11 @@ Future<(AppState, FakeServer)> startApp(
       'settings.gui.get': (_) => {'value': saved.toJson()},
       'settings.provider.get': (_) => providerSettings(),
       'settings.provider.check': (_) => providerCheck(),
+      'settings.search.get': (_) => {
+        'configured': true,
+        'locked': false,
+        'key_status': 'guardada: …9d1e',
+      },
       'models.list': (_) => {
         'models': ['z-ai/glm5', 'meta/llama-3.3-70b'],
       },

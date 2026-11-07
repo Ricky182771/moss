@@ -139,6 +139,17 @@ class Strings {
       'carga, escribe el nombre del modelo a mano.';
   static const modelByHand = 'Modelo';
   static const typeModelName = 'Escribe el nombre del modelo';
+  static const searchState = 'Estado';
+  static const searchConfigured = 'Configurada';
+  static const searchNotConfigured = 'Sin configurar';
+  static const searchKeyTitle = 'API key de búsqueda';
+  static const searchKeyNote =
+      'Se usa con el botón Buscar en la web y con el comando /buscar.';
+  static const newApiKey = 'Nueva API key';
+  static const searchEnvHelp =
+      'Si la variable CHAT_SEARCH_API_KEY está definida, se usa esa y aquí no '
+      'se puede cambiar.';
+  static const notANumber = 'Escribe un número.';
   static const showKey = 'Ver lo que escribes';
   static const hideKey = 'Ocultar lo que escribes';
   static const newKeyHint = 'Escribe una API key nueva';

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../state/app_state.dart';
 import '../state/colors_section.dart';
 import '../state/provider_section.dart';
+import '../state/search_section.dart';
 import '../state/settings_state.dart';
 import '../strings.dart';
 import '../theme/colors.dart';
@@ -14,6 +15,7 @@ import '../widgets/controls.dart';
 import '../widgets/delete_dialog.dart';
 import '../widgets/logo.dart';
 import '../widgets/provider_panel.dart';
+import '../widgets/search_panel.dart';
 import '../widgets/sidebar.dart' show kSidebarWidth;
 import '../widgets/toast.dart';
 
@@ -37,6 +39,7 @@ class SettingsPanel {
 Map<SettingsPage, SettingsSection> _sections(AppState app) => {
   SettingsPage.provider: ProviderSection(app),
   SettingsPage.colors: ColorsSection(app),
+  SettingsPage.search: SearchSection(app),
 };
 
 SettingsPanel _panel(SettingsPage page, SettingsSection? section) =>
@@ -58,10 +61,11 @@ SettingsPanel _panel(SettingsPage page, SettingsSection? section) =>
         title: Strings.modelTitle,
         lead: Strings.modelLead,
       ),
-      SettingsPage.search => const SettingsPanel(
+      SettingsPage.search => SettingsPanel(
         menu: Strings.webSearch,
         title: Strings.webSearch,
         lead: Strings.searchLead,
+        body: (_) => SearchPanel(section! as SearchSection),
       ),
     };
 
