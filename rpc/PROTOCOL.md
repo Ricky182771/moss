@@ -24,6 +24,7 @@ Versión del protocolo: **1**.
 | Evento `service.changed`; `settings.changed` con `telegram` | 7 | Implementado |
 | `settings.model_params.*`; `settings.changed` con `model_params` | 6.7, 7 | Implementado |
 | `error_field` en `settings.provider.check` | 6.7 | Implementado |
+| `key_status` en cada elemento de `providers` de `settings.provider.get` | 6.7 | Implementado |
 | `help` en `settings.model_params.get`; `check` y `save` aceptan cada número como cadena, y `dirty` en `check` | 6.7 | Implementado |
 | Pensamiento: `reasoning` en `Entry`, evento `conversation.reasoning_delta` | 5, 7 | Implementado |
 | `service.log` (el registro del bot) | 6.8 | Implementado |
@@ -380,17 +381,18 @@ Si `config.json` o `credentials.json` no se pueden leer (JSON inválido, permiso
 ```jsonc
 {"providers":[{"id":"nvidia","kind":"builtin","name":"NVIDIA NIM",
                "base_url":"https://integrate.api.nvidia.com/v1","needs_key":true,
-               "key_saved":true, "selectable":true, "note":""}, ...,
+               "key_saved":true, "key_status":"guardada: …abcd",
+               "selectable":true, "note":""}, ...,
               {"id":"custom:omniroute","kind":"endpoint","name":"OmniRoute",
                "base_url":"https://mi-gateway.example/v1","needs_key":true,
-               "key_saved":false, "selectable":false, "note":"sin key"}],
+               "key_saved":false, "key_status":null, "selectable":false, "note":"sin key"}],
  "saved":{"provider":"nvidia","base_url":"...","model":"..."},   // config.json (con un endpoint, su URL)
  "effective":{"base_url":"...","model":"..."},                   // lo que usa la sesión
  "locks":{"base_url":false,"model":false,"api_key":true},   // definidos por CHAT_*
  "key_status":"(definido por CHAT_API_KEY) …abcd"}             // key_status(), enmascarado
 ```
 
-`providers` es la lista de `Session::provider_choices()` (la de F2 y del selector de `/model` en la TUI, `ProviderSettings::provider_list` sin la fila de agregar): la tabla de `providers()` en orden (`kind: "builtin"`) y después los endpoints de `config.json` en su orden (`kind: "endpoint"`, con su `id` `custom:<id>`, su `name` y su `base_url`; `needs_key` es false si la URL es local). `key_saved` si hay key en `credentials.json` para ese proveedor (la llave es el id); `selectable` si `/model` puede pasar a él (key guardada, `CHAT_API_KEY` o servidor local); `note` es `""` o `"sin key"`. Nunca devuelve una key.
+`providers` es la lista de `Session::provider_choices()` (la de F2 y del selector de `/model` en la TUI, `ProviderSettings::provider_list` sin la fila de agregar): la tabla de `providers()` en orden (`kind: "builtin"`) y después los endpoints de `config.json` en su orden (`kind: "endpoint"`, con su `id` `custom:<id>`, su `name` y su `base_url`; `needs_key` es false si la URL es local). `key_saved` si hay key en `credentials.json` para ese proveedor (la llave es el id); `selectable` si `/model` puede pasar a él (key guardada, `CHAT_API_KEY` o servidor local); `note` es `""` o `"sin key"`. `key_status` es el estado enmascarado de la key de ese proveedor (`ProviderSettings::key_status`, con `mask_key`): `guardada: …abcd`, `(definido por CHAT_API_KEY) …abcd` o `null` si no tiene (un servidor local sin key también da `null`). Nunca devuelve una key.
 
 **Endpoints** (`config.json` → `"endpoints"`, guía 7): cada uno con un `id` fijo (`[a-z0-9][a-z0-9-]{0,31}`, que nunca cambia), `name` (1 a 40 caracteres, único sin distinguir mayúsculas) y `base_url`; a lo más 20. Su proveedor es `custom:<id>` en todos lados (también la llave de su key en `credentials.json`). El id lo genera el servidor del nombre al crearlo (`make_endpoint_id`).
 

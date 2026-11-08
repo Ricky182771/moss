@@ -681,6 +681,7 @@ void Dispatcher::settings(const std::string& method, const Json* params, const J
                                  {"base_url", choice.base_url},
                                  {"needs_key", choice.needs_key},
                                  {"key_saved", choice.key_saved},
+                                 {"key_status", non_empty_or_null(choice.key_status)},
                                  {"selectable", choice.selectable},
                                  {"note", choice.note}});
         }

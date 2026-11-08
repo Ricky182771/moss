@@ -131,7 +131,6 @@ class Strings {
   static const addEndpoint = 'Agregar endpoint…';
   static const inUse = 'en uso';
   static const local = 'local';
-  static const keySaved = 'key guardada';
   static const endpointName = 'Nombre';
   static const baseUrl = 'URL base';
   static const baseUrlHelp =

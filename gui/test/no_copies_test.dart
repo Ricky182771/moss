@@ -14,6 +14,7 @@ const _gone = {
   'static const extraHelp': 'la nota del JSON',
   'notANumber': 'el error de un número',
   'notAnInteger': 'el error de un entero',
+  'keySaved': 'el estado de la key: `key_status`',
   'num.parse': 'leer un número',
   r"RegExp(r'^-?\d+": 'decidir qué es un número',
 };

@@ -1354,6 +1354,43 @@ TEST_CASE("RPC: settings.provider.get", "[rpc][settings]") {
     }
 }
 
+TEST_CASE("RPC: settings.provider.get da el key_status de cada proveedor", "[rpc][settings]") {
+    Rpc rpc;
+    const auto of = [](const Json& result, const std::string& id) {
+        for (const Json& provider : result["providers"]) {
+            if (provider["id"] == id) {
+                return provider["key_status"];
+            }
+        }
+        FAIL("no está " + id);
+        return Json{};
+    };
+    SECTION("guardada, sin key y local") {
+        chatbot::Credentials credentials;
+        credentials.keys["gemini"] = kModelKey;
+        REQUIRE_FALSE(chatbot::save_credentials(rpc.credentials_path(), credentials));
+        rpc.config = rpc.load();
+        rpc.initialize();
+        rpc.call(2, "settings.provider.get");
+        const Json result = only(rpc)["result"];
+        CHECK(of(result, "gemini") == "guardada: " + chatbot::cli::mask_key(kModelKey));
+        CHECK(of(result, "nvidia").is_null());
+        CHECK(of(result, "ollama").is_null()); // "opcional en local" no es una key.
+        CHECK(result.dump().find(kModelKey) == std::string::npos);
+    }
+    SECTION("con CHAT_API_KEY, la misma en todos") {
+        rpc.env.values["CHAT_API_KEY"] = kModelKey;
+        rpc.config = rpc.load();
+        rpc.initialize();
+        rpc.call(2, "settings.provider.get");
+        const Json result = only(rpc)["result"];
+        const std::string expected = "(definido por CHAT_API_KEY) " + chatbot::cli::mask_key(kModelKey);
+        CHECK(of(result, "gemini") == expected);
+        CHECK(of(result, "nvidia") == expected);
+        CHECK(result.dump().find(kModelKey) == std::string::npos);
+    }
+}
+
 TEST_CASE("RPC: settings.provider.check y save", "[rpc][settings]") {
     Rpc rpc;
     rpc.config = rpc.load(); // Sin configuración: ready false.

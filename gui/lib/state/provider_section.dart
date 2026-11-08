@@ -14,7 +14,9 @@ class ProviderRow {
   final String name;
   final String baseUrl;
   final bool needsKey;
-  final bool keySaved;
+
+  /// `key_status` de este proveedor, enmascarado; null si no tiene key.
+  final String? keyStatus;
   final String note;
 
   const ProviderRow({
@@ -23,7 +25,7 @@ class ProviderRow {
     required this.name,
     required this.baseUrl,
     required this.needsKey,
-    required this.keySaved,
+    required this.keyStatus,
     required this.note,
   });
 
@@ -33,7 +35,7 @@ class ProviderRow {
     name: j['name'] as String,
     baseUrl: j['base_url'] as String,
     needsKey: j['needs_key'] as bool,
-    keySaved: j['key_saved'] as bool,
+    keyStatus: j['key_status'] as String?,
     note: j['note'] as String? ?? '',
   );
 }

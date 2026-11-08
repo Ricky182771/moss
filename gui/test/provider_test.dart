@@ -77,6 +77,24 @@ void main() {
     expect(find.byType(SecretField), findsOneWidget);
   });
 
+  testWidgets('cada proveedor con su key_status, el que manda el servidor', (
+    tester,
+  ) async {
+    await startApp(tester);
+    await _open(tester);
+    expect(find.textContaining('guardada: …wxyz'), findsOneWidget);
+    expect(find.text('key guardada'), findsNothing);
+
+    await _tap(tester, _row('Google Gemini'));
+    await tester.pumpAndSettle();
+    final field = tester.widget<SecretField>(find.byType(SecretField));
+    expect(field.status, 'guardada: …wxyz');
+
+    await _tap(tester, _row('OmniRoute'));
+    await tester.pumpAndSettle();
+    expect(tester.widget<SecretField>(find.byType(SecretField)).status, '');
+  });
+
   testWidgets('la key va enmascarada; ver se apaga al salir del campo', (
     tester,
   ) async {

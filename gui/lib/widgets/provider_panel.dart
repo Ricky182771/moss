@@ -144,12 +144,7 @@ class _ProviderPanelState extends State<ProviderPanel> {
       label: r.name,
       note: [
         if (inUse) Strings.inUse,
-        if (!r.needsKey)
-          Strings.local
-        else if (r.keySaved)
-          Strings.keySaved
-        else
-          r.note,
+        if (!r.needsKey) Strings.local else r.keyStatus ?? r.note,
       ].where((t) => t.isNotEmpty).join(' · '),
       dot: inUse,
       muted: noKey,
@@ -166,11 +161,7 @@ class _ProviderPanelState extends State<ProviderPanel> {
     final isNew = p.provider == ProviderSection.newEndpoint;
     final inUse = p.provider == p.saved.provider;
     final keyLock = p.keyLocked ? Strings.envApiKey : null;
-    final status = inUse
-        ? p.keyStatus
-        : row?.keySaved ?? false
-        ? Strings.keySaved
-        : '';
+    final status = inUse ? p.keyStatus : row?.keyStatus ?? '';
     return SettingsCard(
       title: isNew ? Strings.newEndpoint : row?.name ?? p.provider,
       trailing: isNew ? null : Text(p.provider, style: s.noteMono),

@@ -647,6 +647,9 @@ Result<std::vector<ProviderChoice>> Session::provider_choices() const {
         choice.endpoint = list[i].endpoint;
         choice.current = i == loaded.value().saved_provider();
         choice.key_saved = form.has_saved_key();
+        if (choice.key_saved || form.key_locked()) {
+            choice.key_status = form.key_status();
+        }
         choice.local = is_local_base_url(form.effective_base_url());
         choice.note = std::string{provider_note(form)};
         choice.selectable = choice.note.empty();

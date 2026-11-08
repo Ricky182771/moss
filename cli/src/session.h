@@ -107,6 +107,8 @@ struct ProviderChoice {
     bool local = false;     ///< Servidor local: no necesita key.
     bool selectable = false;
     std::string note{}; ///< "" o kNoKeyNote (si no es selectable).
+    /// Su key_status (enmascarado), o "" si no tiene key: la guardada o CHAT_API_KEY.
+    std::string key_status{};
 };
 inline constexpr std::string_view kNoKeyNote = "sin key";
 

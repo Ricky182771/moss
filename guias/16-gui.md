@@ -129,7 +129,6 @@ Una acción que no espera a Guardar (como Borrar endpoint) va dentro de `owner.q
 - Resaltado de sintaxis en los bloques de código: la maqueta pinta las palabras clave con el token `code`, pero `DISENO.md` no lo pide; queda para después.
 - `RpcClient` lleva la cuenta de los `id` porque `json_rpc_2` 3.x no deja elegirlos (lo vigila `test/client_test.dart`); la 4.x tiene `idGenerator`.
 - El mensaje que llega se re-parsea entero en cada trozo (ver "Texto del modelo llegando").
-- `key_status` es solo del proveedor guardado; para los demás, la GUI dice "key guardada" con `key_saved`.
 - `PrefsApp` aplana el `TextScaler` del sistema a lineal (en escritorio siempre lo es).
 - Telegram: las notas de los campos ("El servicio arranca solo al iniciar sesión.", "Sin key propia…"), el estado `se quita: se usará la de la app` y los avisos de cancelar una pregunta ("Cancelado: se guardó, pero no se tocó el servicio.") copian textos de la F2 de la TUI, y "¿Reiniciar ahora?" el de `PROTOCOL.md`. No son reglas, pero lo correcto es que `addons.telegram.get` los mande. Tampoco se muestra el aviso de linger de F2 (`linger: false`): falta su texto en el protocolo. `askYesNo` quita el ` (s/n)` del final de las preguntas del servidor (`-32008`), que son las de la TUI: lo correcto es que el protocolo las mande sin él.
 - `title_search.dart` pliega solo los acentos del español y lenguas cercanas; `arriving.dart` detecta los bloques de código solo por las cercas al principio de línea. Las dos están marcadas con `shortcut:`.
