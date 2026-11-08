@@ -104,6 +104,10 @@ std::string TelegramAddon::section_problem() const {
     return {};
 }
 
+std::string remove_invited_question(std::int64_t user) {
+    return "¿Quitar " + std::to_string(user) + " ahora? No espera a Guardar.";
+}
+
 std::string TelegramAddon::discard_question() const {
     if (read_.discarded.empty()) {
         return {};

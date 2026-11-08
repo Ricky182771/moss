@@ -285,6 +285,15 @@ Json status_json(const cli::TelegramAddon& addon) {
             {"journal_command", cli::journal_command(addon.info())}};
 }
 
+/// Por usuario, la pregunta de Quitar: la GUI la muestra tal cual.
+Json remove_questions(const std::vector<std::int64_t>& users) {
+    Json questions = Json::object();
+    for (const std::int64_t user : users) {
+        questions[std::to_string(user)] = cli::remove_invited_question(user);
+    }
+    return questions;
+}
+
 /// Los IDs de Telegram como cadenas decimales (sección 4).
 Json user_list(const std::vector<std::int64_t>& users) {
     Json list = Json::array();
@@ -1161,6 +1170,17 @@ void Dispatcher::addons(const std::string& method, const Json* params, const Jso
                  {"search_key", cli::addon_secret_status(secrets.search_key, false)}}},
                {"labels", std::move(labels)},
                {"time_zones", addon_settings::available_time_zones()},
+               {"texts",
+                {{"same_model", std::string{cli::kSameModelHint}},
+                 {"own_keys_note", std::string{cli::kOwnKeysNote}},
+                 {"log_details_note", std::string{cli::kLogDetailsNote}},
+                 {"secret_removed", std::string{cli::kSecretRemoved}},
+                 {"restart_question", std::string{cli::kRestartQuestion}},
+                 {"saved", std::string{cli::kSaved}},
+                 {"cancelled_nothing_saved", std::string{cli::kCancelledNothingSaved}},
+                 {"cancelled_service_untouched", std::string{cli::kCancelledServiceUntouched}},
+                 {"foreign_unit_kept", std::string{cli::kForeignUnitKept}},
+                 {"cancelled_foreign_untouched", std::string{cli::kCancelledForeignUntouched}}}},
                {"env_note", cli::addon_env_note(addon.environment().env_defined)},
                {"read_only", addon.read_only()},
                {"read_only_reason", non_empty_or_null(reason)},
@@ -1240,7 +1260,9 @@ void Dispatcher::addons(const std::string& method, const Json* params, const Jso
         if (!addon.invited_error().empty()) {
             fail(id, has_id, RpcError::StorageError, message_data(addon.invited_error()));
         } else {
-            reply(id, has_id, {{"users", user_list(addon.invited())}});
+            reply(id, has_id,
+                  {{"users", user_list(addon.invited())},
+                   {"remove_questions", remove_questions(addon.invited())}});
         }
     } else if (method == "addons.telegram.invited.remove") {
         if (bad_params(check_params(params, {{"user"}}))) {
@@ -1259,6 +1281,7 @@ void Dispatcher::addons(const std::string& method, const Json* params, const Jso
                 } else {
                     reply(request, true,
                           {{"users", user_list(telegram_->invited())},
+                           {"remove_questions", remove_questions(telegram_->invited())},
                            {"message", removal.message}});
                 }
             });

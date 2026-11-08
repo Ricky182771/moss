@@ -1890,6 +1890,24 @@ TEST_CASE("RPC: addons.telegram.get y check", "[rpc][addons]") {
     CHECK(result["labels"]["daily_limit"] ==
           std::string{chatbot::cli::addon_field_label(chatbot::cli::AddonField::DailyLimit)});
     CHECK(result["time_zones"] == Json(chatbot::addon_settings::available_time_zones()));
+    using namespace chatbot::cli;
+    const std::vector<std::pair<const char*, std::string_view>> texts{
+        {"same_model", kSameModelHint},
+        {"own_keys_note", kOwnKeysNote},
+        {"log_details_note", kLogDetailsNote},
+        {"secret_removed", kSecretRemoved},
+        {"restart_question", kRestartQuestion},
+        {"saved", kSaved},
+        {"cancelled_nothing_saved", kCancelledNothingSaved},
+        {"cancelled_service_untouched", kCancelledServiceUntouched},
+        {"foreign_unit_kept", kForeignUnitKept},
+        {"cancelled_foreign_untouched", kCancelledForeignUntouched}};
+    CHECK(result["texts"].size() == texts.size());
+    for (const auto& [key, text] : texts) {
+        CHECK(result["texts"][key] == std::string{text});
+    }
+    CHECK(result["secrets"]["model_key"] != std::string{kSecretRemoved});
+    CHECK(addon_secret_status("", true) == std::string{kSecretRemoved});
     CHECK(result["read_only"] == false);
     CHECK(result["read_only_reason"].is_null());
     CHECK(result["discarded"] == Json::array());
@@ -2013,7 +2031,11 @@ TEST_CASE("RPC: invitados", "[rpc][addons]") {
     REQUIRE(chatbot::addon_settings::add_invited(path, 9007199254740993).is_ok()); // > 2^53
     rpc.initialize();
     rpc.call(2, "addons.telegram.invited.list");
-    CHECK(only(rpc)["result"].dump() == R"({"users":["42","9007199254740993"]})");
+    const Json listed = only(rpc)["result"];
+    CHECK(listed["users"].dump() == R"(["42","9007199254740993"])");
+    CHECK(listed["remove_questions"]["42"] == chatbot::cli::remove_invited_question(42));
+    CHECK(listed["remove_questions"]["9007199254740993"] ==
+          chatbot::cli::remove_invited_question(9007199254740993));
 
     const bool active = GENERATE(false, true);
     rpc.system.set_active(active);

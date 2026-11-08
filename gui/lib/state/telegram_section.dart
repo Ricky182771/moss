@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 
 import '../rpc/errors.dart';
-import '../strings.dart';
 import '../theme/motion.dart';
 import 'app_state.dart';
 import 'provider_section.dart' show kCheckDelay;
@@ -112,6 +111,13 @@ class TelegramSection extends SettingsSection {
   Map<String, String> secrets = const {};
   Map<String, String> labels = const {};
 
+  /// `texts` de `addons.telegram.get`: las notas y los avisos de F2.
+  Map<String, String> texts = const {};
+  String text(String key) => texts[key] ?? '';
+
+  /// `remove_questions`: la pregunta de Quitar de cada invitado.
+  Map<String, String> removeQuestions = const {};
+
   /// `time_zones` de `addons.telegram.get`, para elegir de una lista.
   List<String> timeZones = const [];
 
@@ -166,8 +172,8 @@ class TelegramSection extends SettingsSection {
 
   /// El estado de un secreto: el del servidor o, con Quitar, que se quita.
   String secretStatus(String field) => switch (field) {
-    'model_key' when removeModelKey => Strings.keyWillBeRemoved,
-    'search_key' when removeSearchKey => Strings.keyWillBeRemoved,
+    'model_key' when removeModelKey => text('secret_removed'),
+    'search_key' when removeSearchKey => text('secret_removed'),
     _ => secrets[field] ?? '',
   };
 
@@ -213,6 +219,7 @@ class TelegramSection extends SettingsSection {
   void _apply(Map<String, dynamic> r, {required bool form}) {
     secrets = (r['secrets'] as Map).cast<String, String>();
     labels = (r['labels'] as Map).cast<String, String>();
+    texts = (r['texts'] as Map? ?? const {}).cast<String, String>();
     timeZones = (r['time_zones'] as List? ?? const []).cast<String>();
     envNote = r['env_note'] as String;
     readOnly = r['read_only'] as bool;
@@ -253,10 +260,16 @@ class TelegramSection extends SettingsSection {
     notifyListeners();
   }
 
+  void _applyInvited(Map<String, dynamic> r) {
+    invited = (r['users'] as List).cast<String>();
+    removeQuestions = (r['remove_questions'] as Map? ?? const {})
+        .cast<String, String>();
+  }
+
   Future<void> _loadInvited() async {
     try {
       final r = await rpc.request('addons.telegram.invited.list');
-      invited = (r['users'] as List).cast<String>();
+      _applyInvited(r);
       invitedError = null;
     } on RpcError catch (e) {
       invitedError = e.displayMessage;
@@ -366,7 +379,7 @@ class TelegramSection extends SettingsSection {
       if (e.code != RpcError.confirmationRequired) rethrow;
       // Llaves de la sección que se descartarían.
       if (await _ask(e.displayMessage) != true) {
-        _toast(Strings.cancelledNothingSaved);
+        _toast(text('cancelled_nothing_saved'));
         return;
       }
       r = await rpc.request('addons.telegram.save', {
@@ -391,9 +404,9 @@ class TelegramSection extends SettingsSection {
 
     var restart = false;
     if (r['needs_restart'] as bool) {
-      final yes = await _ask(Strings.restartQuestion);
+      final yes = await _ask(text('restart_question'));
       if (yes == null) {
-        _toast(Strings.savedServiceUntouched);
+        _toast(text('cancelled_service_untouched'));
         return;
       }
       restart = yes;
@@ -412,21 +425,21 @@ class TelegramSection extends SettingsSection {
         'replace_foreign': replaceForeign,
       });
       // También `{message, ok: false}` con el addon sin instalar: es aviso.
-      _toast(Strings.savedWith(r['message'] as String));
+      _toastSaved(r['message'] as String);
     } on RpcError catch (e) {
       switch (e.code) {
         case RpcError.cancelled:
           return;
         case RpcError.unsupported: // Sin systemd de usuario: ya se guardó.
-          _toast(Strings.savedWith(e.displayMessage));
+          _toastSaved(e.displayMessage);
         case RpcError.confirmationRequired: // Unidad ajena.
           switch (await _ask(e.displayMessage)) {
             case true:
               await _applyService(restart: restart, replaceForeign: true);
             case false:
-              _toast(Strings.savedForeignKept);
+              _toast(text('foreign_unit_kept'));
             case null:
-              _toast(Strings.savedForeignUntouched);
+              _toast(text('cancelled_foreign_untouched'));
           }
         default:
           rethrow;
@@ -440,9 +453,13 @@ class TelegramSection extends SettingsSection {
     return ask(question);
   }
 
-  void _toast(String text) {
-    if (!disposed) owner?.toast.value = Toast(text);
+  void _toast(String message) {
+    if (!disposed) owner?.toast.value = Toast(message);
   }
+
+  /// "Guardado." del servidor y, si trae algo, el mensaje de la acción.
+  void _toastSaved(String message) =>
+      _toast(message.isEmpty ? text('saved') : '${text('saved')} $message');
 
   @override
   bool showSaveError(RpcError e) {
@@ -577,7 +594,7 @@ class TelegramSection extends SettingsSection {
     () async {
       try {
         final r = await _long('addons.telegram.invited.remove', {'user': user});
-        invited = (r['users'] as List).cast<String>();
+        _applyInvited(r);
         invitedError = null;
         _toast(r['message'] as String);
       } on RpcError catch (e) {

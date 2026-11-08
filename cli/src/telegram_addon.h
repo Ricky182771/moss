@@ -49,6 +49,22 @@ struct AddonsEnvironment {
     std::string home; ///< Para mostrar las rutas con ~.
 };
 
+/// Lo que se pregunta y se avisa al guardar, también para moss-rpc. Las preguntas
+/// van sin " (s/n)", que es de la TUI (yes_no_question).
+inline constexpr std::string_view kRestartQuestion =
+    "Este cambio necesita reiniciar el bot y se borran las conversaciones en memoria. "
+    "¿Reiniciar ahora?";
+inline constexpr std::string_view kSaved = "Guardado.";
+inline constexpr std::string_view kCancelledNothingSaved = "Cancelado: no se guardó nada.";
+inline constexpr std::string_view kCancelledServiceUntouched =
+    "Cancelado: se guardó, pero no se tocó el servicio.";
+inline constexpr std::string_view kForeignUnitKept = "Guardado. No se tocó el servicio existente.";
+inline constexpr std::string_view kCancelledForeignUntouched =
+    "Cancelado: se guardó, pero no se tocó el servicio existente.";
+
+/// "¿Quitar <usuario> ahora? No espera a Guardar."
+[[nodiscard]] std::string remove_invited_question(std::int64_t user);
+
 /// F2 → Addons → Telegram sin FTXUI, lo que comparten AddonsPanel y
 /// moss-rpc: lo guardado (la sección, los secretos y los invitados),
 /// revisar y guardar un formulario, y el addon y su servicio, que corren en

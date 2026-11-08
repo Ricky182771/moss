@@ -311,13 +311,13 @@ class _BotCard extends StatelessWidget {
           t,
           'model',
           options: t.models,
-          hint: Strings.sameModelAsApp,
+          hint: t.text('same_model'),
           help: t.modelsError,
           onFocus: t.loadModels,
         ),
         _Secret(t, 'model_key'),
         _Secret(t, 'search_key'),
-        Text(Strings.ownKeyHelp, style: s.note),
+        Text(t.text('own_keys_note'), style: s.note),
       ],
     );
   }
@@ -391,7 +391,7 @@ class _LimitsCard extends StatelessWidget {
         value: t.logErrorDetails,
         onChanged: t.readOnly ? null : t.setLogErrorDetails,
         title: Strings.logDetailsTitle,
-        note: Strings.logDetailsNote,
+        note: t.text('log_details_note'),
       ),
     ],
   );
@@ -404,8 +404,7 @@ class _InvitedCard extends StatelessWidget {
   Future<void> _remove(BuildContext context, String user) async {
     final yes = await confirm(
       context,
-      question: Strings.removeInvitedQuestion(user),
-      detail: Strings.removeInvitedDetail,
+      question: t.removeQuestions[user] ?? '',
       confirmLabel: Strings.removeInvited,
       action: () async => null,
     );

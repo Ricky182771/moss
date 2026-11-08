@@ -228,7 +228,7 @@ void main() {
     await tester.ensureVisible(find.text(Strings.removeKey).last);
     await tester.tap(find.text(Strings.removeKey).last);
     await tester.pump();
-    expect(find.text(Strings.keyWillBeRemoved), findsOneWidget);
+    expect(find.text(kTelegramTexts['secret_removed']!), findsOneWidget);
 
     await _save(tester);
     final form = server.lastParams('addons.telegram.save')['form'] as Map;
@@ -441,7 +441,7 @@ void main() {
       await _openTelegram(tester);
       await _type(tester, 'Respuestas a la vez', '2');
       await _save(tester);
-      await _answer(tester, Strings.restartQuestion, answer);
+      await _answer(tester, kTelegramTexts['restart_question']!, answer);
       expect(server.lastParams('service.apply'), {
         'addon': 'telegram',
         'restart': restart,
@@ -465,11 +465,14 @@ void main() {
     await _openTelegram(tester);
     await _type(tester, 'Respuestas a la vez', '2');
     await _save(tester);
-    expect(find.text(Strings.restartQuestion), findsOneWidget);
+    expect(find.text(kTelegramTexts['restart_question']!), findsOneWidget);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
     expect(server.methods, isNot(contains('service.apply')));
-    expect(find.text(Strings.savedServiceUntouched), findsOneWidget);
+    expect(
+      find.text(kTelegramTexts['cancelled_service_untouched']!),
+      findsOneWidget,
+    );
     // Sigue en Configuración: el Esc fue de la ventana.
     expect(find.text(Strings.telegramTitle), findsWidgets);
   });
@@ -604,7 +607,7 @@ void main() {
     await tester.tap(find.text(Strings.removeInvited).last);
     await tester.pumpAndSettle();
     expect(
-      find.text(Strings.removeInvitedQuestion('555123987')),
+      find.text('¿Quitar 555123987 ahora? No espera a Guardar.'),
       findsOneWidget,
     );
     // El foco empieza en Cancelar: Enter no quita.

@@ -605,6 +605,32 @@ void main() {
       await _shot(tester, 'config-telegram-completa-$mode');
     });
 
+    testWidgets('telegram: lista de zonas y linger ($mode)', (tester) async {
+      await telegram(
+        tester,
+        handlers: {
+          'service.status': (_) => serviceStatus(
+            lingerNotice:
+                'Sin linger, el bot se detiene al cerrar sesión y no arranca '
+                'tras un apagón hasta que inicies sesión.',
+            lingerCommand: 'loginctl enable-linger "\$USER"',
+          ),
+          'addons.telegram.get': (_) => telegramGet(fields: {'time_zone': ''}),
+        },
+      );
+      await _shot(tester, 'config-telegram-linger-$mode');
+      final field = find.descendant(
+        of: find.byWidgetPredicate(
+          (w) => w is LabeledField && w.label == 'Zona horaria',
+        ),
+        matching: find.byType(EditableText),
+      );
+      await tester.ensureVisible(field);
+      await tester.enterText(field, 'america');
+      await tester.pumpAndSettle();
+      await _shot(tester, 'config-telegram-zonas-$mode');
+    });
+
     testWidgets('telegram en Windows ($mode)', (tester) async {
       await config(tester, page: Strings.telegramMenu);
       await _shot(tester, 'config-telegram-windows-$mode');

@@ -16,6 +16,15 @@ const _gone = {
   'notAnInteger': 'el error de un entero',
   'keySaved': 'el estado de la key: `key_status`',
   "(s/n)": 'recortar las preguntas de -32008',
+  // Las notas y los avisos de F2 → Addons: `texts` de `addons.telegram.get`.
+  'Cancelado: se guardó': 'los avisos de cancelar',
+  'Cancelado: no se guardó': 'el aviso de no guardar',
+  'Este cambio necesita reiniciar': 'la pregunta de reiniciar',
+  'se quita: se usará': 'el estado de un secreto que se quita',
+  'Sin key propia': 'la nota de las keys',
+  'Mismo que la app': 'la pista del modelo',
+  'Puede incluir texto de los alumnos': 'la nota del registro',
+  '¿Quitar ': 'la pregunta de quitar a un invitado',
   'num.parse': 'leer un número',
   r"RegExp(r'^-?\d+": 'decidir qué es un número',
 };

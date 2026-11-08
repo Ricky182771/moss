@@ -3,7 +3,6 @@ import 'package:moss_gui/rpc/errors.dart';
 import 'package:moss_gui/state/app_state.dart';
 import 'package:moss_gui/state/settings_state.dart';
 import 'package:moss_gui/state/telegram_section.dart';
-import 'package:moss_gui/strings.dart';
 
 import 'fake_server.dart';
 import 'harness.dart';
@@ -180,7 +179,7 @@ void main() {
     t.fields['daily_limit']!.text = '50';
     await state.save();
     expect(server.methods, isNot(contains('service.apply')));
-    expect(state.toast.value?.text, Strings.cancelledNothingSaved);
+    expect(state.toast.value?.text, kTelegramTexts['cancelled_nothing_saved']);
     expect(t.dirty, isTrue);
   });
 

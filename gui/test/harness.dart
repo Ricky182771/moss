@@ -320,6 +320,27 @@ const kTelegramLabels = {
   'time_zone': 'Zona horaria',
 };
 
+/// Lo que manda el servidor en `texts`: la GUI no tiene estos textos.
+const kTelegramTexts = {
+  'same_model': 'Mismo que la app',
+  'own_keys_note':
+      'Sin key propia se usan las de la app. Recomendado: una propia con tope '
+      'diario en el proveedor.',
+  'log_details_note':
+      'Puede incluir texto de los alumnos: solo para diagnosticar.',
+  'secret_removed': 'se quita: se usará la de la app',
+  'restart_question':
+      'Este cambio necesita reiniciar el bot y se borran las conversaciones en '
+      'memoria. ¿Reiniciar ahora?',
+  'saved': 'Guardado.',
+  'cancelled_nothing_saved': 'Cancelado: no se guardó nada.',
+  'cancelled_service_untouched':
+      'Cancelado: se guardó, pero no se tocó el servicio.',
+  'foreign_unit_kept': 'Guardado. No se tocó el servicio existente.',
+  'cancelled_foreign_untouched':
+      'Cancelado: se guardó, pero no se tocó el servicio existente.',
+};
+
 Map<String, Object?> telegramGet({
   bool enabled = true,
   bool logErrorDetails = false,
@@ -357,6 +378,7 @@ Map<String, Object?> telegramGet({
     'search_key': 'sin configurar',
   },
   'labels': kTelegramLabels,
+  'texts': kTelegramTexts,
   'time_zones': const [
     'America/Mexico_City',
     'America/Tijuana',
@@ -412,7 +434,12 @@ Map<String, Object? Function(Map<String, dynamic>)> telegramHandlers({
   bool needsRestart = false,
 }) => {
   'addons.telegram.get': (_) => get ?? telegramGet(),
-  'addons.telegram.invited.list': (_) => {'users': invited},
+  'addons.telegram.invited.list': (_) => {
+    'users': invited,
+    'remove_questions': {
+      for (final u in invited) u: '¿Quitar $u ahora? No espera a Guardar.',
+    },
+  },
   'addons.list': (_) => {
     'addons': [addonInstall()],
   },

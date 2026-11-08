@@ -29,6 +29,7 @@ Versión del protocolo: **1**.
 | Las preguntas de `-32008` sin ` (s/n)` | 6.8 | Implementado |
 | `linger_notice` y `linger_command` en `service.status` | 6.8 | Implementado |
 | `time_zones` en `addons.telegram.get` | 6.8 | Implementado |
+| `texts` en `addons.telegram.get`; `remove_questions` en `addons.telegram.invited.*` | 6.8 | Implementado |
 | `help` en `settings.model_params.get`; `check` y `save` aceptan cada número como cadena, y `dirty` en `check` | 6.7 | Implementado |
 | Pensamiento: `reasoning` en `Entry`, evento `conversation.reasoning_delta` | 5, 7 | Implementado |
 | `service.log` (el registro del bot) | 6.8 | Implementado |
@@ -572,6 +573,7 @@ Los parámetros `name` y `addon` solo aceptan un nombre de `known_addons` (`"tel
  "secrets":{"token":"guardada: …abcd", "model_key":"sin configurar", "search_key":"..."},  // addon_secret_status
  "labels":{"token":"Token", "model":"Modelo", ...},   // addon_field_label, para que la GUI no los copie
  "time_zones":["Africa/Abidjan", ...],   // available_time_zones: la base con que se valida time_zone
+ "texts":{"same_model":"Mismo que la app", ...},   // las notas y los avisos de F2; ver abajo
  "env_note":"",              // addon_env_note: CHAT_* de la terminal que el servicio no ve
  "read_only":false,          // error al leer, sección más nueva o addon incompatible
  "read_only_reason":null,    // el texto de F2, o null
@@ -580,6 +582,8 @@ Los parámetros `name` y `addon` solo aceptan un nombre de `known_addons` (`"tel
 ```
 
 `time_zones` sale de la misma base que usa la validación de `time_zone` (`std::chrono::get_tzdb`: zonas y alias, en orden); vacía si esta compilación no tiene base o no se pudo leer. Un desfase fijo como `-06:00` también es válido y no está en la lista: la GUI siempre deja escribir a mano. Para el campo `model` no hay lista aquí: el bot usa el proveedor de la app, así que sale de `models.list` con ese proveedor.
+
+`texts` trae lo que F2 escribe alrededor del formulario y al guardar, para que la GUI no lo copie: `same_model` (el campo Modelo vacío), `own_keys_note`, `log_details_note`, `secret_removed` (el estado de un secreto con Quitar), `restart_question` (la pregunta con `needs_restart`, sin ` (s/n)`), `saved` (el aviso de guardar, que va antes del `message` de `service.apply`), `cancelled_nothing_saved` (Esc en la pregunta de `-32008` de `save`), `cancelled_service_untouched` (Esc en `restart_question`), `foreign_unit_kept` y `cancelled_foreign_untouched` (No y Esc en la de `-32008` de `service.apply`).
 
 Lee los archivos en cada llamada. Los campos de secretos van vacíos (vacío = se conserva lo guardado), igual que en `AddonForm`; los secretos nunca salen, solo su estado enmascarado. Los nombres de `fields` son los de `AddonField` en snake_case. El `form` que reciben `check` y `save` tiene esta misma forma, con todas sus llaves (`-32602` con `form.…` o `form.fields.…` si falta o sobra una).
 
@@ -591,14 +595,15 @@ Lee los archivos en cada llamada. Los campos de secretos van vacíos (vacío = s
 - Si guardar descartaría llaves de la sección y `discard_confirmed` no es `true` → `-32008` con la pregunta de F2 (`Se descartarán: …. ¿Guardar?`; el ` (s/n)` lo agrega la TUI, en su línea de estado); la GUI pregunta y repite con `true`.
 - Escribe primero los cambios de `credentials.json` y después `addons.telegram` (si fallan los secretos, la sección no se escribe), como F2. Un error al escribir → `-32007`. Sin cambios no escribe nada (y tampoco pregunta por las llaves descartadas).
 - Si escribió: `{needs_restart}` y después `settings.changed {section: "telegram"}`. `needs_restart` es el criterio de F2: el cambio lo necesita (token o respuestas a la vez), está activado y el servicio está activo **según el último estado que trajo `service.status` o una acción**; por eso la GUI pide `service.status` al abrir la sección, como F2.
-- **No toca el servicio. Paso obligatorio después de `save`:** `service.apply`, como hace F2 al guardar. Con `needs_restart`, la GUI pregunta "Este cambio necesita reiniciar el bot y se borran las conversaciones en memoria. ¿Reiniciar ahora?" y manda `restart: true` si contesta que sí. Si no lo llama, el servicio sigue como estaba (F2 lo marca como "no coincide" la próxima vez).
+- **No toca el servicio. Paso obligatorio después de `save`:** `service.apply`, como hace F2 al guardar. Con `needs_restart`, la GUI pregunta `texts.restart_question` y manda `restart: true` si contesta que sí. Si no lo llama, el servicio sigue como estaba (F2 lo marca como "no coincide" la próxima vez).
 
 **`addons.telegram.invite_code`** `→ {}` `← {invite_code}` (`generate_invite_code`; no guarda nada: va al campo `invite_code` del formulario). Si el sistema no da números al azar: `-32603` con `data.message`.
 
-**`addons.telegram.invited.list`** `→ {}` `← {users: ["123456789", ...]}`
+**`addons.telegram.invited.list`** `→ {}` `← {users: ["123456789", ...], remove_questions: {"123456789": "¿Quitar 123456789 ahora? No espera a Guardar."}}`
+- `remove_questions` es la pregunta de F2 para quitar a cada uno, sin ` (s/n)`.
 - `invitados.json` dañado o sin `HOME` → `-32007` con el texto de F2.
 
-**`addons.telegram.invited.remove`** `→ {user}` `← {users, message}` · *larga*
+**`addons.telegram.invited.remove`** `→ {user}` `← {users, remove_questions, message}` · *larga*
 - `user` es una cadena decimal (`-32602` si no es un entero positivo de 64 bits). Quita al momento con `remove_invited` (bajo `flock`) y, si el servicio está activo según el último estado, lo recarga para que el bot deje de dejarlo entrar, como F2. Responde al terminar: `users` es la lista que quedó y `message`, el de F2 (`Se quitó 123.` más el resultado de la recarga). Error del archivo → `-32007`.
 
 #### Servicio de systemd

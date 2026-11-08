@@ -176,14 +176,14 @@ class Strings {
       '$provider · Vacío = predeterminado del modelo: no se manda.';
   static const restoreAll = 'Restaurar todo';
   static const reasoning = 'Razonamiento';
+  // shortcut: las cinco opciones repiten kReasoningChoices de la TUI; si
+  // cambian, que settings.model_params.get mande sus etiquetas.
   static const reasoningDefault = 'Predeterminado';
   static const reasoningOff = 'Apagado';
   static const reasoningLow = 'Bajo';
   static const reasoningMedium = 'Medio';
   static const reasoningHigh = 'Alto';
 
-  // shortcut: estas dos notas repiten reglas del núcleo (qué llaves pone
-  // Moss) y de los proveedores; deberían venir de `model_params.get`.
   static String paramLabel(String key) => switch (key) {
     'temperature' => 'Temperatura',
     'top_p' => 'Top P',
@@ -242,11 +242,6 @@ class Strings {
   static const optionalHint = 'Opcional';
   static const removeKey = 'Quitar';
   static const keepSavedKey = 'No quitar';
-  static const keyWillBeRemoved = 'se quita: se usará la de la app';
-  static const sameModelAsApp = 'Mismo que la app';
-  static const ownKeyHelp =
-      'Sin key propia se usan las de la app. Recomendado: una propia con '
-      'tope diario en el proveedor.';
   static const accessSection = 'Acceso';
   static const allowedUsersHelp = 'Separados por comas.';
   static const generateCode = 'Generar código';
@@ -254,27 +249,12 @@ class Strings {
       'Quien lo mande al bot entra a la lista de invitados.';
   static const limitsSection = 'Límites';
   static const logDetailsTitle = 'Detalle de errores en el registro';
-  static const logDetailsNote =
-      'Puede incluir texto de los alumnos: solo para diagnosticar.';
   static String invitedTitle(int n) => 'Invitados ($n)';
   static const noInvited = 'Nadie ha entrado con el código';
   static const noInvitedNote =
       'Cuando alguien lo use, aparece aquí y lo puedes quitar.';
   static const removeInvited = 'Quitar';
   static String removeInvitedLabel(String user) => 'Quitar a $user';
-  static String removeInvitedQuestion(String user) => '¿Quitar $user ahora?';
-  static const removeInvitedDetail = 'No espera a Guardar.';
-  static const restartQuestion =
-      'Este cambio necesita reiniciar el bot y se borran las conversaciones '
-      'en memoria. ¿Reiniciar ahora?';
-  static const cancelledNothingSaved = 'Cancelado: no se guardó nada.';
-  static const savedServiceUntouched =
-      'Cancelado: se guardó, pero no se tocó el servicio.';
-  static const savedForeignKept = 'Guardado. No se tocó el servicio existente.';
-  static const savedForeignUntouched =
-      'Cancelado: se guardó, pero no se tocó el servicio existente.';
-  static String savedWith(String message) =>
-      message.isEmpty ? 'Guardado.' : 'Guardado. $message';
 
   // Ver registro (maqueta Config-registro)
   static const logTitle = 'Registro del bot';
