@@ -23,6 +23,7 @@ Versión del protocolo: **1**.
 | Evento `settings.changed` (`provider`, `system_prompt`, `search`, `gui`) | 7 | Implementado |
 | Evento `service.changed`; `settings.changed` con `telegram` | 7 | Implementado |
 | `settings.model_params.*`; `settings.changed` con `model_params` | 6.7, 7 | Implementado |
+| `error_field` en `settings.provider.check` | 6.7 | Implementado |
 | `help` en `settings.model_params.get`; `check` y `save` aceptan cada número como cadena, y `dirty` en `check` | 6.7 | Implementado |
 | Pensamiento: `reasoning` en `Entry`, evento `conversation.reasoning_delta` | 5, 7 | Implementado |
 | `service.log` (el registro del bot) | 6.8 | Implementado |
@@ -407,10 +408,11 @@ Si `config.json` o `credentials.json` no se pueden leer (JSON inválido, permiso
 - `provider`, `base_url` y `model` son obligatorios; `name`, opcional. Un `provider` que no está en la tabla ni es un endpoint guardado (ni `custom:`) es `-32602` con `fields: ["draft.provider"]`. Los campos de más, de menos o de otro tipo también van como `draft.<campo>`.
 - `validate()` agrega, en un endpoint: `Escribe un nombre para el endpoint.`, `El nombre del endpoint puede tener hasta 40 caracteres.`, `El nombre del endpoint tiene caracteres no válidos.`, `Ya hay un endpoint con ese nombre.`, `Ya tienes 20 endpoints; borra uno antes de agregar otro.`, `Con CHAT_BASE_URL definida no se puede agregar un endpoint.` y el de `validate_base_url`.
 
-**`settings.provider.check`** `→ {draft}` `← {error, hint, can_request_models, dirty}`
+**`settings.provider.check`** `→ {draft}` `← {error, error_field, hint, can_request_models, dirty}`
 
 ```jsonc
 {"error":null,                // validate(); null si se puede guardar
+ "error_field":null,          // name | base_url | api_key | model; null si no es de un campo o no hay error
  "hint":"...",                // base_url_hint(); null si no hay
  "can_request_models":true, "dirty":true}
 ```

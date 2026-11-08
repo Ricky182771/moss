@@ -91,6 +91,9 @@ class ProviderSection extends SettingsSection {
 
   /// De `settings.provider.check`.
   String? error;
+
+  /// De qué campo es [error] (`error_field` de `check`); null: de ninguno.
+  String? errorField;
   String? hint;
   bool canRequestModels = false;
 
@@ -167,6 +170,7 @@ class ProviderSection extends SettingsSection {
     model.text = saved.model;
     apiKey.clear();
     error = null;
+    errorField = null;
     hint = null;
     notifyListeners();
     _check(now: true);
@@ -249,6 +253,7 @@ class ProviderSection extends SettingsSection {
     } on RpcError catch (e) {
       if (disposed) return;
       error = e.displayMessage;
+      errorField = null;
       notifyListeners();
     } on StateError {
       // El canal se cerró.
@@ -266,6 +271,7 @@ class ProviderSection extends SettingsSection {
       return r['error'] == null;
     }
     error = r['error'] as String?;
+    errorField = r['error_field'] as String?;
     hint = r['hint'] as String?;
     canRequestModels = r['can_request_models'] as bool;
     if (canRequestModels && _modelsFor != provider) loadModels();
@@ -339,9 +345,21 @@ class ProviderSection extends SettingsSection {
   bool showSaveError(RpcError e) {
     if (e.code != RpcError.validationFailed) return false;
     error = e.displayMessage;
+    errorField = null;
     notifyListeners();
     return true;
   }
+
+  /// El error si es de [field].
+  String? errorOf(String field) => errorField == field ? error : null;
+
+  /// El error que no va junto a un campo a la vista: el de ninguno, o el de
+  /// Nombre o URL base con un proveedor de la tabla (no tiene esos campos).
+  String? get errorApart =>
+      errorField == null ||
+          (!isEndpoint && (errorField == 'name' || errorField == 'base_url'))
+      ? error
+      : null;
 
   /// `settings.endpoint.delete`: al momento, como en la TUI. Devuelve el
   /// error del servidor (va en la ventana) o null.

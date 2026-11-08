@@ -180,6 +180,7 @@ class _ProviderPanelState extends State<ProviderPanel> {
             label: Strings.endpointName,
             controller: p.name,
             focusNode: _nameFocus,
+            error: p.errorOf('name'),
             onChanged: (_) => p.edited(),
           ),
           LabeledField(
@@ -187,6 +188,7 @@ class _ProviderPanelState extends State<ProviderPanel> {
             controller: p.baseUrl,
             mono: true,
             lockedBy: p.baseUrlLocked ? Strings.envBaseUrl : null,
+            error: p.errorOf('base_url'),
             onChanged: (_) => p.edited(),
             help: p.hint ?? Strings.baseUrlHelp,
           ),
@@ -196,12 +198,11 @@ class _ProviderPanelState extends State<ProviderPanel> {
           controller: p.apiKey,
           status: status,
           lockedBy: keyLock,
+          error: p.errorOf('api_key'),
           onChanged: (_) => p.edited(),
         ),
         if (!p.isEndpoint && p.hint != null) Text(p.hint!, style: s.note),
-        // `check` da un solo error, sin decir de qué campo: va al final de
-        // lo que se edita, antes de Borrar.
-        FieldMessage(p.error),
+        FieldMessage(p.errorApart),
         if (p.isEndpoint && !isNew && row != null)
           Container(
             padding: const EdgeInsets.only(top: 16),
@@ -358,6 +359,7 @@ class _ProviderPanelState extends State<ProviderPanel> {
           mono: true,
           hint: Strings.typeModelName,
           lockedBy: locked ? Strings.envModel : null,
+          error: p.errorOf('model'),
           onChanged: (_) => p.edited(),
         ),
       ],

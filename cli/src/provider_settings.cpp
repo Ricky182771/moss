@@ -325,41 +325,52 @@ Config ProviderSettings::request_config(Config base) const {
 }
 
 std::optional<std::string> ProviderSettings::validate() const {
+    std::optional<ProviderProblem> found = problem();
+    if (!found.has_value()) {
+        return std::nullopt;
+    }
+    return std::move(found->message);
+}
+
+std::optional<ProviderProblem> ProviderSettings::problem() const {
     if (is_new_endpoint() && saved_.endpoints.size() >= kMaxEndpoints) {
-        return "Ya tienes " + std::to_string(kMaxEndpoints) +
-               " endpoints; borra uno antes de agregar otro.";
+        return ProviderProblem{"", "Ya tienes " + std::to_string(kMaxEndpoints) +
+                                       " endpoints; borra uno antes de agregar otro."};
     }
     if (is_endpoint()) {
-        if (std::optional<std::string> problem = endpoint_name_problem(name_)) {
-            return problem;
+        if (std::optional<std::string> name_problem = endpoint_name_problem(name_)) {
+            return ProviderProblem{"name", std::move(*name_problem)};
         }
         const Endpoint* self = endpoint();
         for (const Endpoint& other : saved_.endpoints) {
             if (&other != self && same_endpoint_name(other.name, name_)) {
-                return "Ya hay un endpoint con ese nombre.";
+                return ProviderProblem{"name", "Ya hay un endpoint con ese nombre."};
             }
         }
         // Con CHAT_BASE_URL la URL no se edita: uno nuevo quedaría sin la suya.
         if (is_new_endpoint() && base_url_locked()) {
-            return "Con CHAT_BASE_URL definida no se puede agregar un endpoint.";
+            return ProviderProblem{"",
+                                   "Con CHAT_BASE_URL definida no se puede agregar un endpoint."};
         }
     }
     const std::string& url = effective_base_url();
     if (url.empty()) {
-        return "Escribe la URL base del servidor.";
+        return ProviderProblem{"base_url", "Escribe la URL base del servidor."};
     }
     if (const std::optional<ChatError> error = validate_base_url(url)) {
-        return error->message;
+        return ProviderProblem{"base_url", error->message};
     }
     // El mensaje nunca incluye la key.
     if (!key_locked() && !key_.empty() && !plausible_key(key_)) {
-        return "Eso parece el nombre de una variable o una key incompleta; pega la key completa.";
+        return ProviderProblem{
+            "api_key",
+            "Eso parece el nombre de una variable o una key incompleta; pega la key completa."};
     }
     if (effective_key().empty() && !is_local_base_url(url)) {
-        return "Falta la API key de " + provider_label() + ".";
+        return ProviderProblem{"api_key", "Falta la API key de " + provider_label() + "."};
     }
     if (effective_model().empty()) {
-        return "Elige un modelo de la lista o escríbelo.";
+        return ProviderProblem{"model", "Elige un modelo de la lista o escríbelo."};
     }
     return std::nullopt;
 }

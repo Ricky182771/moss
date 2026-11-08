@@ -430,6 +430,70 @@ void main() {
     );
   });
 
+  group('el error de check va junto a su campo', () {
+    const wrong = 'Mensaje del servidor.';
+    Future<void> openWith(WidgetTester tester, String? field) async {
+      await startApp(
+        tester,
+        handlers: {
+          'settings.provider.check': (_) =>
+              providerCheck(error: wrong, errorField: field),
+        },
+      );
+      await _open(tester);
+      await _tap(tester, _row('OmniRoute'));
+      await tester.pumpAndSettle();
+    }
+
+    Finder inside(Type type, String label) => find.descendant(
+      of: type == SecretField
+          ? find.byType(SecretField)
+          : find.widgetWithText(LabeledField, label),
+      matching: find.text(wrong),
+    );
+
+    for (final (field, type, label) in const [
+      ('name', LabeledField, Strings.endpointName),
+      ('base_url', LabeledField, Strings.baseUrl),
+      ('api_key', SecretField, Strings.apiKey),
+      ('model', LabeledField, Strings.modelByHand),
+    ]) {
+      testWidgets(field, (tester) async {
+        await openWith(tester, field);
+        expect(find.text(wrong), findsOneWidget);
+        expect(inside(type, label), findsOneWidget);
+      });
+    }
+
+    testWidgets('sin campo: al final de la tarjeta', (tester) async {
+      await openWith(tester, null);
+      expect(find.text(wrong), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(LabeledField),
+          matching: find.text(wrong),
+        ),
+        findsNothing,
+      );
+    });
+
+    testWidgets('de la URL en uno de la tabla, que no tiene ese campo', (
+      tester,
+    ) async {
+      await startApp(
+        tester,
+        handlers: {
+          'settings.provider.check': (_) =>
+              providerCheck(error: wrong, errorField: 'base_url'),
+        },
+      );
+      await _open(tester);
+      await _tap(tester, _row('Google Gemini'));
+      await tester.pumpAndSettle();
+      expect(find.text(wrong), findsOneWidget);
+    });
+  });
+
   testWidgets('Guardar con un error en otra sección: va ahí y no guarda nada', (
     tester,
   ) async {

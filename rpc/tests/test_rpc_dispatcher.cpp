@@ -1366,6 +1366,53 @@ TEST_CASE("RPC: settings.provider.check y save", "[rpc][settings]") {
         CHECK(result["hint"].is_null());
         CHECK(result["can_request_models"] == false);
     }
+    SECTION("check: error_field dice de qué campo es el error de validate") {
+        const auto check = [&rpc](const Json& draft) {
+            rpc.call(2, "settings.provider.check", {{"draft", draft}});
+            return only(rpc)["result"];
+        };
+        const auto endpoint = [](std::string name, std::string url, std::string model) {
+            return Json{{"provider", "custom:"}, {"name", std::move(name)},
+                        {"base_url", std::move(url)}, {"model", std::move(model)},
+                        {"api_key", kModelKey}};
+        };
+        Json result = check(endpoint("", "https://mi-servidor/v1", "m"));
+        CHECK(result["error_field"] == "name");
+        CHECK(result["error"].is_string());
+        result = check(endpoint("Lab", "", "m"));
+        CHECK(result["error_field"] == "base_url");
+        CHECK(result["error"].is_string());
+        result = check(endpoint("Lab", "ftp://mi-servidor", "m"));
+        CHECK(result["error_field"] == "base_url");
+        result = check({{"provider", "nvidia"}, {"base_url", ""}, {"model", "m"}});
+        CHECK(result["error_field"] == "api_key");
+        result = check({{"provider", "nvidia"}, {"base_url", ""}, {"model", "m"},
+                        {"api_key", "$NVIDIA_KEY"}});
+        CHECK(result["error_field"] == "api_key");
+        CHECK(result.dump().find("$NVIDIA_KEY") == std::string::npos);
+        result = check(endpoint("Lab", "https://mi-servidor/v1", ""));
+        CHECK(result["error_field"] == "model");
+        result = check(endpoint("Lab", "https://mi-servidor/v1", "m"));
+        CHECK(result["error"].is_null());
+        CHECK(result["error_field"].is_null());
+    }
+    SECTION("check: un error que no es de un campo da error_field null") {
+        Json endpoints = Json::array();
+        for (int i = 0; i < 20; ++i) {
+            const std::string n = std::to_string(i);
+            endpoints.push_back({{"id", "e" + n},
+                                 {"name", "E" + n},
+                                 {"base_url", "https://e" + n + ".example/v1"}});
+        }
+        std::ofstream{rpc.config_path()} << Json{{"endpoints", endpoints}}.dump();
+        rpc.call(2, "settings.provider.check",
+                 {{"draft", {{"provider", "custom:"}, {"name", "Otro"},
+                             {"base_url", "https://otro.example/v1"}, {"model", "m"},
+                             {"api_key", kModelKey}}}});
+        const Json result = only(rpc)["result"];
+        CHECK(result["error"].is_string());
+        CHECK(result["error_field"].is_null());
+    }
     SECTION("check: el hint de una URL sin ruta en un endpoint nuevo") {
         rpc.call(2, "settings.provider.check",
                  {{"draft",

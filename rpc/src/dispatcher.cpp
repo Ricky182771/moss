@@ -739,8 +739,12 @@ void Dispatcher::settings(const std::string& method, const Json* params, const J
             return;
         }
         if (method == "settings.provider.check") {
+            const std::optional<cli::ProviderProblem> problem = form->problem();
             reply(id, has_id,
-                  {{"error", optional_string(form->validate())},
+                  {{"error", problem ? Json(problem->message) : Json(nullptr)},
+                   {"error_field", problem && !problem->field.empty()
+                                       ? Json(std::string{problem->field})
+                                       : Json(nullptr)},
                    {"hint", optional_string(form->base_url_hint())},
                    {"can_request_models", form->can_request_models()},
                    {"dirty", form->dirty()}});

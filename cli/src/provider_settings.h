@@ -45,6 +45,12 @@ struct ProviderEntry {
 };
 inline constexpr std::string_view kAddEndpoint = "Agregar endpoint…";
 
+/// Un error de ProviderSettings::validate y el campo al que corresponde.
+struct ProviderProblem {
+    std::string_view field; ///< "name", "base_url", "api_key", "model" o "" si no es de uno.
+    std::string message;
+};
+
 /// Estado del formulario "Proveedor de IA", sin FTXUI ni hilos: proveedor
 /// (de la tabla, un endpoint guardado o uno nuevo), nombre y URL base
 /// (editables solo en un endpoint), key escrita, filtro y lista de modelos,
@@ -162,6 +168,8 @@ public:
     /// key escrita que empieza con "$", trae espacios o saltos de línea, o
     /// mide menos de 20 caracteres se rechaza (el mensaje nunca la incluye).
     [[nodiscard]] std::optional<std::string> validate() const;
+    /// Lo mismo que validate, con el campo que falló.
+    [[nodiscard]] std::optional<ProviderProblem> problem() const;
     /// Lo que se escribe en config.json: en un endpoint, su entrada de
     /// "endpoints" actualizada (o una nueva al final). Con CHAT_MODEL
     /// definida se conserva el modelo guardado.

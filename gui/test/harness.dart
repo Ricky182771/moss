@@ -264,10 +264,12 @@ const kExtraHelp =
 
 Map<String, Object?> providerCheck({
   String? error,
+  String? errorField,
   String? hint,
   bool canRequestModels = true,
 }) => {
   'error': error,
+  'error_field': errorField,
   'hint': hint,
   'can_request_models': canRequestModels,
   'dirty': false,
