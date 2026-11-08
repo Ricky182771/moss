@@ -101,6 +101,8 @@ para XWayland.
   funciona en Linux): el estado del servicio al pie del menú; Servicio
   (instalación, estado, Reiniciar, Actualizar estado, Ver registro), Bot,
   Acceso (con Generar código), Límites e Invitados (Quitar, al momento).
+  Ver registro abre las últimas 200 líneas del bot (hora y mensaje, por
+  día, los errores con barra roja; Copiar copia las líneas completas).
   Guardar no reinicia el bot: después pregunta lo que haga falta (llaves que
   se descartarían, "¿Reiniciar ahora?", reemplazar un servicio hecho a mano)
   y aplica lo guardado al servicio.
