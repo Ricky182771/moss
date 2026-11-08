@@ -245,8 +245,22 @@ Map<String, Object?> modelParams({
       'integer': true,
     },
   },
+  'help': const {
+    'reasoning': kReasoningHelp,
+    'top_k': kTopKHelp,
+    'extra': kExtraHelp,
+  },
   'preview': '{\n  "model": "z-ai/glm5",\n  "temperature": 0.6\n}',
 };
+
+/// Lo que manda el servidor en `help`: la GUI no tiene estos textos.
+const kReasoningHelp =
+    'En NIM, Bajo, Medio y Alto solo lo encienden (enable_thinking); Apagado '
+    'lo apaga.';
+const kTopKHelp = 'No todos los proveedores lo aceptan.';
+const kExtraHelp =
+    'Se mezcla al final del cuerpo (JSON Merge Patch): gana sobre el '
+    'formulario y null quita una llave.';
 
 Map<String, Object?> providerCheck({
   String? error,

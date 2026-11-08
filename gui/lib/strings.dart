@@ -183,27 +183,8 @@ class Strings {
   static const reasoningMedium = 'Medio';
   static const reasoningHigh = 'Alto';
 
-  /// shortcut: copia los textos de la TUI (`cli/src/model_params_form.cpp`,
-  /// `reasoning_help`) por `reasoning_style`; en `effort` va el genérico, sin
-  /// el caso de OpenRouter (`reasoning.effort`). Lo correcto es que
-  /// `settings.model_params.get` mande el texto, en un PR de protocolo.
-  static String? reasoningHelp(String style) => switch (style) {
-    'toggle' =>
-      'En NIM, Bajo, Medio y Alto solo lo encienden (enable_thinking); '
-          'Apagado lo apaga.',
-    'budget' =>
-      'Bajo, Medio y Alto dan 1024, 4096 y 16384 tokens para pensar; '
-          'Apagado no manda nada.',
-    'effort' =>
-      'Manda reasoning_effort (Apagado: "none"). No todos los modelos lo '
-          'aceptan.',
-    _ => null,
-  };
   // shortcut: estas dos notas repiten reglas del núcleo (qué llaves pone
   // Moss) y de los proveedores; deberían venir de `model_params.get`.
-  static const topKNote =
-      'Top K no es del estándar de OpenAI: no todos los proveedores lo '
-      'aceptan.';
   static String paramLabel(String key) => switch (key) {
     'temperature' => 'Temperatura',
     'top_p' => 'Top P',
@@ -220,9 +201,6 @@ class Strings {
   static const advanced = 'Avanzado';
   static const advancedNote = 'JSON que se mezcla al final';
   static const extraJson = 'JSON avanzado';
-  static const extraHelp =
-      'Gana sobre el formulario; null quita una llave. No se pueden cambiar '
-      'model, messages ni stream.';
   static const preview = 'Vista previa de lo que se envía';
   static const previewLabel = 'Vista previa del cuerpo de la petición';
   static const modelsFailed = 'No se pudieron pedir los modelos.';
@@ -230,8 +208,6 @@ class Strings {
   static const envModel = 'CHAT_MODEL';
   static const envApiKey = 'CHAT_API_KEY';
   static const envSearchKey = 'CHAT_SEARCH_API_KEY';
-  static const notANumber = 'Escribe un número.';
-  static const notAnInteger = 'Escribe un número entero.';
   static const showKey = 'Ver lo que escribes';
   static const hideKey = 'Ocultar lo que escribes';
   static const newKeyHint = 'Escribe una API key nueva';

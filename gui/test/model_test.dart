@@ -42,7 +42,8 @@ void main() {
       find.text(Strings.modelTitleFor('z-ai/glm5', 'NVIDIA NIM')),
       findsOneWidget,
     );
-    expect(find.text(Strings.reasoningHelp('toggle')!), findsOneWidget);
+    expect(find.text(kReasoningHelp), findsOneWidget);
+    expect(find.text(kTopKHelp), findsOneWidget);
     expect(
       find.text(Strings.range('0', '2', exclusive: false)),
       findsOneWidget,
@@ -112,7 +113,7 @@ void main() {
       tester,
       handlers: {
         'settings.model_params.check': (p) => {
-          'field_errors': (p['params'] as Map)['top_k'] == 2000
+          'field_errors': (p['params'] as Map)['top_k'] == '2000'
               ? {'top_k': 'Debe ser un número entero entre 1 y 1000.'}
               : <String, String>{},
           'extra_error': null,
@@ -137,20 +138,34 @@ void main() {
     );
   });
 
-  testWidgets('lo que no es número se marca sin mandarlo', (tester) async {
-    final (_, server) = await startApp(tester);
+  testWidgets('los números se mandan como texto y el error es del servidor', (
+    tester,
+  ) async {
+    const wrong = 'Mensaje del servidor para Semilla.';
+    final (_, server) = await startApp(
+      tester,
+      handlers: {
+        'settings.model_params.check': (p) => {
+          'field_errors': (p['params'] as Map)['seed'] == 'abc'
+              ? {'seed': wrong}
+              : <String, String>{},
+          'extra_error': null,
+          'preview': null,
+          'dirty': true,
+        },
+      },
+    );
     await _openModel(tester);
-    final before = server.methods
-        .where((m) => m == 'settings.model_params.check')
-        .length;
     await tester.ensureVisible(_field('Semilla'));
     await tester.enterText(_editable('Semilla'), 'abc');
     await tester.pumpAndSettle(const Duration(milliseconds: 500));
-    expect(find.text(Strings.notANumber), findsOneWidget);
-    expect(
-      server.methods.where((m) => m == 'settings.model_params.check').length,
-      before,
-    );
+    expect(find.text(wrong), findsOneWidget);
+    final sent = _last(server, 'settings.model_params.check')['params'] as Map;
+    expect(sent['seed'], 'abc');
+    expect(sent['temperature'], '0.6');
+    await tester.tap(find.text(Strings.save));
+    await tester.pumpAndSettle();
+    expect(server.methods, isNot(contains('settings.model_params.save')));
   });
 
   testWidgets('"0.60" es lo guardado (0.6): sin cambios tras guardar', (
@@ -158,7 +173,16 @@ void main() {
   ) async {
     final (_, server) = await startApp(
       tester,
-      handlers: {'settings.model_params.save': (_) => <String, Object?>{}},
+      handlers: {
+        // El servidor dice si es lo mismo que lo guardado: la GUI no lee números.
+        'settings.model_params.check': (p) => {
+          'field_errors': <String, String>{},
+          'extra_error': null,
+          'preview': null,
+          'dirty': (p['params'] as Map)['temperature'] != '0.60',
+        },
+        'settings.model_params.save': (_) => <String, Object?>{},
+      },
     );
     await _openModel(tester);
     await tester.ensureVisible(_field('Temperatura'));
@@ -173,25 +197,11 @@ void main() {
     await tester.tap(find.text(Strings.save));
     await tester.pumpAndSettle();
     final params = _last(server, 'settings.model_params.save')['params'] as Map;
-    expect(params['temperature'], 0.7);
+    expect(params['temperature'], '0,7');
     expect(
       find.bySemanticsLabel(Strings.withUnsaved(Strings.modelTitle)),
       findsNothing,
     );
-  });
-
-  testWidgets('un entero con decimales se marca y no se guarda', (
-    tester,
-  ) async {
-    final (_, server) = await startApp(tester);
-    await _openModel(tester);
-    await tester.ensureVisible(_field('Top K'));
-    await tester.enterText(_editable('Top K'), '2.5');
-    await tester.pumpAndSettle(const Duration(milliseconds: 500));
-    expect(find.text(Strings.notAnInteger), findsOneWidget);
-    await tester.tap(find.text(Strings.save));
-    await tester.pumpAndSettle();
-    expect(server.methods, isNot(contains('settings.model_params.save')));
   });
 
   testWidgets('Avanzado: extra_error, vista previa y Copiar', (tester) async {
@@ -255,7 +265,14 @@ void main() {
     await tester.pumpAndSettle();
     final sent = _last(server, 'settings.model_params.save');
     expect(sent['extra'], '');
-    expect((sent['params'] as Map).values.every((v) => v == null), isTrue);
+    final params = sent['params'] as Map;
+    expect(params['reasoning'], isNull);
+    expect(
+      params.entries
+          .where((e) => e.key != 'reasoning')
+          .every((e) => e.value == ''),
+      isTrue,
+    );
   });
 
   testWidgets('razonamiento Alto se manda como high', (tester) async {
@@ -269,7 +286,7 @@ void main() {
     await tester.pumpAndSettle();
     final params = _last(server, 'settings.model_params.save')['params'] as Map;
     expect(params['reasoning'], 'high');
-    expect(params['temperature'], 0.6);
+    expect(params['temperature'], '0.6');
   });
 
   testWidgets('sin modelo: el texto del servidor y el botón a Proveedor', (

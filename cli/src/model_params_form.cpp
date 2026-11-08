@@ -140,6 +140,13 @@ ModelParams ModelParamsForm::draft(std::vector<FieldProblem>* problems) const {
     ModelParams params;
     params.reasoning = static_cast<Reasoning>(
         std::clamp(reasoning, 0, static_cast<int>(kReasoningChoices.size()) - 1));
+    apply_numbers(params, problems);
+    params.extra = extra;
+    return params;
+}
+
+void ModelParamsForm::apply_numbers(ModelParams& params,
+                                    std::vector<FieldProblem>* problems) const {
     const std::vector<ParamLimit> limits = model_param_limits("");
     for (std::size_t i = 0; i < kNumberFields; ++i) {
         std::string text{trim(numbers[i])};
@@ -160,8 +167,6 @@ ModelParams ModelParamsForm::draft(std::vector<FieldProblem>* problems) const {
                                  limits[i].integer ? "Escribe un número entero." : "Escribe un número."});
         }
     }
-    params.extra = extra;
-    return params;
 }
 
 bool ModelParamsForm::dirty() const {

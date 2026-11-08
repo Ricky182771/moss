@@ -31,6 +31,12 @@ inline constexpr std::array<std::string_view, 5> kReasoningChoices{
 /// Qué hace cada nivel del razonamiento en ese proveedor (la ayuda de F2).
 [[nodiscard]] std::string reasoning_help(std::string_view provider);
 
+/// La nota de Top K y la del JSON avanzado (F2 y settings.model_params.get).
+inline constexpr std::string_view kTopKNote = "No todos los proveedores lo aceptan.";
+inline constexpr std::string_view kExtraNote =
+    "Se mezcla al final del cuerpo (JSON Merge Patch): gana sobre el formulario y null quita una "
+    "llave.";
+
 /// La etiqueta corta de un campo numérico ("temperature" → "Temperatura").
 [[nodiscard]] std::string_view param_label(std::string_view field);
 
@@ -55,6 +61,9 @@ public:
     /// Los ajustes del formulario. Un texto que no es número (o no es entero
     /// donde debe) queda en Predeterminado y su error va a problems.
     [[nodiscard]] ModelParams draft(std::vector<FieldProblem>* problems = nullptr) const;
+    /// Lee los campos numéricos con texto sobre params (los vacíos no los toca);
+    /// el resto de draft. También los usa moss-rpc, con los que llegan como cadena.
+    void apply_numbers(ModelParams& params, std::vector<FieldProblem>* problems) const;
     /// Cambió algo desde lo guardado (o desde mark_saved).
     [[nodiscard]] bool dirty() const;
     /// Todo a Predeterminado (Restaurar todo); hay que guardar.

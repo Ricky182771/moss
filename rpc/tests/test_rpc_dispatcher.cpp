@@ -2632,6 +2632,9 @@ TEST_CASE("RPC: settings.model_params.*", "[rpc][settings][ajustes]") {
         CHECK(got["limits"]["top_k"].dump() ==
               R"({"min":1,"max":1000,"min_exclusive":false,"integer":true})");
         CHECK(got["preview"] == chatbot::request_preview("z-ai/glm5", "nvidia", {}, 2));
+        CHECK(got["help"]["reasoning"] == chatbot::cli::reasoning_help("nvidia"));
+        CHECK(got["help"]["top_k"] == std::string{chatbot::cli::kTopKNote});
+        CHECK(got["help"]["extra"] == std::string{chatbot::cli::kExtraNote});
 
         const Json draft{{"params", {{"temperature", 0.3}, {"top_k", 0}, {"reasoning", "high"}}},
                          {"extra", R"({"model": "x"})"}};
@@ -2673,10 +2676,82 @@ TEST_CASE("RPC: settings.model_params.*", "[rpc][settings][ajustes]") {
         }
         CHECK(after.dump().find(rpc.config.api_key) == std::string::npos);
     }
+    SECTION("la ayuda del razonamiento depende del proveedor") {
+        const std::string provider = GENERATE("gemini", "openrouter", "anthropic");
+        rpc.config.provider = provider;
+        rpc.initialize();
+        rpc.call(2, "settings.model_params.get");
+        CHECK(only(rpc)["result"]["help"]["reasoning"] == chatbot::cli::reasoning_help(provider));
+        CHECK(chatbot::cli::reasoning_help(provider) != chatbot::cli::reasoning_help("nvidia"));
+    }
+    SECTION("números como cadena, leídos como en F2") {
+        rpc.initialize();
+        const auto check = [&rpc](const Json& fields) {
+            rpc.call(9, "settings.model_params.check", {{"params", fields}});
+            return only(rpc)["result"];
+        };
+        chatbot::ModelParams expected;
+        expected.temperature = 0.6;
+
+        // Válidos: "0.6", "0.60", con coma, con espacios. La vista previa es
+        // la de los números de siempre.
+        const std::string text = GENERATE("0.6", "0.60", "0,6", " 0.6 ");
+        Json result = check({{"temperature", text}});
+        CHECK(result["field_errors"].dump() == "{}");
+        CHECK(result["preview"] == chatbot::request_preview("z-ai/glm5", "nvidia", expected, 2));
+        CHECK(result["dirty"] == true);
+
+        // Inválidos: los textos de draft de F2, en field_errors, sin vista previa.
+        chatbot::cli::ModelParamsForm form;
+        form.numbers[0] = "abc"; // temperature
+        form.numbers[2] = "2.5"; // top_k
+        std::vector<chatbot::FieldProblem> problems;
+        (void)form.draft(&problems);
+        REQUIRE(problems.size() == 2);
+        result = check({{"temperature", "abc"}, {"top_k", "2.5"}});
+        CHECK(result["field_errors"]["temperature"] == problems[0].message);
+        CHECK(result["field_errors"]["top_k"] == problems[1].message);
+        CHECK(result["preview"].is_null());
+        CHECK(result["dirty"] == true);
+
+        // Fuera de rango: la misma validación que un número.
+        const Json by_text = check({{"temperature", "9"}});
+        const Json by_number = check({{"temperature", 9}});
+        CHECK(by_text["field_errors"] == by_number["field_errors"]);
+        CHECK(by_text["field_errors"].contains("temperature"));
+        const Json nan = check({{"temperature", "nan"}});
+        CHECK(nan["field_errors"] == by_number["field_errors"]);
+
+        // Vacíos: Predeterminado, sin error.
+        result = check({{"temperature", ""}, {"top_k", "  "}, {"seed", nullptr}});
+        CHECK(result["field_errors"].dump() == "{}");
+        CHECK(result["preview"] == chatbot::request_preview("z-ai/glm5", "nvidia", {}, 2));
+        CHECK(result["dirty"] == false);
+
+        // save: guarda lo mismo; "abc" no guarda y dice por qué.
+        rpc.call(3, "settings.model_params.save",
+                 {{"params", {{"temperature", "abc"}, {"top_k", "2.5"}}}});
+        const Json failed = only(rpc);
+        check_error(failed, -32005, problems[0].message);
+        CHECK(failed["error"]["data"]["field_errors"]["top_k"] == problems[1].message);
+        rpc.call(4, "settings.model_params.save", {{"params", {{"temperature", "0,60"}}}});
+        CHECK(rpc.take()[0]["result"].dump() == "{}");
+        rpc.call(5, "settings.model_params.get");
+        const Json saved = only(rpc)["result"];
+        CHECK(saved["params"]["temperature"] == 0.6);
+
+        // Igual a lo guardado por valor, y el JSON tal como lo da get: sin cambios.
+        rpc.call(6, "settings.model_params.check",
+                 {{"params", {{"temperature", "0.60"}}}, {"extra", saved["extra"]}});
+        CHECK(only(rpc)["result"]["dirty"] == false);
+        // Los clientes de antes siguen mandando números.
+        CHECK(check({{"temperature", 0.6}})["dirty"] == false);
+        CHECK(check({{"temperature", 0.7}})["dirty"] == true);
+    }
     SECTION("parámetros de otro tipo o desconocidos: -32602") {
         rpc.initialize();
         rpc.call(2, "settings.model_params.check",
-                 {{"params", {{"temperature", "0.3"}, {"color", 1}, {"extra", Json::object()}}}});
+                 {{"params", {{"temperature", true}, {"color", 1}, {"extra", Json::object()}}}});
         const Json bad = only(rpc);
         CHECK(bad["error"]["code"] == -32602);
         CHECK(bad["error"]["data"]["fields"].dump() ==

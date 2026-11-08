@@ -239,8 +239,8 @@ class _ModelPanelState extends State<ModelPanel> {
                 ('high', Strings.reasoningHigh),
               ],
             ),
-            if (Strings.reasoningHelp(m.reasoningStyle) case final help?)
-              Text(help, style: s.note),
+            if (m.reasoningHelp.isNotEmpty)
+              Text(m.reasoningHelp, style: s.note),
           ],
         ),
         LayoutBuilder(
@@ -258,7 +258,7 @@ class _ModelPanelState extends State<ModelPanel> {
             );
           },
         ),
-        Text(Strings.topKNote, style: s.note),
+        Text(m.topKNote, style: s.note),
         FieldMessage(m.paramsError),
       ],
     );
@@ -368,7 +368,7 @@ class _ModelPanelState extends State<ModelPanel> {
                               invalid: m.extraError != null,
                               onChanged: (_) => m.paramsEdited(),
                             ),
-                            Text(Strings.extraHelp, style: s.note),
+                            Text(m.extraNote, style: s.note),
                             FieldMessage(m.extraError),
                           ],
                         ),

@@ -8,6 +8,14 @@ const _gone = {
   // El conteo del Pensamiento: `reasoning_words`.
   'thoughtSummary(String': 'la función',
   r"RegExp(r'[^ \n\t\r]+')": 'su expresión',
+  // Los textos y la lectura de números: `settings.model_params.*`.
+  'reasoningHelp(String': 'la ayuda por estilo',
+  'static const topKNote': 'la nota de Top K',
+  'static const extraHelp': 'la nota del JSON',
+  'notANumber': 'el error de un número',
+  'notAnInteger': 'el error de un entero',
+  'num.parse': 'leer un número',
+  r"RegExp(r'^-?\d+": 'decidir qué es un número',
 };
 
 void main() {

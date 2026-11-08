@@ -23,6 +23,7 @@ Versión del protocolo: **1**.
 | Evento `settings.changed` (`provider`, `system_prompt`, `search`, `gui`) | 7 | Implementado |
 | Evento `service.changed`; `settings.changed` con `telegram` | 7 | Implementado |
 | `settings.model_params.*`; `settings.changed` con `model_params` | 6.7, 7 | Implementado |
+| `help` en `settings.model_params.get`; `check` y `save` aceptan cada número como cadena, y `dirty` en `check` | 6.7 | Implementado |
 | Pensamiento: `reasoning` en `Entry`, evento `conversation.reasoning_delta` | 5, 7 | Implementado |
 | `service.log` (el registro del bot) | 6.8 | Implementado |
 | `errors` en `service.log` (las líneas que la TUI pinta como error) | 6.8 | Implementado |
@@ -468,6 +469,8 @@ Los de F2 → Configuración del modelo → Parámetros y Avanzado: los del **mo
  "frequency_penalty":0, "presence_penalty":0, "seed":7}
 ```
 
+En `check` y `save`, cada campo numérico puede ir también **como cadena, tal como lo escribió el usuario** (`"0.60"`, `"0,6"`), y entonces lo lee la misma función que la F2 de la TUI (`ModelParamsForm::apply_numbers`): `""` o solo espacios = Predeterminado, y lo que no es número da su error en `field_errors` (`Escribe un número.`, `Escribe un número entero.`). Mandarlo como número sigue igual. La GUI siempre manda el texto: no decide qué es un número.
+
 `extra` (el JSON avanzado) va **aparte y como texto**, tal como lo escribe el usuario, para que los errores de sintaxis den su línea y columna: `""` o ausente = ninguno.
 
 **`settings.model_params.get`** `→ {}` `←`
@@ -480,26 +483,31 @@ Los de F2 → Configuración del modelo → Parámetros y Avanzado: los del **mo
  "limits":{"temperature":{"min":0.0,"max":2.0,"min_exclusive":false,"integer":false},
            "top_p":{"min":0.0,"max":1.0,"min_exclusive":true,"integer":false},
            "top_k":{"min":1,"max":1000,"min_exclusive":false,"integer":true}, ...},
+ "help":{"reasoning":"En NIM, Bajo, Medio y Alto solo lo encienden (enable_thinking); Apagado lo apaga.",
+         "top_k":"No todos los proveedores lo aceptan.",
+         "extra":"Se mezcla al final del cuerpo (JSON Merge Patch): gana sobre el formulario y null quita una llave."},
  "preview":"{\n  \"model\": …"}   // el cuerpo con lo guardado
 ```
 
 - `limits`: los siete campos numéricos con los rangos del proveedor (en `anthropic`, `temperature` hasta 1), para que la GUI no los copie.
+- `help`: los textos de F2, para que la GUI no los copie: `reasoning` es `reasoning_help` del proveedor en uso, y `top_k` y `extra` son `kTopKNote` y `kExtraNote`.
 - `preview`: `request_preview`, el cuerpo exacto que se mandaría (sangría de 2, en el orden de la petición) con `messages` cambiado por `"[…N mensajes…]"` (el historial de la conversación abierta con el mensaje de sistema, más el siguiente). La key va en la cabecera: nunca aparece.
 - Sin proveedor o sin modelo: `-32004` con `Elige un modelo en Proveedor de IA (o con /model) para ajustarlo.`
 
-**`settings.model_params.check`** `→ {params, extra?}` `← {field_errors, extra_error, preview}`
+**`settings.model_params.check`** `→ {params, extra?}` `← {field_errors, extra_error, preview, dirty}`
 
 ```jsonc
 {"field_errors":{"top_k":"Debe ser un número entero entre 1 y 1000."},   // {} si no hay
  "extra_error":"El JSON avanzado no es válido (línea 3, columna 7).",   // o null
- "preview":null}   // null si hay algún error
+ "preview":null,   // null si hay algún error
+ "dirty":true}     // el borrador es distinto de lo guardado, por valor: "0.60" es igual a 0.6
 ```
 
 - Los textos son los de F2: rangos (`Debe ser un número entre 0 y 2.`, `Debe ser mayor que 0 y como máximo 1.`, …), en Anthropic `Con el razonamiento <nivel>, el máximo de salida debe pasar de <presupuesto> tokens.` (en `max_tokens`), y en `extra`: no es un objeto, más de 8 KiB, UTF-8 inválido, línea y columna del error de sintaxis, o `«<llave>» la pone Moss; no se puede cambiar desde el JSON avanzado.` (`model`, `messages`, `stream`, `stream_options`, `tools`, `tool_choice`).
 
 **`settings.model_params.save`** `→ {params, extra?}` `← {}`
 - `Session::save_model_params`: escribe `"models"` en `config.json` (sin ajustes, quita el modelo, y el proveedor si se queda sin modelos) y aplica desde el siguiente mensaje sin reiniciar. Después, `settings.changed {section: "model_params"}` y el `entry_added` del aviso `Ajustes de <modelo> guardados: valen desde el siguiente mensaje.` **Restaurar todo** = mandar todo en `null` y `extra` vacío.
-- Errores, en este orden: `-32602` (un campo de `params` de otro tipo o desconocido, con `fields: ["params.<campo>"]`; `extra` dentro de `params` también); `-32004` (sin modelo); `-32002` (respuesta en curso); `-32005` con el primer error de `check` en `data.message`; `-32007` si falla la escritura (por ejemplo, un `"models"` que no es objeto: no se toca).
+- Errores, en este orden: `-32602` (un campo de `params` de otro tipo o desconocido, con `fields: ["params.<campo>"]`; `extra` dentro de `params` también); `-32004` (sin modelo); `-32002` (respuesta en curso); `-32005` con el primer error de `check` en `data.message` y los de los campos en `data.field_errors`; `-32007` si falla la escritura (por ejemplo, un `"models"` que no es objeto: no se toca).
 
 Si la petición llevó algún ajuste y el servidor responde 400 o 422, el error de `chat.finished` (y de su entrada) agrega `Puede ser un ajuste de <modelo>: revísalo en Configuración del modelo.`
 

@@ -52,9 +52,22 @@ Json model_params_json(const ModelParams& params) {
 }
 
 /// params y extra de settings.model_params.check/save. Un campo de otro tipo
-/// o desconocido da el data de -32602 ({"fields": ["params.<campo>"]}).
-std::optional<Json> read_model_params(const Json& params, ModelParams& out) {
-    const Result<ParsedModelParams> parsed = model_params_from_json(params.at("params").dump());
+/// o desconocido da el data de -32602 ({"fields": ["params.<campo>"]}). Un campo
+/// numérico también puede ser cadena, tal como se escribió: lo lee el formulario
+/// de F2 y lo que no es número va a text_problems.
+std::optional<Json> read_model_params(const Json& params, ModelParams& out,
+                                      std::vector<FieldProblem>& text_problems) {
+    Json object = params.at("params");
+    cli::ModelParamsForm form;
+    const std::vector<ParamLimit> limits = model_param_limits("");
+    for (std::size_t i = 0; object.is_object() && i < limits.size(); ++i) {
+        const auto field = object.find(std::string{limits[i].field});
+        if (field != object.end() && field->is_string()) {
+            form.numbers[i] = field->get<std::string>();
+            object.erase(field);
+        }
+    }
+    const Result<ParsedModelParams> parsed = model_params_from_json(object.dump());
     std::vector<std::string> fields;
     if (parsed.is_error()) {
         return Json{{"fields", Json::array({"params"})}};
@@ -67,6 +80,7 @@ std::optional<Json> read_model_params(const Json& params, ModelParams& out) {
         }
         out = parsed.value().params;
     }
+    form.apply_numbers(out, &text_problems);
     if (params.at("params").contains("extra")) {
         fields.emplace_back("params.extra"); // extra va aparte, como texto.
     }
@@ -833,6 +847,10 @@ void Dispatcher::settings(const std::string& method, const Json* params, const J
                {"reasoning_style",
                 std::string{reasoning_style_name(reasoning_style(config.provider))}},
                {"limits", std::move(limits)},
+               {"help",
+                {{"reasoning", cli::reasoning_help(config.provider)},
+                 {"top_k", std::string{cli::kTopKNote}},
+                 {"extra", std::string{cli::kExtraNote}}}},
                {"preview", optional_string(session_->check_model_params(saved).preview)}});
     } else if (method == "settings.model_params.check" ||
                method == "settings.model_params.save") {
@@ -842,7 +860,8 @@ void Dispatcher::settings(const std::string& method, const Json* params, const J
             return;
         }
         ModelParams draft;
-        if (const auto bad = read_model_params(*params, draft)) {
+        std::vector<FieldProblem> text_problems;
+        if (const auto bad = read_model_params(*params, draft, text_problems)) {
             fail(id, has_id, RpcError::InvalidParams, *bad);
             return;
         }
@@ -850,25 +869,36 @@ void Dispatcher::settings(const std::string& method, const Json* params, const J
             fail(id, has_id, RpcError::NotConfigured, message_data(*problem));
             return;
         }
-        const cli::ModelParamsCheck check = session_->check_model_params(draft);
-        if (method == "settings.model_params.check") {
-            Json field_errors = Json::object();
-            Json extra_error = nullptr;
-            for (const FieldProblem& problem : check.problems) {
-                if (problem.field == "extra") {
-                    extra_error = problem.message;
-                } else {
-                    field_errors[problem.field] = problem.message;
-                }
+        cli::ModelParamsCheck check = session_->check_model_params(draft);
+        if (!text_problems.empty()) {
+            // Como F2: lo que no es número va primero; Session no lo vio (quedó
+            // en Predeterminado).
+            check.problems.insert(check.problems.begin(), text_problems.begin(),
+                                  text_problems.end());
+            check.preview.reset();
+        }
+        Json field_errors = Json::object();
+        Json extra_error = nullptr;
+        for (const FieldProblem& problem : check.problems) {
+            if (problem.field == "extra") {
+                extra_error = problem.message;
+            } else {
+                field_errors[problem.field] = problem.message;
             }
+        }
+        if (method == "settings.model_params.check") {
+            ModelParams saved = session_->model_params();
+            saved.extra = format_extra(saved.extra); // El JSON como lo da get.
             reply(id, has_id,
                   {{"field_errors", std::move(field_errors)},
                    {"extra_error", std::move(extra_error)},
-                   {"preview", optional_string(check.preview)}});
+                   {"preview", optional_string(check.preview)},
+                   {"dirty", !text_problems.empty() || draft != saved}});
         } else if (!busy()) {
             if (!check.problems.empty()) {
                 fail(id, has_id, RpcError::ValidationFailed,
-                     message_data(check.problems.front().message));
+                     {{"message", check.problems.front().message},
+                      {"field_errors", std::move(field_errors)}});
             } else if (const std::optional<std::string> failed =
                            session_->save_model_params(draft)) {
                 fail(id, has_id, RpcError::StorageError, message_data(*failed));
