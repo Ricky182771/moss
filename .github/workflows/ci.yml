@@ -312,7 +312,7 @@ jobs:
 
   # Interfaz gráfica (Flutter, gui/): formato, análisis, pruebas (sin moss-rpc
   # ni red: canal falso) y el release de Linux. La prueba de capturas no corre
-  # aquí (dart_test.yaml la salta). Windows se compila desde G5.
+  # aquí (dart_test.yaml la salta). Windows: gui-windows, abajo.
   gui:
     name: gui (Flutter)
     runs-on: ubuntu-24.04
@@ -350,3 +350,85 @@ jobs:
 
       - name: Release de Linux
         run: flutter build linux --release
+
+  # La GUI en Windows, con MSVC (el runner de Flutter): análisis, pruebas (atrapan
+  # rutas con \, procesos y saltos de línea) y dos ZIP de PRUEBA, no el oficial:
+  # release para probar a mano y profile para medir con --frame-stats. Cada uno
+  # con moss.exe, moss-rpc.exe y sus DLL, del ZIP del trabajo windows, y las DLL
+  # de Visual C++. El formato se revisa en el trabajo gui.
+  gui-windows:
+    name: gui (Flutter) / windows
+    needs: windows
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: gui
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # La misma versión de Flutter que el trabajo gui.
+      - name: Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.9
+
+      - name: Dependencias
+        run: flutter pub get
+
+      - name: Análisis
+        run: flutter analyze
+
+      - name: Pruebas
+        run: flutter test
+
+      - name: Release de Windows
+        run: flutter build windows --release
+
+      - name: Profile de Windows
+        run: flutter build windows --profile
+
+      - name: ZIP de C++
+        uses: actions/download-artifact@v8
+        with:
+          name: moss-windows-x64
+          path: ${{ runner.temp }}/cpp
+
+      # Imprime qué DLL pide cada ejecutable y falla si alguna no se encuentra.
+      - name: Armar las carpetas de prueba
+        working-directory: .
+        run: |
+          foreach ($mode in 'Release', 'Profile') {
+            tools/package-gui-test-windows.ps1 `
+              -Bundle "gui/build/windows/x64/runner/$mode" `
+              -CppZip "$env:RUNNER_TEMP/cpp/moss-windows-x64.zip" `
+              -Out "$env:RUNNER_TEMP/prueba-$mode"
+          }
+
+      # Sin MSYS2 en el PATH y en una ruta con espacios y acentos: moss-rpc.exe
+      # responde initialize; la GUI abre su ventana, arranca el moss-rpc.exe de
+      # su carpeta y, al cerrarla, no deja ninguno vivo.
+      - name: Probar las carpetas
+        working-directory: .
+        timeout-minutes: 10
+        run: |
+          tools/check-gui-test-windows.ps1 -Source "$env:RUNNER_TEMP/prueba-Release"
+          tools/check-gui-test-windows.ps1 -Source "$env:RUNNER_TEMP/prueba-Profile" -FrameStats
+
+      - name: Subir el ZIP de prueba (release)
+        uses: actions/upload-artifact@v7
+        with:
+          name: moss-gui-windows-prueba-release
+          path: ${{ runner.temp }}/prueba-Release
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Subir el ZIP de prueba (profile)
+        uses: actions/upload-artifact@v7
+        with:
+          name: moss-gui-windows-prueba-profile
+          path: ${{ runner.temp }}/prueba-Profile
+          retention-days: 7
+          if-no-files-found: error
