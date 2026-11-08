@@ -11,10 +11,12 @@ Future<FakeServer> _openLog(
   WidgetTester tester,
   Object? Function(Map<String, dynamic>) log, {
   bool settle = true,
+  DateTime? now,
 }) async {
   final (_, server) = await startApp(
     tester,
     addons: ['telegram'],
+    now: now,
     handlers: {...telegramHandlers(), 'service.log': log},
   );
   await tester.sendKeyEvent(LogicalKeyboardKey.f2);
@@ -67,6 +69,23 @@ void main() {
     );
     expect(find.text(Strings.newestBelow), findsOneWidget);
     expect(find.text(Strings.linesTruncated), findsNothing);
+  });
+
+  testWidgets('Hoy y Ayer con el reloj de la app, también a medianoche', (
+    tester,
+  ) async {
+    await _openLog(
+      tester,
+      (_) => logResult(
+        lines: [
+          '2026-11-07T23:59:59-0600 pc moss-telegram[7]: antes',
+          '2026-11-08T00:00:01-0600 pc moss-telegram[7]: después',
+        ],
+      ),
+      now: DateTime(2026, 11, 8, 0, 0, 5),
+    );
+    expect(find.text(Strings.yesterday.toUpperCase()), findsOneWidget);
+    expect(find.text(Strings.today.toUpperCase()), findsOneWidget);
   });
 
   testWidgets('una línea sin formato sale completa', (tester) async {

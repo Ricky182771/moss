@@ -22,7 +22,7 @@ Future<void> showLogDialog(
   BuildContext context, {
   required RpcClient rpc,
   FocusNode? returnFocus,
-  DateTime Function() now = DateTime.now,
+  required DateTime Function() now,
 }) async {
   final motion = Motion.of(context);
   await showGeneralDialog<void>(

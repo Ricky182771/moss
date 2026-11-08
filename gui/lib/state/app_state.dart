@@ -54,6 +54,7 @@ class AppState extends ChangeNotifier {
     this.reconnect,
     ValueNotifier<GuiPrefs>? prefs,
     this.addons = const [],
+    this.now = DateTime.now,
   }) : prefs = prefs ?? ValueNotifier(const GuiPrefs()) {
     _attach();
   }
@@ -84,6 +85,9 @@ class AppState extends ChangeNotifier {
   /// `capabilities.addons` de `initialize`: los addons que soporta el
   /// servidor (en Windows, ninguno). No cambia durante la sesión.
   final List<String> addons;
+
+  /// El reloj (Hoy y Ayer en Ver registro). Las pruebas lo fijan.
+  final DateTime Function() now;
 
   /// `service.changed` con su addon, para Configuración.
   final _serviceEvents = StreamController<String>.broadcast(sync: true);

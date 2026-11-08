@@ -36,8 +36,12 @@ class _TelegramPanelState extends State<TelegramPanel> {
     super.dispose();
   }
 
-  void _openLog() =>
-      showLogDialog(context, rpc: widget.section.rpc, returnFocus: _viewLog);
+  void _openLog() => showLogDialog(
+    context,
+    rpc: widget.section.rpc,
+    returnFocus: _viewLog,
+    now: widget.section.app.now,
+  );
 
   @override
   Widget build(BuildContext context) {

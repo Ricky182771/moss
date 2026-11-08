@@ -8,6 +8,10 @@ import 'package:moss_gui/state/app_state.dart';
 
 import 'fake_server.dart';
 
+/// El reloj fijo de las pruebas (`AppState.now`): Hoy y Ayer en Ver registro
+/// no dependen de la hora en que corren.
+final kTestNow = DateTime(2026, 11, 7, 10);
+
 /// Arranca la pantalla de chat contra un `moss-rpc` falso.
 Future<(AppState, FakeServer)> startApp(
   WidgetTester tester, {
@@ -21,6 +25,7 @@ Future<(AppState, FakeServer)> startApp(
   Key? key,
   Future<RpcClient> Function()? reconnect,
   List<String> addons = const [],
+  DateTime? now,
 }) async {
   // Por defecto, oscuro.
   final saved =
@@ -74,6 +79,7 @@ Future<(AppState, FakeServer)> startApp(
     reconnect: reconnect,
     prefs: ValueNotifier(saved),
     addons: addons,
+    now: () => now ?? kTestNow,
   );
   await app.load('c1');
   await tester.pumpWidget(
@@ -396,10 +402,9 @@ Map<String, Object? Function(Map<String, dynamic>)> telegramHandlers({
 
 String _two(int n) => n.toString().padLeft(2, '0');
 
-/// Una línea `short-iso` del día [day] (relativo a hoy: 0, -1…).
+/// Una línea `short-iso` del día [day] (relativo a [kTestNow]: 0, -1…).
 String journalLine(int day, String time, String message) {
-  final now = DateTime.now();
-  final d = DateTime(now.year, now.month, now.day + day);
+  final d = DateTime(kTestNow.year, kTestNow.month, kTestNow.day + day);
   return '${d.year}-${_two(d.month)}-${_two(d.day)}T$time-0600 moss-prueba '
       'moss-telegram[4242]: $message';
 }
