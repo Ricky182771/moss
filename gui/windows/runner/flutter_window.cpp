@@ -13,6 +13,17 @@
 #define DWMWA_USE_IMMERSIVE_DARK_MODE 20
 #endif
 
+namespace {
+
+// Si no se puede leer, encendidos: es lo que hace la app sin este ajuste.
+bool SystemAnimationsEnabled() {
+  BOOL enabled = TRUE;
+  return !SystemParametersInfo(SPI_GETCLIENTAREAANIMATION, 0, &enabled, 0) ||
+         enabled != FALSE;
+}
+
+}  // namespace
+
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
     : project_(project) {}
 
@@ -42,6 +53,11 @@ bool FlutterWindow::OnCreate() {
   window_channel_->SetMethodCallHandler(
       [this](const flutter::MethodCall<>& call,
              std::unique_ptr<flutter::MethodResult<>> result) {
+        if (call.method_name() == "animationsEnabled") {
+          animations_enabled_ = SystemAnimationsEnabled();
+          result->Success(flutter::EncodableValue(animations_enabled_));
+          return;
+        }
         const bool* dark = call.arguments() != nullptr
                                ? std::get_if<bool>(call.arguments())
                                : nullptr;
@@ -109,6 +125,15 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
   switch (message) {
     case WM_FONTCHANGE:
       flutter_controller_->engine()->ReloadSystemFonts();
+      break;
+    case WM_SETTINGCHANGE:
+      if (window_channel_ &&
+          animations_enabled_ != SystemAnimationsEnabled()) {
+        animations_enabled_ = !animations_enabled_;
+        window_channel_->InvokeMethod(
+            "animationsEnabled",
+            std::make_unique<flutter::EncodableValue>(animations_enabled_));
+      }
       break;
     case WM_DWMCOLORIZATIONCOLORCHANGED:
       // Win32Window pondría el tema del sistema; manda el de la app.

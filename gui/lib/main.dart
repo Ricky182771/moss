@@ -12,7 +12,7 @@ import 'screens/error_screen.dart';
 import 'state/app_state.dart';
 import 'strings.dart';
 import 'theme/theme.dart';
-import 'widgets/window_theme.dart';
+import 'widgets/window_channel.dart';
 
 void main(List<String> args) {
   if (args.contains('--frame-stats')) startFrameStats();
@@ -58,6 +58,9 @@ class PrefsApp extends StatelessWidget {
       title: 'Moss',
       theme: MossTheme.light(highContrast: p.highContrast),
       darkTheme: MossTheme.dark(highContrast: p.highContrast),
+      // Con el contraste alto del sistema, Más contraste: no cambia lo guardado.
+      highContrastTheme: MossTheme.light(highContrast: true),
+      highContrastDarkTheme: MossTheme.dark(highContrast: true),
       themeMode: switch (p.theme) {
         ThemeChoice.system => ThemeMode.system,
         ThemeChoice.dark => ThemeMode.dark,
@@ -66,22 +69,23 @@ class PrefsApp extends StatelessWidget {
       // DISENO.md: el cambio de tema es instantáneo.
       themeAnimationDuration: Duration.zero,
       debugShowCheckedModeBanner: false,
-      builder: (context, child) {
-        final mq = MediaQuery.of(context);
-        // shortcut: aplana el escalado del sistema a lineal (en escritorio
-        // siempre lo es); si llega Android, componer los dos TextScaler.
-        return WindowTheme(
-          child: MediaQuery(
+      builder: (context, child) => WindowChannel(
+        builder: (context, systemReducesMotion) {
+          final mq = MediaQuery.of(context);
+          // shortcut: aplana el escalado del sistema a lineal (en escritorio
+          // siempre lo es); si llega Android, componer los dos TextScaler.
+          return MediaQuery(
             data: mq.copyWith(
-              disableAnimations: mq.disableAnimations || p.reduceMotion,
+              disableAnimations:
+                  mq.disableAnimations || p.reduceMotion || systemReducesMotion,
               textScaler: TextScaler.linear(
                 mq.textScaler.scale(1) * p.textSize.scale,
               ),
             ),
             child: child!,
-          ),
-        );
-      },
+          );
+        },
+      ),
       home: home,
     ),
     child: home,
