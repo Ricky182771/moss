@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show OverflowBoxFit;
 
 import '../models/conversation.dart';
-import '../state/apply.dart';
 import '../state/arriving.dart';
 import '../strings.dart';
 import '../theme/colors.dart';
@@ -309,7 +308,7 @@ class _ThoughtViewState extends State<ThoughtView>
                     ),
                   ),
                   Text(
-                    thoughtSummary(widget.entry.reasoning),
+                    Strings.thoughtSummary(widget.entry.reasoningWords),
                     style: s.thoughtSummary,
                   ),
                 ],

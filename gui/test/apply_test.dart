@@ -5,6 +5,7 @@ import 'package:moss_gui/models/conversation.dart';
 import 'package:moss_gui/models/events.dart';
 import 'package:moss_gui/rpc/client.dart';
 import 'package:moss_gui/state/apply.dart';
+import 'package:moss_gui/strings.dart';
 
 import 'fake_server.dart';
 
@@ -48,11 +49,13 @@ void main() {
           'rev': 2,
           'index': 0,
           'text': 'so.',
+          'reasoning_words': 1,
         }),
         ev('conversation.entry_delta', {'rev': 3, 'index': 0, 'text': '¡Ho'}),
         ev('conversation.entry_delta', {'rev': 4, 'index': 0, 'text': 'la!'}),
       ]);
       expect(s.entries.single.reasoning, 'Pienso.');
+      expect(s.entries.single.reasoningWords, 1);
       expect(s.entries.single.text, '¡Hola!');
       expect(s.entries.single.inProgress, isTrue);
     });
@@ -133,6 +136,7 @@ void main() {
           'rev': 4,
           'index': 1,
           'text': 'saludan.',
+          'reasoning_words': 2,
         }),
         ev('conversation.entry_delta', {'rev': 5, 'index': 1, 'text': '¡Hola'}),
         ev('conversation.phase', {'rev': 6, 'phase': 'streaming'}),
@@ -209,13 +213,11 @@ void main() {
     });
   });
 
-  test('Pensamiento · N palabras, como la TUI', () {
-    expect(thoughtSummary('una'), 'Pensamiento · 1 palabra');
-    expect(thoughtSummary(' dos\n\tpalabras '), 'Pensamiento · 2 palabras');
-    expect(
-      thoughtSummary(List.filled(1234, 'x').join(' ')),
-      'Pensamiento · 1 234 palabras',
-    );
+  test('Pensamiento · N palabras: el número es del servidor', () {
+    expect(Strings.thoughtSummary(0), 'Pensamiento · 0 palabras');
+    expect(Strings.thoughtSummary(1), 'Pensamiento · 1 palabra');
+    expect(Strings.thoughtSummary(1234), 'Pensamiento · 1 234 palabras');
+    expect(Strings.thoughtSummary(1234567), 'Pensamiento · 1 234 567 palabras');
   });
 
   group('buscar moss-rpc', () {

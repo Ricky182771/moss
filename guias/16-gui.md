@@ -126,7 +126,6 @@ Una acción que no espera a Guardar (como Borrar endpoint) va dentro de `owner.q
 
 ## Deuda conocida
 
-- `thoughtSummary` (`state/apply.dart`) copia la cuenta de palabras de la TUI (`reasoning_summary`). Lo correcto es que el servidor mande el resumen; necesita un campo nuevo en el protocolo.
 - Resaltado de sintaxis en los bloques de código: la maqueta pinta las palabras clave con el token `code`, pero `DISENO.md` no lo pide; queda para después.
 - `RpcClient` lleva la cuenta de los `id` porque `json_rpc_2` 3.x no deja elegirlos (lo vigila `test/client_test.dart`); la 4.x tiene `idGenerator`.
 - El mensaje que llega se re-parsea entero en cada trozo (ver "Texto del modelo llegando").

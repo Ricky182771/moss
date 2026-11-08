@@ -138,6 +138,7 @@ Map<String, Object?> entry(
   bool cancelled = false,
   String note = '',
   String reasoning = '',
+  int reasoningWords = 0,
   List<Map<String, Object?>> sources = const [],
 }) => {
   'kind': kind,
@@ -147,6 +148,7 @@ Map<String, Object?> entry(
   'cancelled': cancelled,
   'note': note,
   'reasoning': reasoning,
+  'reasoning_words': reasoningWords,
   'sources': sources,
 };
 

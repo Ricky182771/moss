@@ -37,6 +37,9 @@ class Entry {
 
   /// Pensamiento del modelo (markdown crudo); "" si no hay.
   final String reasoning;
+
+  /// Palabras de [reasoning], contadas por el servidor.
+  final int reasoningWords;
   final List<Source> sources;
 
   const Entry({
@@ -47,6 +50,7 @@ class Entry {
     this.cancelled = false,
     this.note = '',
     this.reasoning = '',
+    this.reasoningWords = 0,
     this.sources = const [],
   });
 
@@ -59,22 +63,25 @@ class Entry {
     cancelled: json['cancelled'] as bool? ?? false,
     note: json['note'] as String? ?? '',
     reasoning: json['reasoning'] as String? ?? '',
+    reasoningWords: json['reasoning_words'] as int? ?? 0,
     sources: [
       for (final s in json['sources'] as List? ?? const [])
         Source.fromJson(s as Map<String, dynamic>),
     ],
   );
 
-  Entry copyWith({String? text, String? reasoning}) => Entry(
-    kind: kind,
-    text: text ?? this.text,
-    inProgress: inProgress,
-    incomplete: incomplete,
-    cancelled: cancelled,
-    note: note,
-    reasoning: reasoning ?? this.reasoning,
-    sources: sources,
-  );
+  Entry copyWith({String? text, String? reasoning, int? reasoningWords}) =>
+      Entry(
+        kind: kind,
+        text: text ?? this.text,
+        inProgress: inProgress,
+        incomplete: incomplete,
+        cancelled: cancelled,
+        note: note,
+        reasoning: reasoning ?? this.reasoning,
+        reasoningWords: reasoningWords ?? this.reasoningWords,
+        sources: sources,
+      );
 }
 
 enum Phase {

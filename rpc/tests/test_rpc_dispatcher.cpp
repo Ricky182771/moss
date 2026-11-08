@@ -258,12 +258,14 @@ TEST_CASE("RPC: el ejemplo completo de PROTOCOL.md (sección 8)", "[rpc]") {
         Json::parse(R"({"jsonrpc":"2.0","id":3,"result":{"accepted":true}})"),
         Json::parse(R"({"jsonrpc":"2.0","method":"conversation.entry_added","params":{
             "conversation":"c1","rev":1,"index":0,"entry":{"kind":"user","text":"hola",
-            "in_progress":false,"incomplete":false,"cancelled":false,"note":"","reasoning":""}}})"),
+            "in_progress":false,"incomplete":false,"cancelled":false,"note":"","reasoning":"",
+            "reasoning_words":0}}})"),
         Json::parse(R"({"jsonrpc":"2.0","method":"conversation.phase","params":{
             "conversation":"c1","rev":2,"phase":"thinking"}})"),
         Json::parse(R"({"jsonrpc":"2.0","method":"conversation.entry_added","params":{
             "conversation":"c1","rev":3,"index":1,"entry":{"kind":"assistant","text":"¡Ho",
-            "in_progress":true,"incomplete":false,"cancelled":false,"note":"","reasoning":""}}})"),
+            "in_progress":true,"incomplete":false,"cancelled":false,"note":"","reasoning":"",
+            "reasoning_words":0}}})"),
         Json::parse(R"({"jsonrpc":"2.0","method":"conversation.phase","params":{
             "conversation":"c1","rev":4,"phase":"streaming"}})"),
         Json::parse(R"({"jsonrpc":"2.0","method":"conversation.entry_delta","params":{
@@ -271,7 +273,8 @@ TEST_CASE("RPC: el ejemplo completo de PROTOCOL.md (sección 8)", "[rpc]") {
         Json::parse(R"({"jsonrpc":"2.0","method":"conversation.entry_updated","params":{
             "conversation":"c1","rev":6,"index":1,"entry":{"kind":"assistant",
             "text":"¡Hola! ¿En qué te ayudo?","in_progress":false,"incomplete":false,
-            "cancelled":false,"note":"","reasoning":""}}})"),
+            "cancelled":false,"note":"","reasoning":"",
+            "reasoning_words":0}}})"),
         Json::parse(R"({"jsonrpc":"2.0","method":"conversation.saved","params":{
             "conversation":"c1","rev":7,"id":"<id>","title":"hola"}})"),
         Json::parse(R"({"jsonrpc":"2.0","method":"conversations.changed","params":{}})"),
@@ -2736,21 +2739,29 @@ TEST_CASE("RPC: respuesta con pensamiento y texto", "[rpc][pensamiento]") {
     // La entrada nace con el primer pensamiento y sin texto.
     CHECK(got[3]["params"]["entry"]["text"] == "");
     CHECK(got[3]["params"]["entry"]["reasoning"] == "uno ");
+    CHECK(got[3]["params"]["entry"]["reasoning_words"] == 1);
     CHECK(got[3]["params"]["entry"]["in_progress"] == true);
+    // El delta trae el total, no lo que agrega: la línea se actualiza mientras llega.
+    CHECK(got[4]["params"]["text"] == "dos tres");
+    CHECK(got[4]["params"]["reasoning_words"] == 3);
     CHECK(got[8]["params"]["entry"]["reasoning"] == "uno dos tres");
+    CHECK(got[8]["params"]["entry"]["reasoning_words"] == 3);
     CHECK(got[8]["params"]["entry"]["text"] == "Hola");
 
     // El snapshot trae el pensamiento; reabierta, también.
     rpc.call(3, "conversation.get", {{"conversation", "c1"}});
     const Json snapshot = rpc.take().back()["result"];
     CHECK(snapshot["entries"][1]["reasoning"] == "uno dos tres");
+    CHECK(snapshot["entries"][1]["reasoning_words"] == 3);
     CHECK(snapshot["entries"][0]["reasoning"] == "");
+    CHECK(snapshot["entries"][0]["reasoning_words"] == 0);
     const std::string id = snapshot["id"];
     rpc.call(4, "conversation.new");
     rpc.call(5, "conversation.open", {{"id", id}});
     const Json reopened = rpc.take().back()["result"];
     REQUIRE(reopened["entries"].size() >= 2);
     CHECK(reopened["entries"][1]["reasoning"] == "uno dos tres");
+    CHECK(reopened["entries"][1]["reasoning_words"] == 3);
     CHECK(reopened["entries"][1]["text"] == "Hola");
 }
 

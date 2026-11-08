@@ -91,12 +91,14 @@ final _chat = snapshot(
       'assistant',
       text: _code,
       reasoning: List.filled(52, 'palabra').join(' '),
+      reasoningWords: 52,
     ),
     entry('user', text: '¿Y cuál es su complejidad?'),
     entry(
       'assistant',
       inProgress: true,
       reasoning: List.filled(41, 'palabra').join(' '),
+      reasoningWords: 41,
       text:
           'Es **O(n²)** en todos los casos: siempre recorre lo que falta para '
           'encontrar el mínimo, aunque el arreglo ya venga ordenado',
@@ -120,6 +122,7 @@ final _thinking = snapshot(
           'n−1 + n−2 + … + 1 comparaciones, o sea n(n−1)/2.\n\n'
           'Es O(n²) en el mejor, el promedio y el peor caso. Conviene decirlo '
           'en una frase y explicar por qué no mejora con datos ordenados.',
+      reasoningWords: 55,
     ),
   ],
 );

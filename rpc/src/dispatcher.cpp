@@ -1681,7 +1681,9 @@ void Dispatcher::sync(bool flush) {
             const std::string& reasoning = entries[last].reasoning;
             emit_conversation(
                 "conversation.reasoning_delta",
-                {{"index", last}, {"text", reasoning.substr(seen_.last_reasoning_size)}});
+                {{"index", last},
+                 {"text", reasoning.substr(seen_.last_reasoning_size)},
+                 {"reasoning_words", cli::reasoning_word_count(reasoning)}});
         }
     };
     if (text_first_) {

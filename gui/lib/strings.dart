@@ -34,8 +34,14 @@ class Strings {
   static const goToSettings = 'Ir a Configuración';
   static const searching = 'Buscando en la web…';
   static const thinking = 'Pensando…';
-  static String thoughtSummary(String count, bool one) =>
-      'Pensamiento · $count ${one ? 'palabra' : 'palabras'}';
+  static String thoughtSummary(int words) {
+    final digits = words.toString().replaceAllMapped(
+      RegExp(r'\B(?=(\d{3})+$)'),
+      (_) => ' ',
+    );
+    return 'Pensamiento · $digits ${words == 1 ? 'palabra' : 'palabras'}';
+  }
+
   static const cancelled = '(cancelada)';
   static const incomplete = '(respuesta incompleta)';
   static const sources = 'Fuentes';

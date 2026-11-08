@@ -159,7 +159,7 @@ ReasoningView reasoning_view(const Entry& entry) {
     return entry.in_progress && entry.text.empty() ? ReasoningView::Live : ReasoningView::Folded;
 }
 
-std::string reasoning_summary(std::string_view reasoning) {
+std::size_t reasoning_word_count(std::string_view reasoning) {
     std::size_t words = 0;
     bool in_word = false;
     for (const char c : reasoning) {
@@ -167,6 +167,11 @@ std::string reasoning_summary(std::string_view reasoning) {
         words += !space && !in_word ? 1 : 0;
         in_word = !space;
     }
+    return words;
+}
+
+std::string reasoning_summary(std::string_view reasoning) {
+    const std::size_t words = reasoning_word_count(reasoning);
     std::string digits = std::to_string(words);
     for (std::size_t i = digits.size(); i > 3; i -= 3) {
         digits.insert(i - 3, " ");

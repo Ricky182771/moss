@@ -26,6 +26,7 @@ Versión del protocolo: **1**.
 | Pensamiento: `reasoning` en `Entry`, evento `conversation.reasoning_delta` | 5, 7 | Implementado |
 | `service.log` (el registro del bot) | 6.8 | Implementado |
 | `errors` en `service.log` (las líneas que la TUI pinta como error) | 6.8 | Implementado |
+| `reasoning_words` en `Entry` y en `conversation.reasoning_delta` | 5, 7 | Implementado |
 | `conversation.rename`, evento `conversation.renamed`, `used_search` en `Summary`, `conversation.export` con `id` | 6.2, 6.3, 7 | Implementado |
 | `CHAT_DEBUG_RPC` | 10 | Implementado |
 | Windows: stdio en modo binario | 2 | Implementado, probado en la CI con pipes (`tools/check-rpc-pipes.sh`) |
@@ -211,6 +212,7 @@ La GUI mantiene una **copia exacta** de `Conversation::entries()`. Las entradas 
  "cancelled":false,
  "note":"...",                // nota por finish_reason; "" si no hay
  "reasoning":"...",           // pensamiento del modelo (markdown crudo); "" si no hay
+ "reasoning_words":240,       // palabras de reasoning (reasoning_word_count); 0 si no hay
  "sources":[{"n":1,"title":"...","url":"https://...","published_date":"2026-10-20"}]}
                              // solo en kind = sources; published_date puede ser null
 ```
@@ -228,6 +230,7 @@ La GUI mantiene una **copia exacta** de `Conversation::entries()`. Las entradas 
 
 - **`phase`** reemplaza los indicadores de la línea de estado: `searching` es "Buscando en la web…", `thinking` es "Pensando…" (antes del primer texto, también mientras solo llega pensamiento) y `streaming` es cuando ya llega texto.
 - **`reasoning`** (solo `assistant`): el pensamiento que el modelo mandó aparte del texto (`reasoning_content` o `reasoning` en el flujo). Es **para mostrarse plegado** arriba de la respuesta (la TUI lo pliega al llegar el primer texto); no cuenta para los bloques de código, `/copiar`, `/exportar` ni el título, y **nunca se manda de regreso**: el servidor no lo pone en el historial que va al modelo, y la GUI no tiene cómo enviarlo. Se guarda con la conversación (hasta 256 KiB por respuesta), así que una conversación reabierta lo trae en `conversation.get`. Con modelos que no lo mandan queda en `""`.
+- **`reasoning_words`:** cuántas palabras tiene `reasoning`, con la misma función que la línea `Pensamiento · N palabras` de la TUI (`reasoning_word_count`, separadas por espacio, salto de línea o tabulador). La GUI no las cuenta; darle formato al número es suyo. Se agregó sin cambiar `protocol_version`.
 - **`rev`:** cada evento de una conversación lleva el `rev` que deja. Como el servidor escribe todo desde un hilo, el orden ya está garantizado. `rev` sirve para que la GUI compruebe que no se saltó nada (si llega `rev` ≠ el suyo + 1, pide `conversation.get`) y para descartar eventos viejos después de un snapshot.
 - **Cómo se calculan los eventos:** función pura `diff_entries(visto, entradas)` (`rpc/src/entry_diff.h`) que da qué entradas se agregaron, si a la última ya vista se le agregó texto o pensamiento y si cambiaron sus marcas. Lo visto es solo cuántas entradas había y la última (largo del texto y del pensamiento, y marcas), así que el costo por delta no crece con la conversación. Supone lo que hoy cumple `Conversation`: las entradas solo se agregan, de las existentes solo cambia la última, y su texto y su pensamiento solo crecen por el final.
 
@@ -623,7 +626,7 @@ Todas las `service.*` salvo `service.status` y `service.log`, y `invited.remove`
 |---|---|---|
 | `conversation.entry_added` | `{conversation, rev, index, entry}` | Entrada nueva (usuario, respuesta, error, aviso, fuentes) |
 | `conversation.entry_delta` | `{conversation, rev, index, text}` | Más texto en la respuesta en curso: **se concatena** |
-| `conversation.reasoning_delta` | `{conversation, rev, index, text}` | Más pensamiento en la respuesta en curso: **se concatena** a su `reasoning` |
+| `conversation.reasoning_delta` | `{conversation, rev, index, text, reasoning_words}` | Más pensamiento en la respuesta en curso: **se concatena** a su `reasoning`; `reasoning_words` es el total nuevo, no lo que agrega este trozo |
 | `conversation.entry_updated` | `{conversation, rev, index, entry}` | Cambiaron las marcas (termina, se cancela, nota) |
 | `conversation.phase` | `{conversation, rev, phase}` | idle / searching / thinking / streaming |
 | `conversation.saved` | `{conversation, rev, id, title}` | Se guardó después de un par (la primera vez trae id y título). Si el guardado falla no llega: llega la entrada de error |
