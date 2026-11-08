@@ -34,6 +34,8 @@ class Strings {
   static const goToSettings = 'Ir a Configuración';
   static const searching = 'Buscando en la web…';
   static const thinking = 'Pensando…';
+  // shortcut: el texto repite reasoning_summary de la TUI; contar ya es del
+  // servidor (reasoning_words) y dar formato se decidió dejarlo aquí (R6).
   static String thoughtSummary(int words) {
     final digits = words.toString().replaceAllMapped(
       RegExp(r'\B(?=(\d{3})+$)'),
@@ -195,6 +197,8 @@ class Strings {
     _ => key,
   };
   static const paramDefault = 'Predeterminado';
+  // shortcut: repite limit_hint de la TUI, con los límites del servidor; si
+  // cambia, que `limits` mande el texto.
   static String range(String min, String max, {required bool exclusive}) =>
       exclusive ? 'más de $min, hasta $max' : '$min a $max';
   static const advanced = 'Avanzado';
