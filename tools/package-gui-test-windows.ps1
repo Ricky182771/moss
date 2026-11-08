@@ -36,7 +36,9 @@ Write-Output "DLL de Visual C++ desde: $crt"
 function Get-Binaries { Get-ChildItem $Out -File | Where-Object Extension -In '.exe', '.dll' }
 
 function Get-Dependencies([string]$File) {
-    & $dumpbin /nologo /dependents $File | ForEach-Object {
+    $lines = & $dumpbin /nologo /dependents $File
+    if ($LASTEXITCODE -ne 0) { throw "dumpbin falló con $File" }
+    $lines | ForEach-Object {
         if ($_ -match '^\s+(\S+\.dll)\s*$') { $Matches[1].ToLowerInvariant() }
     }
 }
@@ -56,7 +58,10 @@ do {
     }
 } while ($added)
 
-$missing = @()
+# El arranque en el runner no lo notaría: las encuentra en System32.
+$missing = @('msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll') |
+    Where-Object { -not (Test-Path (Join-Path $Out $_)) } |
+    ForEach-Object { "la carpeta no trae $_" }
 foreach ($binary in Get-Binaries | Sort-Object Name) {
     $deps = @(Get-Dependencies $binary.FullName | Sort-Object)
     $local = @($deps | Where-Object { Test-Path (Join-Path $Out $_) })

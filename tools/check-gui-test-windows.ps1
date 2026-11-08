@@ -50,7 +50,7 @@ if ($rpc.ExitCode -ne 0) {
     throw "moss-rpc.exe salió con $($rpc.ExitCode) (-1073741515 es una DLL que falta)"
 }
 if ($reply -notmatch '"portable":true') { throw "initialize sin portable:true: $reply" }
-if ($reply -notmatch '"id":2,"result":\{\}') { throw "shutdown no respondió: $reply" }
+if ($reply -notmatch '"jsonrpc":"2.0","id":2,"result":\{\}') { throw "shutdown no respondió: $reply" }
 Remove-Item (Join-Path $dir 'datos') -Recurse -Force -ErrorAction Ignore
 
 $start = @{ FilePath = (Join-Path $dir 'moss-gui.exe'); WorkingDirectory = $dir; PassThru = $true }
@@ -61,17 +61,19 @@ if ($FrameStats) {
 }
 $gui = Start-Process @start
 
-function Get-Rpc {
-    Get-CimInstance Win32_Process -Filter "Name='moss-rpc.exe'" |
-        Where-Object { $_.ExecutablePath -eq $rpcPath }
-}
+function Get-Rpc { Get-CimInstance Win32_Process -Filter "Name='moss-rpc.exe'" }
 
 try {
     Wait-Until {
         if ($gui.HasExited) { throw "moss-gui.exe salió con $($gui.ExitCode)" }
         $null -ne (Get-Rpc)
-    } 60 'moss-gui.exe arrancara el moss-rpc.exe de su carpeta'
-    Write-Output 'moss-gui.exe arrancó el moss-rpc.exe de su carpeta'
+    } 60 'moss-gui.exe arrancara moss-rpc.exe'
+    # Sin comparar la ruta entera: el temporal del runner puede venir en 8.3.
+    $running = (Get-Rpc).ExecutablePath
+    if ($running -notlike '*José Pérez*\moss gui\moss-rpc.exe') {
+        throw "moss-gui.exe arrancó otro moss-rpc.exe: $running"
+    }
+    Write-Output "moss-gui.exe arrancó el moss-rpc.exe de su carpeta: $running"
     Wait-Until { $gui.Refresh(); $gui.MainWindowHandle -ne [IntPtr]::Zero } 60 'saliera la ventana'
     Write-Output 'La ventana salió (primer cuadro)'
     Wait-Until { Test-Path (Join-Path $dir 'datos') } 30 'se creara datos\'
