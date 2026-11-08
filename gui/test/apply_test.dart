@@ -252,6 +252,27 @@ void main() {
       );
     });
 
+    test('en Windows, con espacios y acentos', () {
+      expect(
+        locateRpc(
+          [],
+          r'C:\Users\José Pérez\Mis programas\moss-gui.exe',
+          windows: true,
+          exists: (_) => true,
+        ).path,
+        r'C:\Users\José Pérez\Mis programas\moss-rpc.exe',
+      );
+      expect(
+        locateRpc(
+          [r'--rpc=C:\Users\José Pérez\build dev\moss-rpc.exe'],
+          r'C:\Moss\moss-gui.exe',
+          windows: true,
+          exists: (_) => true,
+        ).path,
+        r'C:\Users\José Pérez\build dev\moss-rpc.exe',
+      );
+    });
+
     test('no existe', () {
       final l = locateRpc(
         [],

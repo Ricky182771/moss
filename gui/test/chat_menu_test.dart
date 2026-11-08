@@ -87,6 +87,15 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
 
+    // La tecla de menú.
+    Focus.of(tester.element(find.text('Otro'))).requestFocus();
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.contextMenu);
+    await tester.pumpAndSettle();
+    expect(find.text(Strings.rename), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+
     await _rightClick(tester, 'c');
     expect(find.text(Strings.rename), findsNothing);
   });
