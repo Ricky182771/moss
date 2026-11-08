@@ -210,7 +210,7 @@ cd gui && flutter build linux --release   # una vez, al final
 ```
 
 - Comprobar también el loop real de FTXUI con `./build/tsan/cli/moss`, conversación y cancelación manuales, sin `WARNING: ThreadSanitizer` (API real solo con permiso).
-- CI: GCC en los cuatro presets, Clang dev/release, dev sin addons, Windows dev/release, `gui` (Flutter en Linux); **sin keys ni API real**. TSan: `vm.mmap_rnd_bits=28`.
+- CI: GCC en los cuatro presets, Clang dev/release, dev sin addons, Windows dev/release, `gui` (Flutter en Linux), `gui-windows` (Flutter con MSVC y dos ZIP de prueba); **sin keys ni API real**. TSan: `vm.mmap_rnd_bits=28`.
 - Latencia de cancelación **< 2 s en todos los presets**, incluido apagado y destructores. Las pruebas de tiempo siempre miden y reportan con `WARN`; los demás límites de rendimiento fallan solo con `CHATBOT_STRICT_PERF=1` (CI solo release). Las esperas funcionales entre hilos siempre son obligatorias.
 - No desactivar comprobaciones de dependencias/includes ni permitir licencias ausentes en el ZIP.
 

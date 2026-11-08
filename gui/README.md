@@ -24,6 +24,33 @@ flutter run -d linux --dart-entrypoint-args=--rpc=$PWD/../build/dev/cli/moss-rpc
 Así usa tu configuración y tus keys reales. Para probar, usa
 `tools/run-fake.sh` (abajo).
 
+## En Windows
+
+La GUI se compila con MSVC (el runner de Flutter), no con MSYS2:
+
+- Flutter 3.47.9 y Visual Studio 2022 o más nuevo con la carga de trabajo
+  "Desarrollo para el escritorio con C++". `flutter doctor` dice qué falta.
+- `moss-rpc.exe` sale del build de C++ con MSYS2 (`guias/11-compilacion.md`) y
+  necesita sus DLL: pon `C:\msys64\ucrt64\bin` en el `PATH` de esa terminal o
+  usa el `moss-rpc.exe` de un ZIP, que las trae a su lado.
+
+```bat
+cd gui
+flutter run -d windows --dart-entrypoint-args=--rpc=C:\ruta\a\moss-rpc.exe
+```
+
+`--frame-stats` solo hace algo en debug o profile.
+
+**ZIP de prueba.** La CI (trabajo `gui-windows`) sube dos artefactos por 7 días:
+`moss-gui-windows-prueba-release` y `moss-gui-windows-prueba-profile` (para
+medir con `--frame-stats`). No son el ZIP oficial: no llevan `LEEME.txt` ni
+`AVISOS-TERCEROS.txt`. Traen `moss-gui.exe` con sus archivos, `moss.exe`,
+`moss-rpc.exe`, las DLL de MSYS2 y las de Visual C++.
+
+```bash
+gh run download <id de la corrida> -n moss-gui-windows-prueba-release -D "Prueba Moss"
+```
+
 ## Servidor falso (sin gastar)
 
 `tools/fake-llm.py` (solo Python estándar) imita la API de OpenAI en
@@ -111,7 +138,8 @@ para XWayland.
 ### Dónde se guardan las preferencias de la GUI
 
 Lo de Colores y accesibilidad (tema, tamaño del texto, Reducir animaciones y
-Más contraste) va en el `config.json` de Moss, bajo la llave `"gui"`, con
+Más contraste; lo que pide el sistema se suma sin guardarse) va en el
+`config.json` de Moss, bajo la llave `"gui"`, con
 `settings.gui.set` (`rpc/PROTOCOL.md` §6.7): sigue el modo portable y las
 mismas rutas que lo demás. Es un objeto con `"version": 1`; si falta, es de
 otra versión o trae algo que la GUI no conoce, se usan los valores

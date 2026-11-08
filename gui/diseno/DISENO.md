@@ -34,7 +34,7 @@ Escala moss: 50 #EEF4E6 · 100 #D6E6C3 · 200 #B5D395 · 400 #8DBF5F · 500 #6FA
 
 Todos los pares de texto pasan 4.5:1.
 
-**Más contraste** (Colores y accesibilidad; G3, 7 nov 2026): otro juego de tokens (`MossColors.darkHigh` y `lightHigh`), no parches por widget. Los fondos (fondo, barra, campo, acento suave) y el texto sobre acento no cambian; el foco pasa de 2 a 3 px.
+**Más contraste** (Colores y accesibilidad; G3, 7 nov 2026): otro juego de tokens (`MossColors.darkHigh` y `lightHigh`), no parches por widget. Los fondos (fondo, barra, campo, acento suave) y el texto sobre acento no cambian; el foco pasa de 2 a 3 px. **El contraste alto del sistema también lo enciende** (G6, 8 nov 2026), sin cambiar lo guardado: se usan los colores de Moss, no la paleta del tema de contraste de Windows.
 
 | Token | Oscuro | Claro |
 |---|---|---|
@@ -89,14 +89,15 @@ Todos pasan 7:1 (lo vigila `test/colors_test.dart`). El borde queda en 4.2:1 (os
   - Búsqueda web: el estado, la key y el aviso de `CHAT_SEARCH_API_KEY`.
   - Telegram: Servicio (Reiniciar, Actualizar estado, Ver registro, y el aviso de linger si aplica), Bot, Acceso, Límites e Invitados. Modelo y Zona horaria tienen una lista con filtro y se pueden escribir a mano. Guardar no reinicia: después, la GUI pregunta y llama a `service.apply`. Solo Linux: en Windows la sección dice que el bot funciona en Linux (`-32006`).
   - **Ver registro** (mesa `Config-registro`): ventana sobre Configuración (920×720 como máximo, el fondo oscurecido, el formulario no se mueve). Encabezado "Registro del bot" con `moss-telegram.service · últimas 200 líneas`; Actualizar, Copiar (todas las líneas completas, tal como llegan) y Cerrar (Esc). Las líneas en Geist Mono 13 px, en su propia zona desplazable, abajo al abrir. De cada línea `short-iso` (`<fecha> <equipo> <programa>[<pid>]: <mensaje>`) se muestra la hora y el mensaje, con separadores por día (Hoy, Ayer, 31 oct); una línea sin ese formato sale completa. Los errores llevan una barra roja a la izquierda y el texto en color de error (no solo el color). Pie: "La más reciente abajo" y, con `truncated`, "Se recortaron líneas largas". Sin líneas, el `notice` del servidor; mientras carga (si tarda más de 300 ms), "Leyendo el registro…". **Necesita un campo nuevo en `service.log`:** `errors: [índices]` con las líneas que marca `log_line_is_error`, aditivo y sin cambiar `protocol_version`, para no copiar esa regla a Dart (va en G4).
-- Ventana angosta: por debajo de 900 px de ancho la barra lateral se oculta sola y Ctrl+B la abre encima del chat. Tamaño mínimo de la ventana: 720×520.
+- Ventana angosta: por debajo de 900 px de ancho la barra lateral se oculta sola y Ctrl+B la abre encima del chat. Tamaño mínimo del contenido de la ventana: 720×520.
+- **La barra de título sigue el tema de la app** (G6, 8 nov 2026), no solo el del sistema, también al cambiarlo en Configuración. Si la dibuja el compositor (Niri con `prefer-no-csd`), la app no agrega una ni la pinta. Antes del primer cuadro, la ventana tiene el `fondo` del tema del sistema, nunca negro.
 
 ## Animaciones (1 nov 2026)
 
 **Reglas**
 1. Cortas: 100–200 ms. Entrar con `Curves.easeOutCubic`; salir un poco más rápido que entrar.
 2. Solo opacidad, desplazamientos chicos (4–8 px) o escala leve (0.98 → 1). Sin rebotes, sacudidas, desenfoques ni sombras animadas (también por rendimiento con Impeller en las PCs viejas).
-3. **Reducir animaciones** (la opción de Colores y accesibilidad, o `MediaQuery.disableAnimations` del sistema): todo a 0 ms y los indicadores que se repiten quedan fijos.
+3. **Reducir animaciones** (la opción de Colores y accesibilidad, o `MediaQuery.disableAnimations` del sistema; en Windows, "Efectos de animación", que lee el runner): todo a 0 ms y los indicadores que se repiten quedan fijos.
 4. Todas las duraciones en un solo archivo (p. ej. `motion.dart`), para que "Reducir animaciones" las apague desde un lugar.
 5. Solo mueven otras cosas de lugar las que responden a una acción o lo justifican (barra lateral, caja de dos filas, bloque Pensamiento), de acuerdo con el principio de no reacomodar.
 
@@ -136,7 +137,7 @@ Todos pasan 7:1 (lo vigila `test/colors_test.dart`). El borde queda en 4.2:1 (os
 - **Estado** con lo de Flutter (`ChangeNotifier`, `ValueNotifier`), sin paquetes de estado. **Dependencias mínimas** (`json_rpc_2`, `stream_channel`, `flutter_markdown_plus`); cualquier otra se justifica en el PR.
 - **Markdown en Dart:** `flutter_markdown_plus` o `gpt_markdown` (el que nombra `PROTOCOL.md`); G1 elige con una comparación corta en su reporte. Lo que tiene que permitir: un widget propio para el bloque de código (Copiar), texto seleccionable y animar las palabras que llegan (G2). Copiar toma el texto del bloque tal como se ve.
 - Textos de la GUI en español, juntos en un archivo. Tokens de color en un `ThemeExtension` (los dos temas), duraciones en `motion.dart`, fuentes en `gui/assets/fonts/` con su `OFL.txt`.
-- **Pruebas:** `flutter analyze` y `flutter test` con un canal falso (sin `moss-rpc`); trabajo `gui` en la CI de Linux. Windows se compila desde G5.
+- **Pruebas:** `flutter analyze` y `flutter test` con un canal falso (sin `moss-rpc`); trabajos `gui` (Linux) y `gui-windows` en la CI.
 - **Empaquetado (G5):** en Linux, el bundle de `flutter build linux` con `moss`, `moss-rpc` y `moss-telegram` adentro; en Windows, `moss-gui.exe` y sus archivos dentro de `moss-windows-x64.zip`, junto a `moss.exe` y `moss-rpc.exe`. La licencia de Geist va en `AVISOS-TERCEROS.txt`.
 
 ## Ninguna regla del núcleo en Dart
