@@ -295,6 +295,32 @@ class Strings {
   static String savedWith(String message) =>
       message.isEmpty ? 'Guardado.' : 'Guardado. $message';
 
+  // Ver registro (maqueta Config-registro)
+  static const logTitle = 'Registro del bot';
+  static const logSubtitle = 'moss-telegram.service · últimas 200 líneas';
+  static const logLines = 'Líneas del registro';
+  static const refreshLog = 'Actualizar';
+  static const closeLog = 'Cerrar · Esc';
+  static const newestBelow = 'La más reciente abajo';
+  static const linesTruncated = 'Se recortaron líneas largas';
+  static const readingLog = 'Leyendo el registro…';
+  static const today = 'Hoy';
+  static const yesterday = 'Ayer';
+  static const monthsShort = [
+    'ene',
+    'feb',
+    'mar',
+    'abr',
+    'may',
+    'jun',
+    'jul',
+    'ago',
+    'sep',
+    'oct',
+    'nov',
+    'dic',
+  ];
+
   // moss-rpc
   static const rpcNotFound = 'No se encontró moss-rpc';
   static const rpcCannotStart = 'moss-rpc no arrancó';
