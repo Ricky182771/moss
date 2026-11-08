@@ -73,7 +73,10 @@ struct Entry {
 /// Cómo se dibuja el pensamiento de entry, según su ReasoningFold.
 [[nodiscard]] ReasoningView reasoning_view(const Entry& entry);
 
-/// "Pensamiento · 1 240 palabras": palabras separadas por espacios, con
+/// Palabras del pensamiento: separadas por espacio, salto de línea o tabulador.
+[[nodiscard]] std::size_t reasoning_word_count(std::string_view reasoning);
+
+/// "Pensamiento · 1 240 palabras": reasoning_word_count con
 /// espacio como separador de miles ("1 palabra" en singular).
 [[nodiscard]] std::string reasoning_summary(std::string_view reasoning);
 

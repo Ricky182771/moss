@@ -235,7 +235,7 @@ bool addon_needs_restart(const AddonForm& saved_form, const AddonSecrets& saved,
 
 std::string addon_secret_status(std::string_view saved, bool removed) {
     if (removed) {
-        return "se quita: se usará la de la app";
+        return std::string{kSecretRemoved};
     }
     return saved.empty() ? "sin configurar" : "guardada: " + mask_key(saved);
 }

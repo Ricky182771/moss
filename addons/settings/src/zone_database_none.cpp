@@ -3,11 +3,17 @@
 #include "chatbot/error.h"
 
 #include <optional>
+#include <string>
+#include <vector>
 
 namespace chatbot::addon_settings::detail {
 
 bool zone_database_available() {
     return false;
+}
+
+std::vector<std::string> zone_names() {
+    return {};
 }
 
 Result<DayFunction> named_zone_day(std::string_view /*name*/) {

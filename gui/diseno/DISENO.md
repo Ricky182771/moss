@@ -83,11 +83,11 @@ Todos pasan 7:1 (lo vigila `test/colors_test.dart`). El borde queda en 4.2:1 (os
 - **Chat nuevo:** logo más "¿En qué te ayudo?". Si falta configurar el proveedor, una tarjeta con "Ir a Configuración".
 - **Buscar chats** (Ctrl+K): ventana centrada con el campo, resultados por fecha con la coincidencia resaltada y el globo de búsqueda; ↑ ↓, Enter, Esc. **Por título** (lo que da `conversations.list`); buscar dentro del texto necesitaría un método nuevo en el RPC.
 - **Configuración:** pantalla aparte (Volver al chat con Esc), menú de secciones a la izquierda, estado del servicio de Telegram al pie del menú, barra Cancelar / Guardar fija abajo; el panel de cada sección se desplaza solo. Por ahora solo en modo oscuro.
-  - Proveedor: una lista con dos grupos, "De la lista" (con `key guardada`, `local` o atenuados `sin key`, que aquí sí se pueden elegir para ponerles key) y "Tus endpoints" (el en uso con punto verde) más **+ Agregar endpoint…**; debajo, el elegido: en un endpoint Nombre, URL base, API key (enmascarada) y Borrar endpoint (atenuado si está en uso, con la nota); en uno de la tabla solo la API key. Luego el modelo con filtro, Actualizar y escritura a mano.
+  - Proveedor: una lista con dos grupos, "De la lista" (con el `key_status` del servidor, `local` o atenuados `sin key`, que aquí sí se pueden elegir para ponerles key) y "Tus endpoints" (el en uso con punto verde) más **+ Agregar endpoint…**; debajo, el elegido: en un endpoint Nombre, URL base, API key (enmascarada) y Borrar endpoint (atenuado si está en uso, con la nota); en uno de la tabla solo la API key. Luego el modelo con filtro, Actualizar y escritura a mano.
   - Colores y accesibilidad: tema Sistema / Moss oscuro / Moss claro, tamaño del texto, Reducir animaciones y Más contraste. Se guarda en `settings.gui`.
   - **Configuración del modelo:** instrucciones del sistema (para todos los modelos: Predeterminadas / Ninguna / Personalizadas, contador, Restaurar); ajustes del modelo en uso (razonamiento de 5 opciones con la explicación según el proveedor, temperatura, Top P, Top K, máx. tokens, penalizaciones, semilla; vacío = predeterminado, errores junto al campo, Restaurar todo); Avanzado plegable con el JSON y la vista previa de lo que se envía.
   - Búsqueda web: el estado, la key y el aviso de `CHAT_SEARCH_API_KEY`.
-  - Telegram: Servicio (Reiniciar, Actualizar estado, Ver registro), Bot, Acceso, Límites e Invitados. Guardar no reinicia: después, la GUI pregunta y llama a `service.apply`. Solo Linux: en Windows la sección dice que el bot funciona en Linux (`-32006`).
+  - Telegram: Servicio (Reiniciar, Actualizar estado, Ver registro, y el aviso de linger si aplica), Bot, Acceso, Límites e Invitados. Modelo y Zona horaria tienen una lista con filtro y se pueden escribir a mano. Guardar no reinicia: después, la GUI pregunta y llama a `service.apply`. Solo Linux: en Windows la sección dice que el bot funciona en Linux (`-32006`).
   - **Ver registro** (mesa `Config-registro`): ventana sobre Configuración (920×720 como máximo, el fondo oscurecido, el formulario no se mueve). Encabezado "Registro del bot" con `moss-telegram.service · últimas 200 líneas`; Actualizar, Copiar (todas las líneas completas, tal como llegan) y Cerrar (Esc). Las líneas en Geist Mono 13 px, en su propia zona desplazable, abajo al abrir. De cada línea `short-iso` (`<fecha> <equipo> <programa>[<pid>]: <mensaje>`) se muestra la hora y el mensaje, con separadores por día (Hoy, Ayer, 31 oct); una línea sin ese formato sale completa. Los errores llevan una barra roja a la izquierda y el texto en color de error (no solo el color). Pie: "La más reciente abajo" y, con `truncated`, "Se recortaron líneas largas". Sin líneas, el `notice` del servidor; mientras carga (si tarda más de 300 ms), "Leyendo el registro…". **Necesita un campo nuevo en `service.log`:** `errors: [índices]` con las líneas que marca `log_line_is_error`, aditivo y sin cambiar `protocol_version`, para no copiar esa regla a Dart (va en G4).
 - Ventana angosta: por debajo de 900 px de ancho la barra lateral se oculta sola y Ctrl+B la abre encima del chat. Tamaño mínimo de la ventana: 720×520.
 
@@ -138,6 +138,27 @@ Todos pasan 7:1 (lo vigila `test/colors_test.dart`). El borde queda en 4.2:1 (os
 - Textos de la GUI en español, juntos en un archivo. Tokens de color en un `ThemeExtension` (los dos temas), duraciones en `motion.dart`, fuentes en `gui/assets/fonts/` con su `OFL.txt`.
 - **Pruebas:** `flutter analyze` y `flutter test` con un canal falso (sin `moss-rpc`); trabajo `gui` en la CI de Linux. Windows se compila desde G5.
 - **Empaquetado (G5):** en Linux, el bundle de `flutter build linux` con `moss`, `moss-rpc` y `moss-telegram` adentro; en Windows, `moss-gui.exe` y sus archivos dentro de `moss-windows-x64.zip`, junto a `moss.exe` y `moss-rpc.exe`. La licencia de Geist va en `AVISOS-TERCEROS.txt`.
+
+## Ninguna regla del núcleo en Dart
+
+La GUI no decide nada que ya decida el núcleo: conteos, validaciones, lectura de números ni textos de la F2 de la TUI. Lo pide por `moss-rpc` (`rpc/PROTOCOL.md`). Si falta algo, se agrega al protocolo en su propio PR. `gui/test/no_copies_test.dart` vigila que lo que se quitó no regrese a `gui/lib`.
+
+## Deudas de protocolo
+
+| # | Deuda | Estado |
+|---|---|---|
+| 1 | El conteo de palabras del Pensamiento | Resuelta en R6 (PR #56): `reasoning_words` en `Entry` y en `conversation.reasoning_delta` |
+| 2 | Textos de ayuda y lectura de números de Configuración del modelo | Resuelta en R6 (PR #56): `help` en `settings.model_params.get`; `check` y `save` aceptan los números como cadena; `dirty` en `check` |
+| 3 | El campo del error de `settings.provider.check` | Resuelta en R6 (PR #56): `error_field` |
+| 4 | El estado de la key de cada proveedor | Resuelta en R6 (PR #56): `key_status` en cada elemento de `providers` |
+| 5 | Revisar la key de búsqueda al escribir | Resuelta en R6 (PR #56): `settings.search.check` |
+| 6 | Volver a Predeterminadas | Resuelta en R6 (PR #56), sin cambios: guardar exactamente `default_text` ya borra la llave; se probó y se documentó |
+| 7 | Que `/model` valide contra `models.list` | **Descartada:** se queda como decidió M5. No todos los proveedores tienen `/models`, y validar costaría una petición de red en cada `/model` |
+| 8 | Volver a parsear la respuesta entera en cada trozo | **Pendiente:** solo si se nota en las PCs de la escuela; se mide en Windows |
+| 9 | Preguntas de `-32008` con ` (s/n)` | Resuelta en R6 (PR #56): el núcleo las da sin él y lo agrega la TUI |
+| 10 | El aviso de linger | Resuelta en R6 (PR #56): `linger_notice` y `linger_command` en `service.status` |
+| 11 | Opciones de Modelo y Zona horaria del bot | Resuelta en R6 (PR #56): `models.list` con el proveedor de la app y `time_zones` en `addons.telegram.get` |
+| 12 | Notas y avisos de Telegram copiados de la TUI | Resuelta en R6 (PR #56): `texts` en `addons.telegram.get` y `remove_questions` en `addons.telegram.invited.*` |
 
 ## Plan de PRs de la GUI
 

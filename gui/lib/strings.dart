@@ -34,8 +34,16 @@ class Strings {
   static const goToSettings = 'Ir a Configuración';
   static const searching = 'Buscando en la web…';
   static const thinking = 'Pensando…';
-  static String thoughtSummary(String count, bool one) =>
-      'Pensamiento · $count ${one ? 'palabra' : 'palabras'}';
+  // shortcut: el texto repite reasoning_summary de la TUI; contar ya es del
+  // servidor (reasoning_words) y dar formato se decidió dejarlo aquí (R6).
+  static String thoughtSummary(int words) {
+    final digits = words.toString().replaceAllMapped(
+      RegExp(r'\B(?=(\d{3})+$)'),
+      (_) => ' ',
+    );
+    return 'Pensamiento · $digits ${words == 1 ? 'palabra' : 'palabras'}';
+  }
+
   static const cancelled = '(cancelada)';
   static const incomplete = '(respuesta incompleta)';
   static const sources = 'Fuentes';
@@ -125,7 +133,6 @@ class Strings {
   static const addEndpoint = 'Agregar endpoint…';
   static const inUse = 'en uso';
   static const local = 'local';
-  static const keySaved = 'key guardada';
   static const endpointName = 'Nombre';
   static const baseUrl = 'URL base';
   static const baseUrlHelp =
@@ -171,33 +178,14 @@ class Strings {
       '$provider · Vacío = predeterminado del modelo: no se manda.';
   static const restoreAll = 'Restaurar todo';
   static const reasoning = 'Razonamiento';
+  // shortcut: las cinco opciones repiten kReasoningChoices de la TUI; si
+  // cambian, que settings.model_params.get mande sus etiquetas.
   static const reasoningDefault = 'Predeterminado';
   static const reasoningOff = 'Apagado';
   static const reasoningLow = 'Bajo';
   static const reasoningMedium = 'Medio';
   static const reasoningHigh = 'Alto';
 
-  /// shortcut: copia los textos de la TUI (`cli/src/model_params_form.cpp`,
-  /// `reasoning_help`) por `reasoning_style`; en `effort` va el genérico, sin
-  /// el caso de OpenRouter (`reasoning.effort`). Lo correcto es que
-  /// `settings.model_params.get` mande el texto, en un PR de protocolo.
-  static String? reasoningHelp(String style) => switch (style) {
-    'toggle' =>
-      'En NIM, Bajo, Medio y Alto solo lo encienden (enable_thinking); '
-          'Apagado lo apaga.',
-    'budget' =>
-      'Bajo, Medio y Alto dan 1024, 4096 y 16384 tokens para pensar; '
-          'Apagado no manda nada.',
-    'effort' =>
-      'Manda reasoning_effort (Apagado: "none"). No todos los modelos lo '
-          'aceptan.',
-    _ => null,
-  };
-  // shortcut: estas dos notas repiten reglas del núcleo (qué llaves pone
-  // Moss) y de los proveedores; deberían venir de `model_params.get`.
-  static const topKNote =
-      'Top K no es del estándar de OpenAI: no todos los proveedores lo '
-      'aceptan.';
   static String paramLabel(String key) => switch (key) {
     'temperature' => 'Temperatura',
     'top_p' => 'Top P',
@@ -209,14 +197,13 @@ class Strings {
     _ => key,
   };
   static const paramDefault = 'Predeterminado';
+  // shortcut: repite limit_hint de la TUI, con los límites del servidor; si
+  // cambia, que `limits` mande el texto.
   static String range(String min, String max, {required bool exclusive}) =>
       exclusive ? 'más de $min, hasta $max' : '$min a $max';
   static const advanced = 'Avanzado';
   static const advancedNote = 'JSON que se mezcla al final';
   static const extraJson = 'JSON avanzado';
-  static const extraHelp =
-      'Gana sobre el formulario; null quita una llave. No se pueden cambiar '
-      'model, messages ni stream.';
   static const preview = 'Vista previa de lo que se envía';
   static const previewLabel = 'Vista previa del cuerpo de la petición';
   static const modelsFailed = 'No se pudieron pedir los modelos.';
@@ -224,8 +211,6 @@ class Strings {
   static const envModel = 'CHAT_MODEL';
   static const envApiKey = 'CHAT_API_KEY';
   static const envSearchKey = 'CHAT_SEARCH_API_KEY';
-  static const notANumber = 'Escribe un número.';
-  static const notAnInteger = 'Escribe un número entero.';
   static const showKey = 'Ver lo que escribes';
   static const hideKey = 'Ocultar lo que escribes';
   static const newKeyHint = 'Escribe una API key nueva';
@@ -261,11 +246,6 @@ class Strings {
   static const optionalHint = 'Opcional';
   static const removeKey = 'Quitar';
   static const keepSavedKey = 'No quitar';
-  static const keyWillBeRemoved = 'se quita: se usará la de la app';
-  static const sameModelAsApp = 'Mismo que la app';
-  static const ownKeyHelp =
-      'Sin key propia se usan las de la app. Recomendado: una propia con '
-      'tope diario en el proveedor.';
   static const accessSection = 'Acceso';
   static const allowedUsersHelp = 'Separados por comas.';
   static const generateCode = 'Generar código';
@@ -273,27 +253,12 @@ class Strings {
       'Quien lo mande al bot entra a la lista de invitados.';
   static const limitsSection = 'Límites';
   static const logDetailsTitle = 'Detalle de errores en el registro';
-  static const logDetailsNote =
-      'Puede incluir texto de los alumnos: solo para diagnosticar.';
   static String invitedTitle(int n) => 'Invitados ($n)';
   static const noInvited = 'Nadie ha entrado con el código';
   static const noInvitedNote =
       'Cuando alguien lo use, aparece aquí y lo puedes quitar.';
   static const removeInvited = 'Quitar';
   static String removeInvitedLabel(String user) => 'Quitar a $user';
-  static String removeInvitedQuestion(String user) => '¿Quitar $user ahora?';
-  static const removeInvitedDetail = 'No espera a Guardar.';
-  static const restartQuestion =
-      'Este cambio necesita reiniciar el bot y se borran las conversaciones '
-      'en memoria. ¿Reiniciar ahora?';
-  static const cancelledNothingSaved = 'Cancelado: no se guardó nada.';
-  static const savedServiceUntouched =
-      'Cancelado: se guardó, pero no se tocó el servicio.';
-  static const savedForeignKept = 'Guardado. No se tocó el servicio existente.';
-  static const savedForeignUntouched =
-      'Cancelado: se guardó, pero no se tocó el servicio existente.';
-  static String savedWith(String message) =>
-      message.isEmpty ? 'Guardado.' : 'Guardado. $message';
 
   // Ver registro (maqueta Config-registro)
   static const logTitle = 'Registro del bot';

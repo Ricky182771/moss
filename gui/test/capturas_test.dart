@@ -91,12 +91,14 @@ final _chat = snapshot(
       'assistant',
       text: _code,
       reasoning: List.filled(52, 'palabra').join(' '),
+      reasoningWords: 52,
     ),
     entry('user', text: '¿Y cuál es su complejidad?'),
     entry(
       'assistant',
       inProgress: true,
       reasoning: List.filled(41, 'palabra').join(' '),
+      reasoningWords: 41,
       text:
           'Es **O(n²)** en todos los casos: siempre recorre lo que falta para '
           'encontrar el mínimo, aunque el arreglo ya venga ordenado',
@@ -120,6 +122,7 @@ final _thinking = snapshot(
           'n−1 + n−2 + … + 1 comparaciones, o sea n(n−1)/2.\n\n'
           'Es O(n²) en el mejor, el promedio y el peor caso. Conviene decirlo '
           'en una frase y explicar por qué no mejora con datos ordenados.',
+      reasoningWords: 55,
     ),
   ],
 );
@@ -602,6 +605,32 @@ void main() {
       await _shot(tester, 'config-telegram-completa-$mode');
     });
 
+    testWidgets('telegram: lista de zonas y linger ($mode)', (tester) async {
+      await telegram(
+        tester,
+        handlers: {
+          'service.status': (_) => serviceStatus(
+            lingerNotice:
+                'Sin linger, el bot se detiene al cerrar sesión y no arranca '
+                'tras un apagón hasta que inicies sesión.',
+            lingerCommand: 'loginctl enable-linger "\$USER"',
+          ),
+          'addons.telegram.get': (_) => telegramGet(fields: {'time_zone': ''}),
+        },
+      );
+      await _shot(tester, 'config-telegram-linger-$mode');
+      final field = find.descendant(
+        of: find.byWidgetPredicate(
+          (w) => w is LabeledField && w.label == 'Zona horaria',
+        ),
+        matching: find.byType(EditableText),
+      );
+      await tester.ensureVisible(field);
+      await tester.enterText(field, 'america');
+      await tester.pumpAndSettle();
+      await _shot(tester, 'config-telegram-zonas-$mode');
+    });
+
     testWidgets('telegram en Windows ($mode)', (tester) async {
       await config(tester, page: Strings.telegramMenu);
       await _shot(tester, 'config-telegram-windows-$mode');
@@ -614,7 +643,7 @@ void main() {
           'addons.telegram.save': (_) => throw const FakeError(
             -32008,
             'confirmar',
-            {'message': 'Se descartarán: rara, vieja. ¿Guardar? (s/n)'},
+            {'message': 'Se descartarán: rara, vieja. ¿Guardar?'},
           ),
         },
       );
@@ -643,7 +672,7 @@ void main() {
         tester,
         handlers: {
           'service.apply': (_) => throw const FakeError(-32008, 'confirmar', {
-            'message': '¿Reemplazar el servicio existente? (s/n)',
+            'message': '¿Reemplazar el servicio existente?',
           }),
         },
       );

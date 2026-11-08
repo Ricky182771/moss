@@ -2,16 +2,37 @@
 
 #include "chatbot/error.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <exception>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace chatbot::addon_settings::detail {
 
 bool zone_database_available() {
     return true;
+}
+
+std::vector<std::string> zone_names() {
+    std::vector<std::string> names;
+    try {
+        const std::chrono::tzdb& database = std::chrono::get_tzdb();
+        names.reserve(database.zones.size() + database.links.size());
+        for (const std::chrono::time_zone& zone : database.zones) {
+            names.emplace_back(zone.name());
+        }
+        // Los alias también los acepta locate_zone (Europe/Amsterdam lo es).
+        for (const std::chrono::time_zone_link& link : database.links) {
+            names.emplace_back(link.name());
+        }
+    } catch (const std::exception&) {
+        return {}; // Sin tzdata no hay lista: se escribe a mano.
+    }
+    std::sort(names.begin(), names.end());
+    return names;
 }
 
 Result<DayFunction> named_zone_day(std::string_view name) {

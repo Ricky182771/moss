@@ -120,7 +120,7 @@ TEST_CASE("TelegramAddon: lee la sección, los secretos enmascarables y los invi
     CHECK(addon.saved_form().at(AddonField::Token).empty()); // Vacío: se conserva.
     CHECK(addon.secrets().token == kToken);
     CHECK(addon.discarded() == std::vector<std::string>{"rara"});
-    CHECK(addon.discard_question() == "Se descartarán: rara. ¿Guardar? (s/n)");
+    CHECK(addon.discard_question() == "Se descartarán: rara. ¿Guardar?");
     CHECK(addon.invited() == std::vector<std::int64_t>{42});
     CHECK(addon.invited_error().empty());
     CHECK_FALSE(addon.install().has_value());

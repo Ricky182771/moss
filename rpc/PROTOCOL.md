@@ -23,9 +23,18 @@ Versión del protocolo: **1**.
 | Evento `settings.changed` (`provider`, `system_prompt`, `search`, `gui`) | 7 | Implementado |
 | Evento `service.changed`; `settings.changed` con `telegram` | 7 | Implementado |
 | `settings.model_params.*`; `settings.changed` con `model_params` | 6.7, 7 | Implementado |
+| `error_field` en `settings.provider.check` | 6.7 | Implementado |
+| `key_status` en cada elemento de `providers` de `settings.provider.get` | 6.7 | Implementado |
+| `settings.search.check` | 6.7 | Implementado |
+| Las preguntas de `-32008` sin ` (s/n)` | 6.8 | Implementado |
+| `linger_notice` y `linger_command` en `service.status` | 6.8 | Implementado |
+| `time_zones` en `addons.telegram.get` | 6.8 | Implementado |
+| `texts` en `addons.telegram.get`; `remove_questions` en `addons.telegram.invited.*` | 6.8 | Implementado |
+| `help` en `settings.model_params.get`; `check` y `save` aceptan cada número como cadena, y `dirty` en `check` | 6.7 | Implementado |
 | Pensamiento: `reasoning` en `Entry`, evento `conversation.reasoning_delta` | 5, 7 | Implementado |
 | `service.log` (el registro del bot) | 6.8 | Implementado |
 | `errors` en `service.log` (las líneas que la TUI pinta como error) | 6.8 | Implementado |
+| `reasoning_words` en `Entry` y en `conversation.reasoning_delta` | 5, 7 | Implementado |
 | `conversation.rename`, evento `conversation.renamed`, `used_search` en `Summary`, `conversation.export` con `id` | 6.2, 6.3, 7 | Implementado |
 | `CHAT_DEBUG_RPC` | 10 | Implementado |
 | Windows: stdio en modo binario | 2 | Implementado, probado en la CI con pipes (`tools/check-rpc-pipes.sh`) |
@@ -164,7 +173,7 @@ Los códigos estándar de JSON-RPC más los de la aplicación, en el rango que J
 | -32005 | ValidationFailed | No pasa la validación: configuración, texto vacío, número de bloque o nombre de archivo (`data.message` o `data.fields`) |
 | -32006 | Unsupported | No disponible: addons en Windows, sin systemd de usuario o sin `HOME` para la unidad (`data.message`) |
 | -32007 | StorageError | No se pudo leer, escribir o borrar un archivo, o no hay carpeta de descargas (`data.message`) |
-| -32008 | ConfirmationRequired | Hay que preguntarle al usuario: unidad de systemd ajena o llaves de la sección que se descartarían (`data.message`, el texto de F2) |
+| -32008 | ConfirmationRequired | Hay que preguntarle al usuario: unidad de systemd ajena o llaves de la sección que se descartarían (`data.message`, la pregunta de F2, sin el ` (s/n)` de la TUI) |
 | -32010 | ProtocolMismatch | Versión distinta en `initialize` |
 | -32011 | StartupFailed | El arranque falló (carpeta del modo portable no escribible, `config.json` inválido): `initialize` responde esto con `data.message`, el mismo texto que la TUI imprime al salir |
 
@@ -211,6 +220,7 @@ La GUI mantiene una **copia exacta** de `Conversation::entries()`. Las entradas 
  "cancelled":false,
  "note":"...",                // nota por finish_reason; "" si no hay
  "reasoning":"...",           // pensamiento del modelo (markdown crudo); "" si no hay
+ "reasoning_words":240,       // palabras de reasoning (reasoning_word_count); 0 si no hay
  "sources":[{"n":1,"title":"...","url":"https://...","published_date":"2026-10-20"}]}
                              // solo en kind = sources; published_date puede ser null
 ```
@@ -228,6 +238,7 @@ La GUI mantiene una **copia exacta** de `Conversation::entries()`. Las entradas 
 
 - **`phase`** reemplaza los indicadores de la línea de estado: `searching` es "Buscando en la web…", `thinking` es "Pensando…" (antes del primer texto, también mientras solo llega pensamiento) y `streaming` es cuando ya llega texto.
 - **`reasoning`** (solo `assistant`): el pensamiento que el modelo mandó aparte del texto (`reasoning_content` o `reasoning` en el flujo). Es **para mostrarse plegado** arriba de la respuesta (la TUI lo pliega al llegar el primer texto); no cuenta para los bloques de código, `/copiar`, `/exportar` ni el título, y **nunca se manda de regreso**: el servidor no lo pone en el historial que va al modelo, y la GUI no tiene cómo enviarlo. Se guarda con la conversación (hasta 256 KiB por respuesta), así que una conversación reabierta lo trae en `conversation.get`. Con modelos que no lo mandan queda en `""`.
+- **`reasoning_words`:** cuántas palabras tiene `reasoning`, con la misma función que la línea `Pensamiento · N palabras` de la TUI (`reasoning_word_count`, separadas por espacio, salto de línea o tabulador). La GUI no las cuenta; darle formato al número es suyo. Se agregó sin cambiar `protocol_version`.
 - **`rev`:** cada evento de una conversación lleva el `rev` que deja. Como el servidor escribe todo desde un hilo, el orden ya está garantizado. `rev` sirve para que la GUI compruebe que no se saltó nada (si llega `rev` ≠ el suyo + 1, pide `conversation.get`) y para descartar eventos viejos después de un snapshot.
 - **Cómo se calculan los eventos:** función pura `diff_entries(visto, entradas)` (`rpc/src/entry_diff.h`) que da qué entradas se agregaron, si a la última ya vista se le agregó texto o pensamiento y si cambiaron sus marcas. Lo visto es solo cuántas entradas había y la última (largo del texto y del pensamiento, y marcas), así que el costo por delta no crece con la conversación. Supone lo que hoy cumple `Conversation`: las entradas solo se agregan, de las existentes solo cambia la última, y su texto y su pensamiento solo crecen por el final.
 
@@ -375,17 +386,18 @@ Si `config.json` o `credentials.json` no se pueden leer (JSON inválido, permiso
 ```jsonc
 {"providers":[{"id":"nvidia","kind":"builtin","name":"NVIDIA NIM",
                "base_url":"https://integrate.api.nvidia.com/v1","needs_key":true,
-               "key_saved":true, "selectable":true, "note":""}, ...,
+               "key_saved":true, "key_status":"guardada: …abcd",
+               "selectable":true, "note":""}, ...,
               {"id":"custom:omniroute","kind":"endpoint","name":"OmniRoute",
                "base_url":"https://mi-gateway.example/v1","needs_key":true,
-               "key_saved":false, "selectable":false, "note":"sin key"}],
+               "key_saved":false, "key_status":null, "selectable":false, "note":"sin key"}],
  "saved":{"provider":"nvidia","base_url":"...","model":"..."},   // config.json (con un endpoint, su URL)
  "effective":{"base_url":"...","model":"..."},                   // lo que usa la sesión
  "locks":{"base_url":false,"model":false,"api_key":true},   // definidos por CHAT_*
  "key_status":"(definido por CHAT_API_KEY) …abcd"}             // key_status(), enmascarado
 ```
 
-`providers` es la lista de `Session::provider_choices()` (la de F2 y del selector de `/model` en la TUI, `ProviderSettings::provider_list` sin la fila de agregar): la tabla de `providers()` en orden (`kind: "builtin"`) y después los endpoints de `config.json` en su orden (`kind: "endpoint"`, con su `id` `custom:<id>`, su `name` y su `base_url`; `needs_key` es false si la URL es local). `key_saved` si hay key en `credentials.json` para ese proveedor (la llave es el id); `selectable` si `/model` puede pasar a él (key guardada, `CHAT_API_KEY` o servidor local); `note` es `""` o `"sin key"`. Nunca devuelve una key.
+`providers` es la lista de `Session::provider_choices()` (la de F2 y del selector de `/model` en la TUI, `ProviderSettings::provider_list` sin la fila de agregar): la tabla de `providers()` en orden (`kind: "builtin"`) y después los endpoints de `config.json` en su orden (`kind: "endpoint"`, con su `id` `custom:<id>`, su `name` y su `base_url`; `needs_key` es false si la URL es local). `key_saved` si hay key en `credentials.json` para ese proveedor (la llave es el id); `selectable` si `/model` puede pasar a él (key guardada, `CHAT_API_KEY` o servidor local); `note` es `""` o `"sin key"`. `key_status` es el estado enmascarado de la key de ese proveedor (`ProviderSettings::key_status`, con `mask_key`): `guardada: …abcd`, `(definido por CHAT_API_KEY) …abcd` o `null` si no tiene (un servidor local sin key también da `null`). Nunca devuelve una key.
 
 **Endpoints** (`config.json` → `"endpoints"`, guía 7): cada uno con un `id` fijo (`[a-z0-9][a-z0-9-]{0,31}`, que nunca cambia), `name` (1 a 40 caracteres, único sin distinguir mayúsculas) y `base_url`; a lo más 20. Su proveedor es `custom:<id>` en todos lados (también la llave de su key en `credentials.json`). El id lo genera el servidor del nombre al crearlo (`make_endpoint_id`).
 
@@ -403,10 +415,11 @@ Si `config.json` o `credentials.json` no se pueden leer (JSON inválido, permiso
 - `provider`, `base_url` y `model` son obligatorios; `name`, opcional. Un `provider` que no está en la tabla ni es un endpoint guardado (ni `custom:`) es `-32602` con `fields: ["draft.provider"]`. Los campos de más, de menos o de otro tipo también van como `draft.<campo>`.
 - `validate()` agrega, en un endpoint: `Escribe un nombre para el endpoint.`, `El nombre del endpoint puede tener hasta 40 caracteres.`, `El nombre del endpoint tiene caracteres no válidos.`, `Ya hay un endpoint con ese nombre.`, `Ya tienes 20 endpoints; borra uno antes de agregar otro.`, `Con CHAT_BASE_URL definida no se puede agregar un endpoint.` y el de `validate_base_url`.
 
-**`settings.provider.check`** `→ {draft}` `← {error, hint, can_request_models, dirty}`
+**`settings.provider.check`** `→ {draft}` `← {error, error_field, hint, can_request_models, dirty}`
 
 ```jsonc
 {"error":null,                // validate(); null si se puede guardar
+ "error_field":null,          // name | base_url | api_key | model; null si no es de un campo o no hay error
  "hint":"...",                // base_url_hint(); null si no hay
  "can_request_models":true, "dirty":true}
 ```
@@ -449,7 +462,7 @@ Si `config.json` o `credentials.json` no se pueden leer (JSON inválido, permiso
 - `error` de `validate_system_prompt` y `warning` de `system_prompt_limit_warning`, los mismos textos que F2 muestra debajo del campo; `bytes` en UTF-8.
 
 **`settings.system_prompt.save`** `→ {text}` `← {mode}`
-- `text` es siempre una cadena (**sin `null`**). `""` = sin mensaje de sistema. **Restaurar** = mandar `default_text`: `system_prompt_to_store` convierte el predeterminado en "borrar la llave", igual que F2.
+- `text` es siempre una cadena (**sin `null`**). `""` = sin mensaje de sistema. **Predeterminadas y Restaurar** = mandar exactamente `default_text`: `system_prompt_to_store` convierte el predeterminado en "borrar la llave", igual que F2, así que `config.json` queda sin `system_prompt`, no con el texto, y la respuesta dice `mode: "default"`. Por eso no hace falta `null`.
 - `Session::save_system_prompt_text`. Se aplica a la conversación abierta con `set_system_prompt`, desde su siguiente mensaje, con los avisos de F2 en el historial.
 - Errores: `-32002` (respuesta en curso), `-32005` con el texto de `validate_system_prompt`, `-32007` si falla la escritura.
 
@@ -465,6 +478,8 @@ Los de F2 → Configuración del modelo → Parámetros y Avanzado: los del **mo
  "frequency_penalty":0, "presence_penalty":0, "seed":7}
 ```
 
+En `check` y `save`, cada campo numérico puede ir también **como cadena, tal como lo escribió el usuario** (`"0.60"`, `"0,6"`), y entonces lo lee la misma función que la F2 de la TUI (`ModelParamsForm::apply_numbers`): `""` o solo espacios = Predeterminado, y lo que no es número da su error en `field_errors` (`Escribe un número.`, `Escribe un número entero.`). Mandarlo como número sigue igual. La GUI siempre manda el texto: no decide qué es un número.
+
 `extra` (el JSON avanzado) va **aparte y como texto**, tal como lo escribe el usuario, para que los errores de sintaxis den su línea y columna: `""` o ausente = ninguno.
 
 **`settings.model_params.get`** `→ {}` `←`
@@ -477,26 +492,31 @@ Los de F2 → Configuración del modelo → Parámetros y Avanzado: los del **mo
  "limits":{"temperature":{"min":0.0,"max":2.0,"min_exclusive":false,"integer":false},
            "top_p":{"min":0.0,"max":1.0,"min_exclusive":true,"integer":false},
            "top_k":{"min":1,"max":1000,"min_exclusive":false,"integer":true}, ...},
+ "help":{"reasoning":"En NIM, Bajo, Medio y Alto solo lo encienden (enable_thinking); Apagado lo apaga.",
+         "top_k":"No todos los proveedores lo aceptan.",
+         "extra":"Se mezcla al final del cuerpo (JSON Merge Patch): gana sobre el formulario y null quita una llave."},
  "preview":"{\n  \"model\": …"}   // el cuerpo con lo guardado
 ```
 
 - `limits`: los siete campos numéricos con los rangos del proveedor (en `anthropic`, `temperature` hasta 1), para que la GUI no los copie.
+- `help`: los textos de F2, para que la GUI no los copie: `reasoning` es `reasoning_help` del proveedor en uso, y `top_k` y `extra` son `kTopKNote` y `kExtraNote`.
 - `preview`: `request_preview`, el cuerpo exacto que se mandaría (sangría de 2, en el orden de la petición) con `messages` cambiado por `"[…N mensajes…]"` (el historial de la conversación abierta con el mensaje de sistema, más el siguiente). La key va en la cabecera: nunca aparece.
 - Sin proveedor o sin modelo: `-32004` con `Elige un modelo en Proveedor de IA (o con /model) para ajustarlo.`
 
-**`settings.model_params.check`** `→ {params, extra?}` `← {field_errors, extra_error, preview}`
+**`settings.model_params.check`** `→ {params, extra?}` `← {field_errors, extra_error, preview, dirty}`
 
 ```jsonc
 {"field_errors":{"top_k":"Debe ser un número entero entre 1 y 1000."},   // {} si no hay
  "extra_error":"El JSON avanzado no es válido (línea 3, columna 7).",   // o null
- "preview":null}   // null si hay algún error
+ "preview":null,   // null si hay algún error
+ "dirty":true}     // el borrador es distinto de lo guardado, por valor: "0.60" es igual a 0.6
 ```
 
 - Los textos son los de F2: rangos (`Debe ser un número entre 0 y 2.`, `Debe ser mayor que 0 y como máximo 1.`, …), en Anthropic `Con el razonamiento <nivel>, el máximo de salida debe pasar de <presupuesto> tokens.` (en `max_tokens`), y en `extra`: no es un objeto, más de 8 KiB, UTF-8 inválido, línea y columna del error de sintaxis, o `«<llave>» la pone Moss; no se puede cambiar desde el JSON avanzado.` (`model`, `messages`, `stream`, `stream_options`, `tools`, `tool_choice`).
 
 **`settings.model_params.save`** `→ {params, extra?}` `← {}`
 - `Session::save_model_params`: escribe `"models"` en `config.json` (sin ajustes, quita el modelo, y el proveedor si se queda sin modelos) y aplica desde el siguiente mensaje sin reiniciar. Después, `settings.changed {section: "model_params"}` y el `entry_added` del aviso `Ajustes de <modelo> guardados: valen desde el siguiente mensaje.` **Restaurar todo** = mandar todo en `null` y `extra` vacío.
-- Errores, en este orden: `-32602` (un campo de `params` de otro tipo o desconocido, con `fields: ["params.<campo>"]`; `extra` dentro de `params` también); `-32004` (sin modelo); `-32002` (respuesta en curso); `-32005` con el primer error de `check` en `data.message`; `-32007` si falla la escritura (por ejemplo, un `"models"` que no es objeto: no se toca).
+- Errores, en este orden: `-32602` (un campo de `params` de otro tipo o desconocido, con `fields: ["params.<campo>"]`; `extra` dentro de `params` también); `-32004` (sin modelo); `-32002` (respuesta en curso); `-32005` con el primer error de `check` en `data.message` y los de los campos en `data.field_errors`; `-32007` si falla la escritura (por ejemplo, un `"models"` que no es objeto: no se toca).
 
 Si la petición llevó algún ajuste y el servidor responde 400 o 422, el error de `chat.finished` (y de su entrada) agrega `Puede ser un ajuste de <modelo>: revísalo en Configuración del modelo.`
 
@@ -504,6 +524,9 @@ Si la petición llevó algún ajuste y el servidor responde 400 o 422, el error 
 
 **`settings.search.get`** `→ {}` `← {configured, locked, key_status}`
 - `configured`: hay key vigente (el `has_search_key` de `app.status`). `locked`: la fija `CHAT_SEARCH_API_KEY`. `key_status`: el de `SearchSettings`, enmascarado.
+
+**`settings.search.check`** `→ {api_key}` `← {error}`
+- La misma validación que `save`, con los mismos textos, sin guardar nada: `error` es `null` si se puede guardar. Una key mal escrita no se repite en la respuesta. Funciona con una respuesta en curso, como los demás `check`. `-32007` si no se pueden leer las credenciales.
 
 **`settings.search.save`** `→ {api_key}` `← {saved: true}`
 - `Session::save_search_key`: `credentials.json` con `search:tavily` y reemplaza el `SearchProvider` (el runner ya acepta el cambio en caliente). Desde ahí `app.status.has_search_key` es `true`. El aviso de F2 va al historial.
@@ -549,12 +572,18 @@ Los parámetros `name` y `addon` solo aceptan un nombre de `known_addons` (`"tel
          "remove_model_key":false, "remove_search_key":false},
  "secrets":{"token":"guardada: …abcd", "model_key":"sin configurar", "search_key":"..."},  // addon_secret_status
  "labels":{"token":"Token", "model":"Modelo", ...},   // addon_field_label, para que la GUI no los copie
+ "time_zones":["Africa/Abidjan", ...],   // available_time_zones: la base con que se valida time_zone
+ "texts":{"same_model":"Mismo que la app", ...},   // las notas y los avisos de F2; ver abajo
  "env_note":"",              // addon_env_note: CHAT_* de la terminal que el servicio no ve
  "read_only":false,          // error al leer, sección más nueva o addon incompatible
  "read_only_reason":null,    // el texto de F2, o null
  "discarded":["rara"],       // llaves que guardar descartaría
  "load_error":null}          // config.json o credentials.json no se pudieron leer
 ```
+
+`time_zones` sale de la misma base que usa la validación de `time_zone` (`std::chrono::get_tzdb`: zonas y alias, en orden); vacía si esta compilación no tiene base o no se pudo leer. Un desfase fijo como `-06:00` también es válido y no está en la lista: la GUI siempre deja escribir a mano. Para el campo `model` no hay lista aquí: el bot usa el proveedor de la app, así que sale de `models.list` con ese proveedor.
+
+`texts` trae lo que F2 escribe alrededor del formulario y al guardar, para que la GUI no lo copie: `same_model` (el campo Modelo vacío), `own_keys_note`, `log_details_note`, `secret_removed` (el estado de un secreto con Quitar), `restart_question` (la pregunta con `needs_restart`, sin ` (s/n)`), `saved` (el aviso de guardar, que va antes del `message` de `service.apply`), `cancelled_nothing_saved` (Esc en la pregunta de `-32008` de `save`), `cancelled_service_untouched` (Esc en `restart_question`), `foreign_unit_kept` y `cancelled_foreign_untouched` (No y Esc en la de `-32008` de `service.apply`).
 
 Lee los archivos en cada llamada. Los campos de secretos van vacíos (vacío = se conserva lo guardado), igual que en `AddonForm`; los secretos nunca salen, solo su estado enmascarado. Los nombres de `fields` son los de `AddonField` en snake_case. El `form` que reciben `check` y `save` tiene esta misma forma, con todas sus llaves (`-32602` con `form.…` o `form.fields.…` si falta o sobra una).
 
@@ -563,17 +592,18 @@ Lee los archivos en cada llamada. Los campos de secretos van vacíos (vacío = s
 
 **`addons.telegram.save`** `→ {form, discard_confirmed?: false}` `← {needs_restart}`
 - Solo lectura → `-32005` con `read_only_reason`. Errores del formulario → `-32005` con `data.message` (`form_error`) y `data.field_errors`.
-- Si guardar descartaría llaves de la sección y `discard_confirmed` no es `true` → `-32008` con el texto de F2 (`Se descartarán: …. ¿Guardar? (s/n)`); la GUI pregunta y repite con `true`.
+- Si guardar descartaría llaves de la sección y `discard_confirmed` no es `true` → `-32008` con la pregunta de F2 (`Se descartarán: …. ¿Guardar?`; el ` (s/n)` lo agrega la TUI, en su línea de estado); la GUI pregunta y repite con `true`.
 - Escribe primero los cambios de `credentials.json` y después `addons.telegram` (si fallan los secretos, la sección no se escribe), como F2. Un error al escribir → `-32007`. Sin cambios no escribe nada (y tampoco pregunta por las llaves descartadas).
 - Si escribió: `{needs_restart}` y después `settings.changed {section: "telegram"}`. `needs_restart` es el criterio de F2: el cambio lo necesita (token o respuestas a la vez), está activado y el servicio está activo **según el último estado que trajo `service.status` o una acción**; por eso la GUI pide `service.status` al abrir la sección, como F2.
-- **No toca el servicio. Paso obligatorio después de `save`:** `service.apply`, como hace F2 al guardar. Con `needs_restart`, la GUI pregunta "Este cambio necesita reiniciar el bot y se borran las conversaciones en memoria. ¿Reiniciar ahora?" y manda `restart: true` si contesta que sí. Si no lo llama, el servicio sigue como estaba (F2 lo marca como "no coincide" la próxima vez).
+- **No toca el servicio. Paso obligatorio después de `save`:** `service.apply`, como hace F2 al guardar. Con `needs_restart`, la GUI pregunta `texts.restart_question` y manda `restart: true` si contesta que sí. Si no lo llama, el servicio sigue como estaba (F2 lo marca como "no coincide" la próxima vez).
 
 **`addons.telegram.invite_code`** `→ {}` `← {invite_code}` (`generate_invite_code`; no guarda nada: va al campo `invite_code` del formulario). Si el sistema no da números al azar: `-32603` con `data.message`.
 
-**`addons.telegram.invited.list`** `→ {}` `← {users: ["123456789", ...]}`
+**`addons.telegram.invited.list`** `→ {}` `← {users: ["123456789", ...], remove_questions: {"123456789": "¿Quitar 123456789 ahora? No espera a Guardar."}}`
+- `remove_questions` es la pregunta de F2 para quitar a cada uno, sin ` (s/n)`.
 - `invitados.json` dañado o sin `HOME` → `-32007` con el texto de F2.
 
-**`addons.telegram.invited.remove`** `→ {user}` `← {users, message}` · *larga*
+**`addons.telegram.invited.remove`** `→ {user}` `← {users, remove_questions, message}` · *larga*
 - `user` es una cadena decimal (`-32602` si no es un entero positivo de 64 bits). Quita al momento con `remove_invited` (bajo `flock`) y, si el servicio está activo según el último estado, lo recarga para que el bot deje de dejarlo entrar, como F2. Responde al terminar: `users` es la lista que quedó y `message`, el de F2 (`Se quitó 123.` más el resultado de la recarga). Error del archivo → `-32007`.
 
 #### Servicio de systemd
@@ -588,6 +618,8 @@ La unidad que escribe `moss-rpc` es **byte por byte** la de la TUI: su `ExecStar
 {"systemd":true, "active":"active", "enabled":"enabled", "exit_status":null,
  "unit":"current",              // missing | foreign | current | stale (UnitState)
  "linger":true, "last_error":"",
+ "linger_notice":null,          // kNoLinger si linger es false, como F2; si no, null
+ "linger_command":null,         // kLingerCommand en el mismo caso: se muestra, nunca se corre
  "summary":"...",              // service_summary
  "problem":"", "mismatch":"",  // service_problem; service_mismatch con Activado guardado
  "journal_command":"..."}      // journal_command
@@ -597,7 +629,7 @@ La unidad que escribe `moss-rpc` es **byte por byte** la de la TUI: su `ExecStar
 **`service.apply`** `→ {addon, restart?: false, replace_foreign?: false}` `← {message, ok}`
 - **Sin `enabled`:** aplica lo guardado en `addons.telegram`, como F2 después de guardar (`ServiceControl::apply`): con Activado, escribe la unidad si falta o está vieja, `daemon-reload`, `enable --now` si no corre, y si ya corría `reload`, o `restart` con `restart: true`; sin Activado, `disable --now` si corre o está habilitado.
 - Activado y el addon no está instalado: no toca el servicio y responde `{message, ok: false}` con el problema (`No instalado: …`; F2 lo muestra como `Guardado. …`). No es un error.
-- Unidad ajena y `replace_foreign` no es `true` → `-32008` con `¿Reemplazar el servicio existente? (s/n)` (`kReplaceForeignUnit`); la GUI pregunta y repite con `true`.
+- Unidad ajena y `replace_foreign` no es `true` → `-32008` con `¿Reemplazar el servicio existente?` (`kReplaceForeignUnit`); la GUI pregunta y repite con `true`.
 - Sin systemd de usuario → `-32006` con `No hay systemd de usuario en esta sesión.`
 - `ok: false` si un `systemctl` falló; `message` dice cuál (`No se pudo …`). `message` puede ser `""` si no hubo nada que hacer.
 
@@ -623,7 +655,7 @@ Todas las `service.*` salvo `service.status` y `service.log`, y `invited.remove`
 |---|---|---|
 | `conversation.entry_added` | `{conversation, rev, index, entry}` | Entrada nueva (usuario, respuesta, error, aviso, fuentes) |
 | `conversation.entry_delta` | `{conversation, rev, index, text}` | Más texto en la respuesta en curso: **se concatena** |
-| `conversation.reasoning_delta` | `{conversation, rev, index, text}` | Más pensamiento en la respuesta en curso: **se concatena** a su `reasoning` |
+| `conversation.reasoning_delta` | `{conversation, rev, index, text, reasoning_words}` | Más pensamiento en la respuesta en curso: **se concatena** a su `reasoning`; `reasoning_words` es el total nuevo, no lo que agrega este trozo |
 | `conversation.entry_updated` | `{conversation, rev, index, entry}` | Cambiaron las marcas (termina, se cancela, nota) |
 | `conversation.phase` | `{conversation, rev, phase}` | idle / searching / thinking / streaming |
 | `conversation.saved` | `{conversation, rev, id, title}` | Se guardó después de un par (la primera vez trae id y título). Si el guardado falla no llega: llega la entrada de error |

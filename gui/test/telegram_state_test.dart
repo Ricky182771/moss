@@ -3,7 +3,6 @@ import 'package:moss_gui/rpc/errors.dart';
 import 'package:moss_gui/state/app_state.dart';
 import 'package:moss_gui/state/settings_state.dart';
 import 'package:moss_gui/state/telegram_section.dart';
-import 'package:moss_gui/strings.dart';
 
 import 'fake_server.dart';
 import 'harness.dart';
@@ -149,7 +148,7 @@ void main() {
         {
           'addons.telegram.save': (p) => p['discard_confirmed'] == true
               ? {'needs_restart': false}
-              : throw _error(-32008, 'Se descartarán: rara. ¿Guardar? (s/n)'),
+              : throw _error(-32008, 'Se descartarán: rara. ¿Guardar?'),
         },
         answers: [true],
       );
@@ -173,14 +172,14 @@ void main() {
     final (t, state, server) = await _start(
       {
         'addons.telegram.save': (p) =>
-            throw _error(-32008, 'Se descartarán: rara. ¿Guardar? (s/n)'),
+            throw _error(-32008, 'Se descartarán: rara. ¿Guardar?'),
       },
       answers: [false],
     );
     t.fields['daily_limit']!.text = '50';
     await state.save();
     expect(server.methods, isNot(contains('service.apply')));
-    expect(state.toast.value?.text, Strings.cancelledNothingSaved);
+    expect(state.toast.value?.text, kTelegramTexts['cancelled_nothing_saved']);
     expect(t.dirty, isTrue);
   });
 
@@ -204,10 +203,7 @@ void main() {
         {
           'service.apply': (p) => p['replace_foreign'] == true
               ? {'message': 'Servicio activado.', 'ok': true}
-              : throw _error(
-                  -32008,
-                  '¿Reemplazar el servicio existente? (s/n)',
-                ),
+              : throw _error(-32008, '¿Reemplazar el servicio existente?'),
         },
         answers: [true],
       );

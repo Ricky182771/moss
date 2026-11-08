@@ -9,11 +9,15 @@
 
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace chatbot::addon_settings::detail {
 
 /// true si esta compilación tiene la base de zonas.
 [[nodiscard]] bool zone_database_available();
+
+/// Los nombres de la base, en orden; vacía sin base.
+[[nodiscard]] std::vector<std::string> zone_names();
 
 /// La fecha en la zona de IANA con ese nombre. Sin base de zonas, o con un
 /// nombre que no existe, error Config (cause dice por qué).

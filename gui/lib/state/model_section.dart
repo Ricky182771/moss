@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 
 import '../rpc/errors.dart';
-import '../strings.dart';
 import 'provider_section.dart' show kCheckDelay;
 import 'settings_state.dart';
 
@@ -68,10 +67,15 @@ class ModelSection extends SettingsSection {
 
   /// El nombre del proveedor (de `settings.provider.get`), para el título.
   String providerName = '';
-  String reasoningStyle = '';
   Map<String, Limit> limits = const {};
 
-  Map<String, Object?> savedParams = const {};
+  /// Los textos de ayuda de `settings.model_params.get`.
+  String reasoningHelp = '';
+  String topKNote = '';
+  String extraNote = '';
+
+  String? savedReasoning;
+  Map<String, String> savedFields = const {};
   String savedExtra = '';
   String? reasoning;
   final fields = {for (final k in kNumberFields) k: TextEditingController()};
@@ -85,6 +89,9 @@ class ModelSection extends SettingsSection {
 
   Timer? _promptTimer;
   Timer? _paramsTimer;
+
+  /// El último `check` dijo que lo escrito es igual a lo guardado, por valor.
+  bool _sameAsSaved = false;
   int _promptGeneration = 0;
   int _paramsGeneration = 0;
 
@@ -97,14 +104,13 @@ class ModelSection extends SettingsSection {
 
   bool get paramsDirty {
     if (noModel != null) return false;
-    if (reasoning != savedParams['reasoning'] || extra.text != savedExtra) {
-      return true;
+    if (reasoning != savedReasoning || extra.text != savedExtra) return true;
+    if (kNumberFields.every((k) => fields[k]!.text == savedFields[k])) {
+      return false;
     }
-    // Por valor, no por texto: "0.60" es lo mismo que 0.6 guardado.
-    return kNumberFields.any((k) {
-      final (value, bad) = _parse(k);
-      return bad != null || value != savedParams[k];
-    });
+    // Por valor, no por texto: "0.60" es lo mismo que 0.6 guardado, y eso lo
+    // dice el servidor (`dirty` de `check`).
+    return !_sameAsSaved;
   }
 
   @override
@@ -142,13 +148,18 @@ class ModelSection extends SettingsSection {
       noModel = null;
       provider = r['provider'] as String;
       model = r['model'] as String;
-      reasoningStyle = r['reasoning_style'] as String? ?? '';
-      savedParams = (r['params'] as Map).cast<String, Object?>();
+      final params = (r['params'] as Map).cast<String, Object?>();
+      savedReasoning = params['reasoning'] as String?;
+      savedFields = {for (final k in kNumberFields) k: _show(params[k])};
       savedExtra = r['extra'] as String? ?? '';
       limits = {
         for (final e in (r['limits'] as Map).entries)
           e.key as String: Limit.fromJson(e.value as Map<String, dynamic>),
       };
+      final help = r['help'] as Map? ?? const {};
+      reasoningHelp = help['reasoning'] as String? ?? '';
+      topKNote = help['top_k'] as String? ?? '';
+      extraNote = help['extra'] as String? ?? '';
       preview = r['preview'] as String?;
       providerName = await _providerName(provider);
     } on RpcError catch (e) {
@@ -180,11 +191,12 @@ class ModelSection extends SettingsSection {
   }
 
   void _resetParams() {
-    reasoning = savedParams['reasoning'] as String?;
+    reasoning = savedReasoning;
     for (final k in kNumberFields) {
-      fields[k]!.text = _show(savedParams[k]);
+      fields[k]!.text = savedFields[k] ?? '';
     }
     extra.text = savedExtra;
+    _sameAsSaved = false;
     fieldErrors = const {};
     extraError = null;
     paramsError = null;
@@ -253,6 +265,9 @@ class ModelSection extends SettingsSection {
   }
 
   void paramsEdited({bool now = false}) {
+    _sameAsSaved = false;
+    // Un `check` en camino ya no es de lo que está escrito.
+    _paramsGeneration++;
     notifyListeners();
     _paramsTimer?.cancel();
     if (now) {
@@ -272,58 +287,19 @@ class ModelSection extends SettingsSection {
     paramsEdited(now: true);
   }
 
-  static final _decimal = RegExp(r'^-?\d+(\.\d+)?$');
-  static final _integer = RegExp(r'^-?\d+$');
-
-  /// Lo escrito en [key] como número: vacío es null (Predeterminado). Lo que
-  /// no se puede mandar como número (o como entero, si `limits` dice que lo
-  /// es) se marca aquí; el rango lo revisa el servidor.
-  ///
-  /// shortcut: el formato aceptado (coma decimal, `−`, sin exponente) y sus
-  /// mensajes copian `cli/src/model_params_form.cpp`; lo correcto es que
-  /// `settings.model_params.check` acepte el texto de cada campo y responda
-  /// su error, en un PR de protocolo.
-  (num?, String?) _parse(String key) {
-    final t = fields[key]!.text
-        .trim()
-        .replaceAll('−', '-')
-        .replaceAll(',', '.');
-    if (t.isEmpty) return (null, null);
-    if (limits[key]?.integer ?? false) {
-      return _integer.hasMatch(t)
-          ? (int.parse(t), null)
-          : (null, Strings.notAnInteger);
-    }
-    return _decimal.hasMatch(t)
-        ? (num.parse(t), null)
-        : (null, Strings.notANumber);
-  }
-
-  (Map<String, Object?>, Map<String, String>) _params() {
-    final params = <String, Object?>{'reasoning': reasoning};
-    final bad = <String, String>{};
-    for (final k in kNumberFields) {
-      final (value, error) = _parse(k);
-      params[k] = value;
-      if (error != null) bad[k] = error;
-    }
-    return (params, bad);
-  }
+  /// Lo que se manda: los números tal como se escribieron; leerlos es del
+  /// servidor (PROTOCOL.md §6.7).
+  Map<String, Object?> _params() => {
+    'reasoning': reasoning,
+    for (final k in kNumberFields) k: fields[k]!.text,
+  };
 
   Future<bool> _checkParams() async {
     _paramsTimer?.cancel();
     if (noModel != null) return true;
     final generation = ++_paramsGeneration;
-    final (params, bad) = _params();
-    if (bad.isNotEmpty) {
-      fieldErrors = bad;
-      paramsError = null;
-      preview = null;
-      notifyListeners();
-      return false;
-    }
     final r = await rpc.request('settings.model_params.check', {
-      'params': params,
+      'params': _params(),
       'extra': extra.text,
     });
     final errors = (r['field_errors'] as Map? ?? const {})
@@ -336,6 +312,7 @@ class ModelSection extends SettingsSection {
     extraError = extraErr;
     paramsError = null;
     preview = r['preview'] as String?;
+    _sameAsSaved = r['dirty'] == false;
     notifyListeners();
     return errors.isEmpty && extraErr == null;
   }
@@ -377,13 +354,14 @@ class ModelSection extends SettingsSection {
         _savingParams = true;
         // Lo que se manda: lo que se escriba mientras responde sigue como
         // cambio sin guardar.
-        final params = _params().$1;
+        final params = _params();
         final sent = extra.text;
         await rpc.request('settings.model_params.save', {
           'params': params,
           'extra': sent,
         });
-        savedParams = params;
+        savedReasoning = params['reasoning'] as String?;
+        savedFields = {for (final k in kNumberFields) k: params[k] as String};
         savedExtra = sent;
         notifyListeners();
       }),
@@ -404,7 +382,10 @@ class ModelSection extends SettingsSection {
   bool showSaveError(RpcError e) {
     if (e.code != RpcError.validationFailed) return false;
     if (_savingParams) {
-      paramsError = e.displayMessage;
+      final fieldsWrong = (e.data?['field_errors'] as Map? ?? const {})
+          .cast<String, String>();
+      fieldErrors = fieldsWrong;
+      paramsError = fieldsWrong.isEmpty ? e.displayMessage : null;
     } else {
       promptError = e.displayMessage;
     }

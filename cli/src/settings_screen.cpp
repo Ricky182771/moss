@@ -1144,8 +1144,7 @@ ftxui::Element SettingsScreen::render_params() const {
                                         ftxui::text("  "), std::move(hint) | ftxui::flex})));
         if (limits[i].field == "top_k") {
             rows.push_back(row("", false,
-                               ftxui::paragraph("No todos los proveedores lo aceptan.") | notice |
-                                   ftxui::flex));
+                               ftxui::paragraph(std::string{kTopKNote}) | notice | ftxui::flex));
         }
     }
     rows.push_back(row("", false, restore_all_button_->Render()));
@@ -1155,9 +1154,7 @@ ftxui::Element SettingsScreen::render_params() const {
 ftxui::Element SettingsScreen::render_advanced() const {
     const ftxui::Decorator notice = palette_.ink(&Theme::notice);
     const ModelParamsCheck check = model_check();
-    ftxui::Element below = ftxui::paragraph("Se mezcla al final del cuerpo (JSON Merge Patch): "
-                                            "gana sobre el formulario y null quita una llave.") |
-                           notice;
+    ftxui::Element below = ftxui::paragraph(std::string{kExtraNote}) | notice;
     for (const FieldProblem& problem : check.problems) {
         if (problem.field == "extra") {
             below = ftxui::paragraph(clean(problem.message)) | ftxui::bold;

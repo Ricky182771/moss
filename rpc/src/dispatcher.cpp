@@ -9,6 +9,7 @@
 
 #include "chatbot/addon_settings/registry.h"
 #include "chatbot/addon_settings/systemd_unit.h"
+#include "chatbot/addon_settings/time_zone.h"
 #include "chatbot/model_params.h"
 #include "chatbot/system_prompt.h"
 
@@ -52,9 +53,22 @@ Json model_params_json(const ModelParams& params) {
 }
 
 /// params y extra de settings.model_params.check/save. Un campo de otro tipo
-/// o desconocido da el data de -32602 ({"fields": ["params.<campo>"]}).
-std::optional<Json> read_model_params(const Json& params, ModelParams& out) {
-    const Result<ParsedModelParams> parsed = model_params_from_json(params.at("params").dump());
+/// o desconocido da el data de -32602 ({"fields": ["params.<campo>"]}). Un campo
+/// numérico también puede ser cadena, tal como se escribió: lo lee el formulario
+/// de F2 y lo que no es número va a text_problems.
+std::optional<Json> read_model_params(const Json& params, ModelParams& out,
+                                      std::vector<FieldProblem>& text_problems) {
+    Json object = params.at("params");
+    cli::ModelParamsForm form;
+    const std::vector<ParamLimit> limits = model_param_limits("");
+    for (std::size_t i = 0; object.is_object() && i < limits.size(); ++i) {
+        const auto field = object.find(std::string{limits[i].field});
+        if (field != object.end() && field->is_string()) {
+            form.numbers[i] = field->get<std::string>();
+            object.erase(field);
+        }
+    }
+    const Result<ParsedModelParams> parsed = model_params_from_json(object.dump());
     std::vector<std::string> fields;
     if (parsed.is_error()) {
         return Json{{"fields", Json::array({"params"})}};
@@ -67,6 +81,7 @@ std::optional<Json> read_model_params(const Json& params, ModelParams& out) {
         }
         out = parsed.value().params;
     }
+    form.apply_numbers(out, &text_problems);
     if (params.at("params").contains("extra")) {
         fields.emplace_back("params.extra"); // extra va aparte, como texto.
     }
@@ -257,12 +272,26 @@ Json status_json(const cli::TelegramAddon& addon) {
                                                            : Json(nullptr)},
             {"unit", std::string{unit_state_name(status.unit)}},
             {"linger", status.linger.has_value() ? Json(*status.linger) : Json(nullptr)},
+            // La condición de F2: solo si se sabe que está apagado.
+            {"linger_notice", status.linger == false ? Json(std::string{cli::kNoLinger})
+                                                     : Json(nullptr)},
+            {"linger_command", status.linger == false ? Json(std::string{cli::kLingerCommand})
+                                                      : Json(nullptr)},
             {"last_error", status.last_error},
             {"summary", cli::service_summary(status)},
             {"problem", cli::service_problem(status, addon.info().executable,
                                              addon.environment().data_dir.value_or(""))},
             {"mismatch", addon.out_of_sync(addon.saved_form().enabled)},
             {"journal_command", cli::journal_command(addon.info())}};
+}
+
+/// Por usuario, la pregunta de Quitar: la GUI la muestra tal cual.
+Json remove_questions(const std::vector<std::int64_t>& users) {
+    Json questions = Json::object();
+    for (const std::int64_t user : users) {
+        questions[std::to_string(user)] = cli::remove_invited_question(user);
+    }
+    return questions;
 }
 
 /// Los IDs de Telegram como cadenas decimales (sección 4).
@@ -667,6 +696,7 @@ void Dispatcher::settings(const std::string& method, const Json* params, const J
                                  {"base_url", choice.base_url},
                                  {"needs_key", choice.needs_key},
                                  {"key_saved", choice.key_saved},
+                                 {"key_status", non_empty_or_null(choice.key_status)},
                                  {"selectable", choice.selectable},
                                  {"note", choice.note}});
         }
@@ -725,8 +755,12 @@ void Dispatcher::settings(const std::string& method, const Json* params, const J
             return;
         }
         if (method == "settings.provider.check") {
+            const std::optional<cli::ProviderProblem> problem = form->problem();
             reply(id, has_id,
-                  {{"error", optional_string(form->validate())},
+                  {{"error", problem ? Json(problem->message) : Json(nullptr)},
+                   {"error_field", problem && !problem->field.empty()
+                                       ? Json(std::string{problem->field})
+                                       : Json(nullptr)},
                    {"hint", optional_string(form->base_url_hint())},
                    {"can_request_models", form->can_request_models()},
                    {"dirty", form->dirty()}});
@@ -833,6 +867,10 @@ void Dispatcher::settings(const std::string& method, const Json* params, const J
                {"reasoning_style",
                 std::string{reasoning_style_name(reasoning_style(config.provider))}},
                {"limits", std::move(limits)},
+               {"help",
+                {{"reasoning", cli::reasoning_help(config.provider)},
+                 {"top_k", std::string{cli::kTopKNote}},
+                 {"extra", std::string{cli::kExtraNote}}}},
                {"preview", optional_string(session_->check_model_params(saved).preview)}});
     } else if (method == "settings.model_params.check" ||
                method == "settings.model_params.save") {
@@ -842,7 +880,8 @@ void Dispatcher::settings(const std::string& method, const Json* params, const J
             return;
         }
         ModelParams draft;
-        if (const auto bad = read_model_params(*params, draft)) {
+        std::vector<FieldProblem> text_problems;
+        if (const auto bad = read_model_params(*params, draft, text_problems)) {
             fail(id, has_id, RpcError::InvalidParams, *bad);
             return;
         }
@@ -850,25 +889,36 @@ void Dispatcher::settings(const std::string& method, const Json* params, const J
             fail(id, has_id, RpcError::NotConfigured, message_data(*problem));
             return;
         }
-        const cli::ModelParamsCheck check = session_->check_model_params(draft);
-        if (method == "settings.model_params.check") {
-            Json field_errors = Json::object();
-            Json extra_error = nullptr;
-            for (const FieldProblem& problem : check.problems) {
-                if (problem.field == "extra") {
-                    extra_error = problem.message;
-                } else {
-                    field_errors[problem.field] = problem.message;
-                }
+        cli::ModelParamsCheck check = session_->check_model_params(draft);
+        if (!text_problems.empty()) {
+            // Como F2: lo que no es número va primero; Session no lo vio (quedó
+            // en Predeterminado).
+            check.problems.insert(check.problems.begin(), text_problems.begin(),
+                                  text_problems.end());
+            check.preview.reset();
+        }
+        Json field_errors = Json::object();
+        Json extra_error = nullptr;
+        for (const FieldProblem& problem : check.problems) {
+            if (problem.field == "extra") {
+                extra_error = problem.message;
+            } else {
+                field_errors[problem.field] = problem.message;
             }
+        }
+        if (method == "settings.model_params.check") {
+            ModelParams saved = session_->model_params();
+            saved.extra = format_extra(saved.extra); // El JSON como lo da get.
             reply(id, has_id,
                   {{"field_errors", std::move(field_errors)},
                    {"extra_error", std::move(extra_error)},
-                   {"preview", optional_string(check.preview)}});
+                   {"preview", optional_string(check.preview)},
+                   {"dirty", !text_problems.empty() || draft != saved}});
         } else if (!busy()) {
             if (!check.problems.empty()) {
                 fail(id, has_id, RpcError::ValidationFailed,
-                     message_data(check.problems.front().message));
+                     {{"message", check.problems.front().message},
+                      {"field_errors", std::move(field_errors)}});
             } else if (const std::optional<std::string> failed =
                            session_->save_model_params(draft)) {
                 fail(id, has_id, RpcError::StorageError, message_data(*failed));
@@ -877,9 +927,11 @@ void Dispatcher::settings(const std::string& method, const Json* params, const J
                 changed("model_params");
             }
         }
-    } else if (method == "settings.search.get" || method == "settings.search.save") {
+    } else if (method == "settings.search.get" || method == "settings.search.check" ||
+               method == "settings.search.save") {
+        const bool get = method == "settings.search.get";
         const bool save = method == "settings.search.save";
-        if (const auto bad = save ? check_params(params, {{"api_key"}}) : check_params(params, {})) {
+        if (const auto bad = get ? check_params(params, {}) : check_params(params, {{"api_key"}})) {
             fail(id, has_id, RpcError::InvalidParams, *bad);
             return;
         }
@@ -892,25 +944,30 @@ void Dispatcher::settings(const std::string& method, const Json* params, const J
             return;
         }
         cli::SearchSettings f = form.value();
-        if (!save) {
+        if (get) {
             reply(id, has_id,
                   {{"configured", session_->has_search_key()},
                    {"locked", f.key_locked()},
                    {"key_status", f.key_status()}});
             return;
         }
+        std::optional<std::string> error;
         if (f.key_locked()) {
-            fail(id, has_id, RpcError::ValidationFailed, message_data(kSearchKeyLocked));
-            return;
-        }
-        (void)f.set_key(params->at("api_key").get<std::string>());
-        if (const std::optional<std::string> error = f.validate()) {
-            fail(id, has_id, RpcError::ValidationFailed, message_data(*error));
-            return;
+            error = std::string{kSearchKeyLocked};
+        } else {
+            (void)f.set_key(params->at("api_key").get<std::string>());
+            error = f.validate();
         }
         const auto update = f.credential_update();
-        if (!update.has_value()) { // Vacía: en F2 no se guarda nada.
-            fail(id, has_id, RpcError::ValidationFailed, message_data(kSearchKeyEmpty));
+        if (!error.has_value() && !update.has_value()) { // Vacía: en F2 no se guarda nada.
+            error = std::string{kSearchKeyEmpty};
+        }
+        if (!save) {
+            reply(id, has_id, {{"error", optional_string(error)}});
+            return;
+        }
+        if (error.has_value()) {
+            fail(id, has_id, RpcError::ValidationFailed, message_data(*error));
             return;
         }
         if (const std::optional<std::string> failed = session_->save_search_key(update->second)) {
@@ -1112,6 +1169,18 @@ void Dispatcher::addons(const std::string& method, const Json* params, const Jso
                  {"model_key", cli::addon_secret_status(secrets.model_key, false)},
                  {"search_key", cli::addon_secret_status(secrets.search_key, false)}}},
                {"labels", std::move(labels)},
+               {"time_zones", addon_settings::available_time_zones()},
+               {"texts",
+                {{"same_model", std::string{cli::kSameModelHint}},
+                 {"own_keys_note", std::string{cli::kOwnKeysNote}},
+                 {"log_details_note", std::string{cli::kLogDetailsNote}},
+                 {"secret_removed", std::string{cli::kSecretRemoved}},
+                 {"restart_question", std::string{cli::kRestartQuestion}},
+                 {"saved", std::string{cli::kSaved}},
+                 {"cancelled_nothing_saved", std::string{cli::kCancelledNothingSaved}},
+                 {"cancelled_service_untouched", std::string{cli::kCancelledServiceUntouched}},
+                 {"foreign_unit_kept", std::string{cli::kForeignUnitKept}},
+                 {"cancelled_foreign_untouched", std::string{cli::kCancelledForeignUntouched}}}},
                {"env_note", cli::addon_env_note(addon.environment().env_defined)},
                {"read_only", addon.read_only()},
                {"read_only_reason", non_empty_or_null(reason)},
@@ -1191,7 +1260,9 @@ void Dispatcher::addons(const std::string& method, const Json* params, const Jso
         if (!addon.invited_error().empty()) {
             fail(id, has_id, RpcError::StorageError, message_data(addon.invited_error()));
         } else {
-            reply(id, has_id, {{"users", user_list(addon.invited())}});
+            reply(id, has_id,
+                  {{"users", user_list(addon.invited())},
+                   {"remove_questions", remove_questions(addon.invited())}});
         }
     } else if (method == "addons.telegram.invited.remove") {
         if (bad_params(check_params(params, {{"user"}}))) {
@@ -1210,6 +1281,7 @@ void Dispatcher::addons(const std::string& method, const Json* params, const Jso
                 } else {
                     reply(request, true,
                           {{"users", user_list(telegram_->invited())},
+                           {"remove_questions", remove_questions(telegram_->invited())},
                            {"message", removal.message}});
                 }
             });
@@ -1681,7 +1753,9 @@ void Dispatcher::sync(bool flush) {
             const std::string& reasoning = entries[last].reasoning;
             emit_conversation(
                 "conversation.reasoning_delta",
-                {{"index", last}, {"text", reasoning.substr(seen_.last_reasoning_size)}});
+                {{"index", last},
+                 {"text", reasoning.substr(seen_.last_reasoning_size)},
+                 {"reasoning_words", cli::reasoning_word_count(reasoning)}});
         }
     };
     if (text_first_) {

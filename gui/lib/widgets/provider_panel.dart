@@ -144,12 +144,7 @@ class _ProviderPanelState extends State<ProviderPanel> {
       label: r.name,
       note: [
         if (inUse) Strings.inUse,
-        if (!r.needsKey)
-          Strings.local
-        else if (r.keySaved)
-          Strings.keySaved
-        else
-          r.note,
+        if (!r.needsKey) Strings.local else r.keyStatus ?? r.note,
       ].where((t) => t.isNotEmpty).join(' · '),
       dot: inUse,
       muted: noKey,
@@ -166,11 +161,7 @@ class _ProviderPanelState extends State<ProviderPanel> {
     final isNew = p.provider == ProviderSection.newEndpoint;
     final inUse = p.provider == p.saved.provider;
     final keyLock = p.keyLocked ? Strings.envApiKey : null;
-    final status = inUse
-        ? p.keyStatus
-        : row?.keySaved ?? false
-        ? Strings.keySaved
-        : '';
+    final status = inUse ? p.keyStatus : row?.keyStatus ?? '';
     return SettingsCard(
       title: isNew ? Strings.newEndpoint : row?.name ?? p.provider,
       trailing: isNew ? null : Text(p.provider, style: s.noteMono),
@@ -180,6 +171,7 @@ class _ProviderPanelState extends State<ProviderPanel> {
             label: Strings.endpointName,
             controller: p.name,
             focusNode: _nameFocus,
+            error: p.errorOf('name'),
             onChanged: (_) => p.edited(),
           ),
           LabeledField(
@@ -187,6 +179,7 @@ class _ProviderPanelState extends State<ProviderPanel> {
             controller: p.baseUrl,
             mono: true,
             lockedBy: p.baseUrlLocked ? Strings.envBaseUrl : null,
+            error: p.errorOf('base_url'),
             onChanged: (_) => p.edited(),
             help: p.hint ?? Strings.baseUrlHelp,
           ),
@@ -196,12 +189,11 @@ class _ProviderPanelState extends State<ProviderPanel> {
           controller: p.apiKey,
           status: status,
           lockedBy: keyLock,
+          error: p.errorOf('api_key'),
           onChanged: (_) => p.edited(),
         ),
         if (!p.isEndpoint && p.hint != null) Text(p.hint!, style: s.note),
-        // `check` da un solo error, sin decir de qué campo: va al final de
-        // lo que se edita, antes de Borrar.
-        FieldMessage(p.error),
+        FieldMessage(p.errorApart),
         if (p.isEndpoint && !isNew && row != null)
           Container(
             padding: const EdgeInsets.only(top: 16),
@@ -358,6 +350,7 @@ class _ProviderPanelState extends State<ProviderPanel> {
           mono: true,
           hint: Strings.typeModelName,
           lockedBy: locked ? Strings.envModel : null,
+          error: p.errorOf('model'),
           onChanged: (_) => p.edited(),
         ),
       ],

@@ -38,6 +38,15 @@ enum class AddonField : std::size_t {
 };
 inline constexpr std::size_t kAddonFieldCount = static_cast<std::size_t>(AddonField::Count);
 
+/// Las notas de F2 → Addons, también para moss-rpc.
+inline constexpr std::string_view kSameModelHint = "Mismo que la app";
+inline constexpr std::string_view kOwnKeysNote =
+    "Sin key propia se usan las de la app. Recomendado: una propia con tope diario en el "
+    "proveedor.";
+inline constexpr std::string_view kLogDetailsNote =
+    "Puede incluir texto de los alumnos: solo para diagnosticar.";
+inline constexpr std::string_view kSecretRemoved = "se quita: se usará la de la app";
+
 /// La etiqueta del campo (≤ 20 caracteres: caben a 80 columnas).
 [[nodiscard]] std::string_view addon_field_label(AddonField field);
 

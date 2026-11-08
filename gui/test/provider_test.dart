@@ -77,6 +77,24 @@ void main() {
     expect(find.byType(SecretField), findsOneWidget);
   });
 
+  testWidgets('cada proveedor con su key_status, el que manda el servidor', (
+    tester,
+  ) async {
+    await startApp(tester);
+    await _open(tester);
+    expect(find.textContaining('guardada: …wxyz'), findsOneWidget);
+    expect(find.text('key guardada'), findsNothing);
+
+    await _tap(tester, _row('Google Gemini'));
+    await tester.pumpAndSettle();
+    final field = tester.widget<SecretField>(find.byType(SecretField));
+    expect(field.status, 'guardada: …wxyz');
+
+    await _tap(tester, _row('OmniRoute'));
+    await tester.pumpAndSettle();
+    expect(tester.widget<SecretField>(find.byType(SecretField)).status, '');
+  });
+
   testWidgets('la key va enmascarada; ver se apaga al salir del campo', (
     tester,
   ) async {
@@ -360,6 +378,20 @@ void main() {
     );
   });
 
+  testWidgets('models.list reemplazado por otro: no se queda cargando', (
+    tester,
+  ) async {
+    await startApp(
+      tester,
+      handlers: {
+        'models.list': (_) => throw const FakeError(-32800, 'Cancelado'),
+      },
+    );
+    await _open(tester);
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text(Strings.loadingModels), findsNothing);
+  });
+
   testWidgets('modelos con error: su mensaje y escribir a mano', (
     tester,
   ) async {
@@ -428,6 +460,70 @@ void main() {
           .enabled,
       isFalse,
     );
+  });
+
+  group('el error de check va junto a su campo', () {
+    const wrong = 'Mensaje del servidor.';
+    Future<void> openWith(WidgetTester tester, String? field) async {
+      await startApp(
+        tester,
+        handlers: {
+          'settings.provider.check': (_) =>
+              providerCheck(error: wrong, errorField: field),
+        },
+      );
+      await _open(tester);
+      await _tap(tester, _row('OmniRoute'));
+      await tester.pumpAndSettle();
+    }
+
+    Finder inside(Type type, String label) => find.descendant(
+      of: type == SecretField
+          ? find.byType(SecretField)
+          : find.widgetWithText(LabeledField, label),
+      matching: find.text(wrong),
+    );
+
+    for (final (field, type, label) in const [
+      ('name', LabeledField, Strings.endpointName),
+      ('base_url', LabeledField, Strings.baseUrl),
+      ('api_key', SecretField, Strings.apiKey),
+      ('model', LabeledField, Strings.modelByHand),
+    ]) {
+      testWidgets(field, (tester) async {
+        await openWith(tester, field);
+        expect(find.text(wrong), findsOneWidget);
+        expect(inside(type, label), findsOneWidget);
+      });
+    }
+
+    testWidgets('sin campo: al final de la tarjeta', (tester) async {
+      await openWith(tester, null);
+      expect(find.text(wrong), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(LabeledField),
+          matching: find.text(wrong),
+        ),
+        findsNothing,
+      );
+    });
+
+    testWidgets('de la URL en uno de la tabla, que no tiene ese campo', (
+      tester,
+    ) async {
+      await startApp(
+        tester,
+        handlers: {
+          'settings.provider.check': (_) =>
+              providerCheck(error: wrong, errorField: 'base_url'),
+        },
+      );
+      await _open(tester);
+      await _tap(tester, _row('Google Gemini'));
+      await tester.pumpAndSettle();
+      expect(find.text(wrong), findsOneWidget);
+    });
   });
 
   testWidgets('Guardar con un error en otra sección: va ahí y no guarda nada', (

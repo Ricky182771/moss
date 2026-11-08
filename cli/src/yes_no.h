@@ -1,12 +1,19 @@
 #ifndef CHATBOT_CLI_YES_NO_H
 #define CHATBOT_CLI_YES_NO_H
 
+#include <string>
 #include <string_view>
 
 namespace chatbot::cli {
 
 /// Lo que contesta un evento a una pregunta (s/n).
 enum class YesNo { Yes, No, Cancel, Ignore };
+
+/// Una pregunta del núcleo como se escribe en la línea de estado: el " (s/n)"
+/// es de la TUI (la GUI tiene botones).
+[[nodiscard]] inline std::string yes_no_question(std::string_view question) {
+    return std::string{question} + " (s/n)";
+}
 
 /// La regla de toda pregunta (s/n) (F2: descartar y las de Addons; la barra
 /// lateral: borrar una conversación): s/S sí, n/N no y Esc cancela (quien

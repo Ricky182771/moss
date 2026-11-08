@@ -62,7 +62,12 @@ void main() {
         rev: 2,
         entries: [
           entry('user', text: 'hola'),
-          entry('assistant', text: 'Hola', reasoning: 'pienso **mucho**'),
+          entry(
+            'assistant',
+            text: 'Hola',
+            reasoning: 'pienso **mucho**',
+            reasoningWords: 2,
+          ),
         ],
       ),
     );

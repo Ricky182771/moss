@@ -1058,6 +1058,13 @@ TEST_CASE("reasoning_summary: palabras con separador de miles", "[pensamiento]")
     CHECK(reasoning_summary(many) == "Pensamiento · 1 234 567 palabras");
 }
 
+TEST_CASE("reasoning_word_count: lo que resume reasoning_summary", "[pensamiento]") {
+    using chatbot::cli::reasoning_word_count;
+    CHECK(reasoning_word_count("") == 0);
+    CHECK(reasoning_word_count("una") == 1);
+    CHECK(reasoning_word_count("  dos\n\tpalabras\r\n") == 2);
+}
+
 TEST_CASE("glyphs: ▸ y ▾ del pensamiento tienen respaldo", "[pensamiento]") {
     using chatbot::cli::Glyph;
     using chatbot::cli::Symbols;

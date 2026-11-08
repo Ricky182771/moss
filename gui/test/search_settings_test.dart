@@ -102,7 +102,47 @@ void main() {
     expect(tester.widget<Switch>(find.byType(Switch)).onChanged, isNotNull);
   });
 
-  testWidgets('el error del servidor va junto al campo', (tester) async {
+  testWidgets('una key mal escrita da su error al escribir, sin guardar', (
+    tester,
+  ) async {
+    const wrong = 'Mensaje del servidor.';
+    final (_, server) = await startApp(
+      tester,
+      handlers: {
+        'settings.search.check': (p) => {
+          'error': p['api_key'] == 'TAVILY' ? wrong : null,
+        },
+      },
+    );
+    await _openSearch(tester);
+    await tester.enterText(_keyField, 'TAVILY');
+    await tester.pump();
+    expect(find.text(wrong), findsNothing); // Espera a que dejen de escribir.
+    await tester.pumpAndSettle(const Duration(milliseconds: 500));
+    expect(find.text(wrong), findsOneWidget);
+    expect(server.methods, isNot(contains('settings.search.save')));
+
+    // Guardar revisa y no guarda; escribir bien lo quita.
+    await tester.tap(find.text(Strings.save));
+    await tester.pumpAndSettle();
+    expect(server.methods, isNot(contains('settings.search.save')));
+    await tester.enterText(_keyField, _key);
+    await tester.pumpAndSettle(const Duration(milliseconds: 500));
+    expect(find.text(wrong), findsNothing);
+
+    // Vacía: se conserva la guardada, sin preguntar.
+    final before = server.methods
+        .where((m) => m == 'settings.search.check')
+        .length;
+    await tester.enterText(_keyField, '');
+    await tester.pumpAndSettle(const Duration(milliseconds: 500));
+    expect(
+      server.methods.where((m) => m == 'settings.search.check').length,
+      before,
+    );
+  });
+
+  testWidgets('el error de guardar va junto al campo', (tester) async {
     await startApp(
       tester,
       handlers: {

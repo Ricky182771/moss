@@ -28,6 +28,7 @@
 #include "chatbot/addon_settings/paths.h"
 #include "chatbot/addon_settings/registry.h"
 #include "chatbot/addon_settings/systemd_unit.h"
+#include "chatbot/addon_settings/time_zone.h"
 #include "chatbot/addon_settings/token.h"
 #include "chatbot/config.h"
 #include "chatbot/credentials.h"
@@ -258,12 +259,14 @@ TEST_CASE("RPC: el ejemplo completo de PROTOCOL.md (sección 8)", "[rpc]") {
         Json::parse(R"({"jsonrpc":"2.0","id":3,"result":{"accepted":true}})"),
         Json::parse(R"({"jsonrpc":"2.0","method":"conversation.entry_added","params":{
             "conversation":"c1","rev":1,"index":0,"entry":{"kind":"user","text":"hola",
-            "in_progress":false,"incomplete":false,"cancelled":false,"note":"","reasoning":""}}})"),
+            "in_progress":false,"incomplete":false,"cancelled":false,"note":"","reasoning":"",
+            "reasoning_words":0}}})"),
         Json::parse(R"({"jsonrpc":"2.0","method":"conversation.phase","params":{
             "conversation":"c1","rev":2,"phase":"thinking"}})"),
         Json::parse(R"({"jsonrpc":"2.0","method":"conversation.entry_added","params":{
             "conversation":"c1","rev":3,"index":1,"entry":{"kind":"assistant","text":"¡Ho",
-            "in_progress":true,"incomplete":false,"cancelled":false,"note":"","reasoning":""}}})"),
+            "in_progress":true,"incomplete":false,"cancelled":false,"note":"","reasoning":"",
+            "reasoning_words":0}}})"),
         Json::parse(R"({"jsonrpc":"2.0","method":"conversation.phase","params":{
             "conversation":"c1","rev":4,"phase":"streaming"}})"),
         Json::parse(R"({"jsonrpc":"2.0","method":"conversation.entry_delta","params":{
@@ -271,7 +274,8 @@ TEST_CASE("RPC: el ejemplo completo de PROTOCOL.md (sección 8)", "[rpc]") {
         Json::parse(R"({"jsonrpc":"2.0","method":"conversation.entry_updated","params":{
             "conversation":"c1","rev":6,"index":1,"entry":{"kind":"assistant",
             "text":"¡Hola! ¿En qué te ayudo?","in_progress":false,"incomplete":false,
-            "cancelled":false,"note":"","reasoning":""}}})"),
+            "cancelled":false,"note":"","reasoning":"",
+            "reasoning_words":0}}})"),
         Json::parse(R"({"jsonrpc":"2.0","method":"conversation.saved","params":{
             "conversation":"c1","rev":7,"id":"<id>","title":"hola"}})"),
         Json::parse(R"({"jsonrpc":"2.0","method":"conversations.changed","params":{}})"),
@@ -1351,6 +1355,43 @@ TEST_CASE("RPC: settings.provider.get", "[rpc][settings]") {
     }
 }
 
+TEST_CASE("RPC: settings.provider.get da el key_status de cada proveedor", "[rpc][settings]") {
+    Rpc rpc;
+    const auto of = [](const Json& result, const std::string& id) {
+        for (const Json& provider : result["providers"]) {
+            if (provider["id"] == id) {
+                return provider["key_status"];
+            }
+        }
+        FAIL("no está " + id);
+        return Json{};
+    };
+    SECTION("guardada, sin key y local") {
+        chatbot::Credentials credentials;
+        credentials.keys["gemini"] = kModelKey;
+        REQUIRE_FALSE(chatbot::save_credentials(rpc.credentials_path(), credentials));
+        rpc.config = rpc.load();
+        rpc.initialize();
+        rpc.call(2, "settings.provider.get");
+        const Json result = only(rpc)["result"];
+        CHECK(of(result, "gemini") == "guardada: " + chatbot::cli::mask_key(kModelKey));
+        CHECK(of(result, "nvidia").is_null());
+        CHECK(of(result, "ollama").is_null()); // "opcional en local" no es una key.
+        CHECK(result.dump().find(kModelKey) == std::string::npos);
+    }
+    SECTION("con CHAT_API_KEY, la misma en todos") {
+        rpc.env.values["CHAT_API_KEY"] = kModelKey;
+        rpc.config = rpc.load();
+        rpc.initialize();
+        rpc.call(2, "settings.provider.get");
+        const Json result = only(rpc)["result"];
+        const std::string expected = "(definido por CHAT_API_KEY) " + chatbot::cli::mask_key(kModelKey);
+        CHECK(of(result, "gemini") == expected);
+        CHECK(of(result, "nvidia") == expected);
+        CHECK(result.dump().find(kModelKey) == std::string::npos);
+    }
+}
+
 TEST_CASE("RPC: settings.provider.check y save", "[rpc][settings]") {
     Rpc rpc;
     rpc.config = rpc.load(); // Sin configuración: ready false.
@@ -1362,6 +1403,53 @@ TEST_CASE("RPC: settings.provider.check y save", "[rpc][settings]") {
         CHECK(result["error"].is_string());
         CHECK(result["hint"].is_null());
         CHECK(result["can_request_models"] == false);
+    }
+    SECTION("check: error_field dice de qué campo es el error de validate") {
+        const auto check = [&rpc](const Json& draft) {
+            rpc.call(2, "settings.provider.check", {{"draft", draft}});
+            return only(rpc)["result"];
+        };
+        const auto endpoint = [](std::string name, std::string url, std::string model) {
+            return Json{{"provider", "custom:"}, {"name", std::move(name)},
+                        {"base_url", std::move(url)}, {"model", std::move(model)},
+                        {"api_key", kModelKey}};
+        };
+        Json result = check(endpoint("", "https://mi-servidor/v1", "m"));
+        CHECK(result["error_field"] == "name");
+        CHECK(result["error"].is_string());
+        result = check(endpoint("Lab", "", "m"));
+        CHECK(result["error_field"] == "base_url");
+        CHECK(result["error"].is_string());
+        result = check(endpoint("Lab", "ftp://mi-servidor", "m"));
+        CHECK(result["error_field"] == "base_url");
+        result = check({{"provider", "nvidia"}, {"base_url", ""}, {"model", "m"}});
+        CHECK(result["error_field"] == "api_key");
+        result = check({{"provider", "nvidia"}, {"base_url", ""}, {"model", "m"},
+                        {"api_key", "$NVIDIA_KEY"}});
+        CHECK(result["error_field"] == "api_key");
+        CHECK(result.dump().find("$NVIDIA_KEY") == std::string::npos);
+        result = check(endpoint("Lab", "https://mi-servidor/v1", ""));
+        CHECK(result["error_field"] == "model");
+        result = check(endpoint("Lab", "https://mi-servidor/v1", "m"));
+        CHECK(result["error"].is_null());
+        CHECK(result["error_field"].is_null());
+    }
+    SECTION("check: un error que no es de un campo da error_field null") {
+        Json endpoints = Json::array();
+        for (int i = 0; i < 20; ++i) {
+            const std::string n = std::to_string(i);
+            endpoints.push_back({{"id", "e" + n},
+                                 {"name", "E" + n},
+                                 {"base_url", "https://e" + n + ".example/v1"}});
+        }
+        std::ofstream{rpc.config_path()} << Json{{"endpoints", endpoints}}.dump();
+        rpc.call(2, "settings.provider.check",
+                 {{"draft", {{"provider", "custom:"}, {"name", "Otro"},
+                             {"base_url", "https://otro.example/v1"}, {"model", "m"},
+                             {"api_key", kModelKey}}}});
+        const Json result = only(rpc)["result"];
+        CHECK(result["error"].is_string());
+        CHECK(result["error_field"].is_null());
     }
     SECTION("check: el hint de una URL sin ruta en un endpoint nuevo") {
         rpc.call(2, "settings.provider.check",
@@ -1544,6 +1632,28 @@ TEST_CASE("RPC: settings.system_prompt.*", "[rpc][settings]") {
     CHECK(only(rpc)["error"]["code"] == -32602);
 }
 
+TEST_CASE("RPC: guardar exactamente default_text borra la llave de config.json",
+          "[rpc][settings]") {
+    Rpc rpc;
+    rpc.initialize();
+    const auto stored = [&rpc] {
+        std::ifstream file{rpc.config_path()};
+        return Json::parse(file);
+    };
+    rpc.call(2, "settings.system_prompt.get");
+    const std::string default_text = only(rpc)["result"]["default_text"];
+
+    rpc.call(3, "settings.system_prompt.save", {{"text", "Eres un tutor."}});
+    CHECK(rpc.take()[0]["result"]["mode"] == "custom");
+    CHECK(stored()["system_prompt"] == "Eres un tutor.");
+
+    rpc.call(4, "settings.system_prompt.save", {{"text", default_text}});
+    CHECK(rpc.take()[0]["result"]["mode"] == "default");
+    CHECK_FALSE(stored().contains("system_prompt"));
+    rpc.call(5, "settings.system_prompt.get");
+    CHECK(only(rpc)["result"]["mode"] == "default");
+}
+
 TEST_CASE("RPC: settings.search.*", "[rpc][settings]") {
     Rpc rpc;
     SECTION("get y save") {
@@ -1574,6 +1684,48 @@ TEST_CASE("RPC: settings.search.*", "[rpc][settings]") {
         rpc.call(3, "settings.search.save", {{"api_key", "tvly-otra-clave-ficticia-de-busqueda"}});
         CHECK(only(rpc)["error"]["code"] == -32005);
         CHECK_FALSE(std::filesystem::exists(rpc.credentials_path()));
+    }
+}
+
+TEST_CASE("RPC: settings.search.check valida como save, sin guardar", "[rpc][settings]") {
+    Rpc rpc;
+    const auto same_as_save = [&rpc](const std::string& key) {
+        rpc.call(2, "settings.search.check", {{"api_key", key}});
+        const Json check = only(rpc);
+        CHECK(check["result"].size() == 1);
+        rpc.call(3, "settings.search.save", {{"api_key", key}});
+        const Json save = rpc.take()[0];
+        CHECK(check.dump().find(key.empty() ? "\x01" : key) == std::string::npos);
+        return std::pair{check["result"]["error"], save};
+    };
+    SECTION("mal escrita y vacía: el mismo texto que save") {
+        rpc.initialize();
+        for (const std::string& key : {std::string{"$TAVILY"}, std::string{"corta"}, std::string{}}) {
+            const auto [error, save] = same_as_save(key);
+            REQUIRE(error.is_string());
+            check_error(save, -32005, error.get<std::string>());
+        }
+        CHECK_FALSE(std::filesystem::exists(rpc.credentials_path()));
+    }
+    SECTION("bien escrita: null, y check no guarda") {
+        rpc.initialize();
+        rpc.call(2, "settings.search.check", {{"api_key", chatbot_test::kSearchKey}});
+        const std::vector<Json> got = rpc.take();
+        REQUIRE(got.size() == 1); // Sin settings.changed.
+        CHECK(got[0]["result"].dump() == R"({"error":null})");
+        CHECK_FALSE(std::filesystem::exists(rpc.credentials_path()));
+    }
+    SECTION("con CHAT_SEARCH_API_KEY: el aviso de save") {
+        rpc.env.values["CHAT_SEARCH_API_KEY"] = chatbot_test::kSearchKey;
+        rpc.initialize();
+        const auto [error, save] = same_as_save("tvly-otra-clave-ficticia-de-busqueda");
+        REQUIRE(error.is_string());
+        check_error(save, -32005, error.get<std::string>());
+    }
+    SECTION("sin api_key: -32602") {
+        rpc.initialize();
+        rpc.call(2, "settings.search.check");
+        CHECK(only(rpc)["error"]["code"] == -32602);
     }
 }
 
@@ -1737,6 +1889,25 @@ TEST_CASE("RPC: addons.telegram.get y check", "[rpc][addons]") {
     CHECK(result["secrets"]["model_key"] == chatbot::cli::addon_secret_status("", false));
     CHECK(result["labels"]["daily_limit"] ==
           std::string{chatbot::cli::addon_field_label(chatbot::cli::AddonField::DailyLimit)});
+    CHECK(result["time_zones"] == Json(chatbot::addon_settings::available_time_zones()));
+    using namespace chatbot::cli;
+    const std::vector<std::pair<const char*, std::string_view>> texts{
+        {"same_model", kSameModelHint},
+        {"own_keys_note", kOwnKeysNote},
+        {"log_details_note", kLogDetailsNote},
+        {"secret_removed", kSecretRemoved},
+        {"restart_question", kRestartQuestion},
+        {"saved", kSaved},
+        {"cancelled_nothing_saved", kCancelledNothingSaved},
+        {"cancelled_service_untouched", kCancelledServiceUntouched},
+        {"foreign_unit_kept", kForeignUnitKept},
+        {"cancelled_foreign_untouched", kCancelledForeignUntouched}};
+    CHECK(result["texts"].size() == texts.size());
+    for (const auto& [key, text] : texts) {
+        CHECK(result["texts"][key] == std::string{text});
+    }
+    CHECK(result["secrets"]["model_key"] != std::string{kSecretRemoved});
+    CHECK(addon_secret_status("", true) == std::string{kSecretRemoved});
     CHECK(result["read_only"] == false);
     CHECK(result["read_only_reason"].is_null());
     CHECK(result["discarded"] == Json::array());
@@ -1813,7 +1984,7 @@ TEST_CASE("RPC: addons.telegram.save", "[rpc][addons]") {
         Json form = bot_form(rpc);
         form["fields"]["daily_limit"] = "9";
         rpc.call(2, "addons.telegram.save", {{"form", form}});
-        check_error(only(rpc), -32008, "Se descartarán: rara. ¿Guardar? (s/n)");
+        check_error(only(rpc), -32008, "Se descartarán: rara. ¿Guardar?");
         rpc.call(3, "addons.telegram.save", {{"form", form}, {"discard_confirmed", true}});
         CHECK(summaries(rpc.take()) ==
               std::vector<std::string>{"#3 result", "settings.changed telegram"});
@@ -1860,7 +2031,11 @@ TEST_CASE("RPC: invitados", "[rpc][addons]") {
     REQUIRE(chatbot::addon_settings::add_invited(path, 9007199254740993).is_ok()); // > 2^53
     rpc.initialize();
     rpc.call(2, "addons.telegram.invited.list");
-    CHECK(only(rpc)["result"].dump() == R"({"users":["42","9007199254740993"]})");
+    const Json listed = only(rpc)["result"];
+    CHECK(listed["users"].dump() == R"(["42","9007199254740993"])");
+    CHECK(listed["remove_questions"]["42"] == chatbot::cli::remove_invited_question(42));
+    CHECK(listed["remove_questions"]["9007199254740993"] ==
+          chatbot::cli::remove_invited_question(9007199254740993));
 
     const bool active = GENERATE(false, true);
     rpc.system.set_active(active);
@@ -1899,9 +2074,19 @@ TEST_CASE("RPC: service.status y service.apply", "[rpc][addons]") {
         CHECK(status["active"] == "active");
         CHECK(status["unit"] == "missing");
         CHECK(status["linger"] == false);
+        CHECK(status["linger_notice"] == std::string{chatbot::cli::kNoLinger});
+        CHECK(status["linger_command"] == std::string{chatbot::cli::kLingerCommand});
         CHECK(status["exit_status"].is_null());
         CHECK(status["journal_command"] ==
               chatbot::cli::journal_command(*chatbot::addon_settings::find_addon("telegram")));
+    }
+    SECTION("status con linger: sin aviso") {
+        rpc.system.answer("loginctl show-user 1000 -p Linger --value",
+                          chatbot_test::exited(0, "yes\n"));
+        const Json status = long_call(rpc, 2, "service.status", {{"addon", "telegram"}})[0]["result"];
+        CHECK(status["linger"] == true);
+        CHECK(status["linger_notice"].is_null());
+        CHECK(status["linger_command"].is_null());
     }
     SECTION("apply escribe la unidad de la TUI, byte por byte") {
         const std::vector<Json> got = long_call(rpc, 2, "service.apply", {{"addon", "telegram"}});
@@ -2607,6 +2792,9 @@ TEST_CASE("RPC: settings.model_params.*", "[rpc][settings][ajustes]") {
         CHECK(got["limits"]["top_k"].dump() ==
               R"({"min":1,"max":1000,"min_exclusive":false,"integer":true})");
         CHECK(got["preview"] == chatbot::request_preview("z-ai/glm5", "nvidia", {}, 2));
+        CHECK(got["help"]["reasoning"] == chatbot::cli::reasoning_help("nvidia"));
+        CHECK(got["help"]["top_k"] == std::string{chatbot::cli::kTopKNote});
+        CHECK(got["help"]["extra"] == std::string{chatbot::cli::kExtraNote});
 
         const Json draft{{"params", {{"temperature", 0.3}, {"top_k", 0}, {"reasoning", "high"}}},
                          {"extra", R"({"model": "x"})"}};
@@ -2648,10 +2836,82 @@ TEST_CASE("RPC: settings.model_params.*", "[rpc][settings][ajustes]") {
         }
         CHECK(after.dump().find(rpc.config.api_key) == std::string::npos);
     }
+    SECTION("la ayuda del razonamiento depende del proveedor") {
+        const std::string provider = GENERATE("gemini", "openrouter", "anthropic");
+        rpc.config.provider = provider;
+        rpc.initialize();
+        rpc.call(2, "settings.model_params.get");
+        CHECK(only(rpc)["result"]["help"]["reasoning"] == chatbot::cli::reasoning_help(provider));
+        CHECK(chatbot::cli::reasoning_help(provider) != chatbot::cli::reasoning_help("nvidia"));
+    }
+    SECTION("números como cadena, leídos como en F2") {
+        rpc.initialize();
+        const auto check = [&rpc](const Json& fields) {
+            rpc.call(9, "settings.model_params.check", {{"params", fields}});
+            return only(rpc)["result"];
+        };
+        chatbot::ModelParams expected;
+        expected.temperature = 0.6;
+
+        // Válidos: "0.6", "0.60", con coma, con espacios. La vista previa es
+        // la de los números de siempre.
+        const std::string text = GENERATE("0.6", "0.60", "0,6", " 0.6 ");
+        Json result = check({{"temperature", text}});
+        CHECK(result["field_errors"].dump() == "{}");
+        CHECK(result["preview"] == chatbot::request_preview("z-ai/glm5", "nvidia", expected, 2));
+        CHECK(result["dirty"] == true);
+
+        // Inválidos: los textos de draft de F2, en field_errors, sin vista previa.
+        chatbot::cli::ModelParamsForm form;
+        form.numbers[0] = "abc"; // temperature
+        form.numbers[2] = "2.5"; // top_k
+        std::vector<chatbot::FieldProblem> problems;
+        (void)form.draft(&problems);
+        REQUIRE(problems.size() == 2);
+        result = check({{"temperature", "abc"}, {"top_k", "2.5"}});
+        CHECK(result["field_errors"]["temperature"] == problems[0].message);
+        CHECK(result["field_errors"]["top_k"] == problems[1].message);
+        CHECK(result["preview"].is_null());
+        CHECK(result["dirty"] == true);
+
+        // Fuera de rango: la misma validación que un número.
+        const Json by_text = check({{"temperature", "9"}});
+        const Json by_number = check({{"temperature", 9}});
+        CHECK(by_text["field_errors"] == by_number["field_errors"]);
+        CHECK(by_text["field_errors"].contains("temperature"));
+        const Json nan = check({{"temperature", "nan"}});
+        CHECK(nan["field_errors"] == by_number["field_errors"]);
+
+        // Vacíos: Predeterminado, sin error.
+        result = check({{"temperature", ""}, {"top_k", "  "}, {"seed", nullptr}});
+        CHECK(result["field_errors"].dump() == "{}");
+        CHECK(result["preview"] == chatbot::request_preview("z-ai/glm5", "nvidia", {}, 2));
+        CHECK(result["dirty"] == false);
+
+        // save: guarda lo mismo; "abc" no guarda y dice por qué.
+        rpc.call(3, "settings.model_params.save",
+                 {{"params", {{"temperature", "abc"}, {"top_k", "2.5"}}}});
+        const Json failed = only(rpc);
+        check_error(failed, -32005, problems[0].message);
+        CHECK(failed["error"]["data"]["field_errors"]["top_k"] == problems[1].message);
+        rpc.call(4, "settings.model_params.save", {{"params", {{"temperature", "0,60"}}}});
+        CHECK(rpc.take()[0]["result"].dump() == "{}");
+        rpc.call(5, "settings.model_params.get");
+        const Json saved = only(rpc)["result"];
+        CHECK(saved["params"]["temperature"] == 0.6);
+
+        // Igual a lo guardado por valor, y el JSON tal como lo da get: sin cambios.
+        rpc.call(6, "settings.model_params.check",
+                 {{"params", {{"temperature", "0.60"}}}, {"extra", saved["extra"]}});
+        CHECK(only(rpc)["result"]["dirty"] == false);
+        // Los clientes de antes siguen mandando números.
+        CHECK(check({{"temperature", 0.6}})["dirty"] == false);
+        CHECK(check({{"temperature", 0.7}})["dirty"] == true);
+    }
     SECTION("parámetros de otro tipo o desconocidos: -32602") {
         rpc.initialize();
         rpc.call(2, "settings.model_params.check",
-                 {{"params", {{"temperature", "0.3"}, {"color", 1}, {"extra", Json::object()}}}});
+                 {{"params", {{"temperature", true}, {"color", 1}, {"extra", Json::object()}}}});
         const Json bad = only(rpc);
         CHECK(bad["error"]["code"] == -32602);
         CHECK(bad["error"]["data"]["fields"].dump() ==
@@ -2714,21 +2974,29 @@ TEST_CASE("RPC: respuesta con pensamiento y texto", "[rpc][pensamiento]") {
     // La entrada nace con el primer pensamiento y sin texto.
     CHECK(got[3]["params"]["entry"]["text"] == "");
     CHECK(got[3]["params"]["entry"]["reasoning"] == "uno ");
+    CHECK(got[3]["params"]["entry"]["reasoning_words"] == 1);
     CHECK(got[3]["params"]["entry"]["in_progress"] == true);
+    // El delta trae el total, no lo que agrega: la línea se actualiza mientras llega.
+    CHECK(got[4]["params"]["text"] == "dos tres");
+    CHECK(got[4]["params"]["reasoning_words"] == 3);
     CHECK(got[8]["params"]["entry"]["reasoning"] == "uno dos tres");
+    CHECK(got[8]["params"]["entry"]["reasoning_words"] == 3);
     CHECK(got[8]["params"]["entry"]["text"] == "Hola");
 
     // El snapshot trae el pensamiento; reabierta, también.
     rpc.call(3, "conversation.get", {{"conversation", "c1"}});
     const Json snapshot = rpc.take().back()["result"];
     CHECK(snapshot["entries"][1]["reasoning"] == "uno dos tres");
+    CHECK(snapshot["entries"][1]["reasoning_words"] == 3);
     CHECK(snapshot["entries"][0]["reasoning"] == "");
+    CHECK(snapshot["entries"][0]["reasoning_words"] == 0);
     const std::string id = snapshot["id"];
     rpc.call(4, "conversation.new");
     rpc.call(5, "conversation.open", {{"id", id}});
     const Json reopened = rpc.take().back()["result"];
     REQUIRE(reopened["entries"].size() >= 2);
     CHECK(reopened["entries"][1]["reasoning"] == "uno dos tres");
+    CHECK(reopened["entries"][1]["reasoning_words"] == 3);
     CHECK(reopened["entries"][1]["text"] == "Hola");
 }
 

@@ -150,6 +150,10 @@ class _ServiceCard extends StatelessWidget {
           Text(status.problem, style: error),
         if (status != null && status.mismatch.isNotEmpty)
           Text(status.mismatch, style: error),
+        if (status?.lingerNotice case final notice?)
+          Text(notice, style: s.note),
+        if (status?.lingerCommand case final command?)
+          SelectableText(command, style: s.noteMono),
         Wrap(
           spacing: 10,
           runSpacing: 10,
@@ -192,10 +196,9 @@ class _ServiceCard extends StatelessWidget {
 class _Field extends StatelessWidget {
   final TelegramSection t;
   final String field;
-  final String? hint;
   final String? help;
   final Widget? trailing;
-  const _Field(this.t, this.field, {this.hint, this.help, this.trailing});
+  const _Field(this.t, this.field, {this.help, this.trailing});
 
   @override
   Widget build(BuildContext context) => LabeledField(
@@ -204,10 +207,40 @@ class _Field extends StatelessWidget {
     onChanged: (_) => t.edited(field),
     mono: true,
     enabled: !t.readOnly,
-    hint: hint,
     help: help,
     error: t.fieldErrors[field],
     trailing: trailing,
+  );
+}
+
+/// Un campo con una lista para elegir, y que se puede escribir a mano.
+class _Choice extends StatelessWidget {
+  final TelegramSection t;
+  final String field;
+  final List<String> options;
+  final String? hint;
+  final String? help;
+  final VoidCallback? onFocus;
+  const _Choice(
+    this.t,
+    this.field, {
+    required this.options,
+    this.hint,
+    this.help,
+    this.onFocus,
+  });
+
+  @override
+  Widget build(BuildContext context) => ChoiceField(
+    label: t.label(field),
+    controller: t.fields[field]!,
+    options: options,
+    onChanged: (_) => t.edited(field),
+    enabled: !t.readOnly,
+    hint: hint,
+    help: help,
+    error: t.fieldErrors[field],
+    onFocus: onFocus,
   );
 }
 
@@ -274,10 +307,17 @@ class _BotCard extends StatelessWidget {
           hint: Strings.tokenHint,
           help: Strings.keepTokenHelp,
         ),
-        _Field(t, 'model', hint: Strings.sameModelAsApp),
+        _Choice(
+          t,
+          'model',
+          options: t.models,
+          hint: t.text('same_model'),
+          help: t.modelsError,
+          onFocus: t.loadModels,
+        ),
         _Secret(t, 'model_key'),
         _Secret(t, 'search_key'),
-        Text(Strings.ownKeyHelp, style: s.note),
+        Text(t.text('own_keys_note'), style: s.note),
       ],
     );
   }
@@ -337,7 +377,12 @@ class _LimitsCard extends StatelessWidget {
             runSpacing: gap,
             children: [
               for (final f in _fields)
-                SizedBox(width: width, child: _Field(t, f)),
+                SizedBox(
+                  width: width,
+                  child: f == 'time_zone'
+                      ? _Choice(t, f, options: t.timeZones)
+                      : _Field(t, f),
+                ),
             ],
           );
         },
@@ -346,7 +391,7 @@ class _LimitsCard extends StatelessWidget {
         value: t.logErrorDetails,
         onChanged: t.readOnly ? null : t.setLogErrorDetails,
         title: Strings.logDetailsTitle,
-        note: Strings.logDetailsNote,
+        note: t.text('log_details_note'),
       ),
     ],
   );
@@ -359,8 +404,7 @@ class _InvitedCard extends StatelessWidget {
   Future<void> _remove(BuildContext context, String user) async {
     final yes = await confirm(
       context,
-      question: Strings.removeInvitedQuestion(user),
-      detail: Strings.removeInvitedDetail,
+      question: t.removeQuestions[user] ?? '',
       confirmLabel: Strings.removeInvited,
       action: () async => null,
     );

@@ -143,8 +143,18 @@ void main() {
         conversation: snapshot(
           rev: 2,
           entries: [
-            entry('assistant', text: 'Uno', reasoning: 'pienso uno'),
-            entry('assistant', text: 'Dos', reasoning: 'pienso dos'),
+            entry(
+              'assistant',
+              text: 'Uno',
+              reasoning: 'pienso uno',
+              reasoningWords: 2,
+            ),
+            entry(
+              'assistant',
+              text: 'Dos',
+              reasoning: 'pienso dos',
+              reasoningWords: 2,
+            ),
           ],
         ),
       );
@@ -154,6 +164,37 @@ void main() {
       await tester.tap(find.text('Pensamiento · 2 palabras').first);
       await tester.pumpAndSettle();
       expect(_folds(tester), [1, 0]);
+    });
+
+    testWidgets('la línea dice lo que manda el servidor, también al llegar', (
+      tester,
+    ) async {
+      final (_, server) = await startApp(
+        tester,
+        conversation: snapshot(
+          rev: 2,
+          phase: 'thinking',
+          entries: [
+            entry('user', text: 'hola'),
+            entry(
+              'assistant',
+              reasoning: 'Estoy',
+              reasoningWords: 1234,
+              inProgress: true,
+            ),
+          ],
+        ),
+      );
+      expect(find.text('Pensamiento · 1 234 palabras'), findsOneWidget);
+      server.notify('conversation.reasoning_delta', {
+        'conversation': 'c1',
+        'rev': 3,
+        'index': 1,
+        'text': ' pensando',
+        'reasoning_words': 1235,
+      });
+      await tester.pump();
+      expect(find.text('Pensamiento · 1 235 palabras'), findsOneWidget);
     });
 
     testWidgets('abierto mientras llega y se pliega con el texto', (

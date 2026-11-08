@@ -153,9 +153,12 @@ TEST_CASE("Codificación de Entry", "[rpc]") {
     entry.note = "nota";
     CHECK(chatbot::rpc::encode_entry(entry).dump() ==
           R"({"kind":"assistant","text":"¡Hola!","in_progress":true,"incomplete":false,)"
-          R"("cancelled":false,"note":"nota","reasoning":""})");
-    entry.reasoning = "pensé";
-    CHECK(chatbot::rpc::encode_entry(entry)["reasoning"] == "pensé");
+          R"("cancelled":false,"note":"nota","reasoning":"","reasoning_words":0})");
+    entry.reasoning = "pensé  dos\nveces";
+    const Json thought = chatbot::rpc::encode_entry(entry);
+    CHECK(thought["reasoning"] == "pensé  dos\nveces");
+    CHECK(thought["reasoning_words"] == chatbot::cli::reasoning_word_count(entry.reasoning));
+    CHECK(thought["reasoning_words"] == 3);
 
     Entry sources;
     sources.kind = EntryKind::Sources;

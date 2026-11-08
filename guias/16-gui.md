@@ -75,7 +75,7 @@ Los agrega el servidor al historial (`Session::report`, `PROTOCOL.md` §6.5) y l
 
 **Borradores.** `SettingsScreen` crea un `SettingsState` al abrirse y lo descarta al salir. Cada sección (`SettingsSection`) lee lo guardado con su `*.get` (`load`) y lleva su borrador (campos, `TextEditingController`); `dirty` lo compara con lo guardado y pone la marca en el menú. Cambiar de sección no pierde nada; Cancelar llama a `discard` en todas. Colores es especial: su borrador es `AppState.prefs`, que `PrefsApp` aplica al momento (vista previa en vivo); Cancelar y Descartar lo regresan a lo guardado antes de desmontar.
 
-**Checks.** Mientras se escribe, cada sección manda su `*.check` con un retraso (`kCheckDelay`, 400 ms después de la última tecla) y pone lo que regresa junto al campo (`field_errors`, `extra_error`, `error`, `hint`, la vista previa, los bytes). Nada de eso se calcula en Dart, salvo convertir lo escrito a número para mandarlo como número (y marcar lo que no se puede convertir; ver la deuda).
+**Checks.** Mientras se escribe, cada sección manda su `*.check` con un retraso (`kCheckDelay`, 400 ms después de la última tecla) y pone lo que regresa junto al campo (`field_errors`, `extra_error`, `error`, `hint`, la vista previa, los bytes). Nada de eso se calcula en Dart: los números van como texto, tal como se escribieron, y `settings.model_params.check` dice su error y si son iguales a lo guardado (`dirty`).
 
 **Guardar** (`SettingsState.save`):
 1. Los `check` de las secciones con cambios, en paralelo. Un error: no se guarda nada, el panel va a la primera sección que lo tiene y cada error se queda junto a su campo. Un error del propio `check` (Busy, no se pudo leer) va en la barra.
@@ -97,13 +97,15 @@ Los agrega el servidor al historial (`Session::report`, `PROTOCOL.md` §6.5) y l
 - **Al entrar:** `addons.telegram.get`, `addons.telegram.invited.list` y `addons.list`, y una vez `service.status` (lo pide `needs_restart`, como en F2). Con `service.changed` (`AppState.serviceEvents`) se vuelve a pedir `service.status`, que no emite `service.changed`: no hay ciclo. Como `service.status` corre `--config-version`, después se piden otra vez `addons.list` y `addons.telegram.get` (el borrador solo si no hay cambios); si falla, `addons.check_install`. El estado al pie del menú es el `summary` con un punto según `active`.
 - **Formulario:** los campos de `form.fields` con las etiquetas de `labels`, repartidos en Bot, Acceso y Límites como la maqueta; `enabled` y `log_error_details`, casillas. Los secretos (`token`, `model_key`, `search_key`) son `SecretField` (vacío = se conserva; el estado de `secrets`); Quitar pone `remove_*` y escribir lo deshace. `read_only` deshabilita todo y muestra `read_only_reason` (o `load_error`); `env_note` va arriba. `dirty` compara el borrador con lo guardado; en solo lectura nunca hay cambios.
 - **Guardar** (la última en `SaveOrder`, como Addons en F2): en la revisión, `addons.telegram.check` (`field_errors` junto a cada campo; `form_error` al final si no es de un campo). El paso de guardar hace `addons.telegram.save` y, **después**, `service.apply`, el paso obligatorio:
-  1. `-32008` al guardar (llaves descartadas): la pregunta del servidor; Sí repite con `discard_confirmed: true`, No o Esc no guardan ("Cancelado: no se guardó nada.").
-  2. Con `needs_restart`: "¿Reiniciar ahora?"; Sí o No van como `restart`; Esc no toca el servicio.
+  1. `-32008` al guardar (llaves descartadas): la pregunta del servidor; Sí repite con `discard_confirmed: true`, No o Esc no guardan (`texts.cancelled_nothing_saved`).
+  2. Con `needs_restart`: `texts.restart_question`; Sí o No van como `restart`; Esc no toca el servicio.
   3. `service.apply` con `-32008` (unidad ajena): la pregunta del servidor; Sí repite con `replace_foreign: true`.
-  4. Su `message` va como aviso corto ("Guardado. …"), también con `ok: false` (el addon sin instalar es aviso, no error); `-32006` (sin systemd de usuario) también. Los demás errores van en la barra.
-  Las preguntas usan `SettingsState.ask`, que pone la pantalla: `askYesNo` (`delete_dialog.dart`), la ventana de Borrar con Sí/No, el foco en No, Esc = cancelar, y sin el ` (s/n)` de los textos de la TUI.
+  4. Su `message` va como aviso corto, después de `texts.saved`, también con `ok: false` (el addon sin instalar es aviso, no error); `-32006` (sin systemd de usuario) también. Los demás errores van en la barra.
+  Las preguntas usan `SettingsState.ask`, que pone la pantalla: `askYesNo` (`delete_dialog.dart`), la ventana de Borrar con Sí/No, el foco en No, Esc = cancelar. Las preguntas del servidor llegan sin ` (s/n)`, que es de la TUI.
+- **Modelo y Zona horaria** son `ChoiceField` (`settings_form.dart`): una lista flotante sobre `Popover`, que se filtra al escribir y deja escribir a mano. Las zonas son `time_zones` de `addons.telegram.get`, la misma base con que se valida. Los modelos son `models.list` con el proveedor guardado, el que usa el bot, pedidos al entrar al campo; otro `models.list` reemplaza al que esté pendiente, también al de la sección Proveedor (`PROTOCOL.md` §6.7).
+- **Servicio:** los textos son de `service.status`, incluidos `linger_notice` y `linger_command` (el comando se puede seleccionar; la GUI nunca lo corre).
 - **Acciones largas** (`service.status`, `service.restart`, `service.apply`, `addons.check_install`, `invited.remove`): con `RpcClient.start`, para mandar `$/cancel` al salir de Configuración (`TelegramSection.dispose`). Cancelar no interrumpe la acción y `service.changed` llega igual. Su botón (`SecondaryButton`) queda deshabilitado mientras dura y, si pasa de 300 ms (`Motion.loadingDelay`), muestra el indicador. Funcionan con una respuesta del chat en curso.
-- **Al momento, sin esperar a Guardar:** Generar (`addons.telegram.invite_code`) pone el código en el campo, sin guardar; Quitar un invitado pregunta con el texto de la TUI y llama a `invited.remove`, cuyo `message` va como aviso.
+- **Al momento, sin esperar a Guardar:** Generar (`addons.telegram.invite_code`) pone el código en el campo, sin guardar; Quitar un invitado pregunta con `remove_questions` del servidor y llama a `invited.remove`, cuyo `message` va como aviso.
 
 ### Ver registro (G4)
 
@@ -126,13 +128,8 @@ Una acción que no espera a Guardar (como Borrar endpoint) va dentro de `owner.q
 
 ## Deuda conocida
 
-- `thoughtSummary` (`state/apply.dart`) copia la cuenta de palabras de la TUI (`reasoning_summary`). Lo correcto es que el servidor mande el resumen; necesita un campo nuevo en el protocolo.
 - Resaltado de sintaxis en los bloques de código: la maqueta pinta las palabras clave con el token `code`, pero `DISENO.md` no lo pide; queda para después.
 - `RpcClient` lleva la cuenta de los `id` porque `json_rpc_2` 3.x no deja elegirlos (lo vigila `test/client_test.dart`); la 4.x tiene `idGenerator`.
 - El mensaje que llega se re-parsea entero en cada trozo (ver "Texto del modelo llegando").
-- La explicación del razonamiento en Configuración del modelo (`Strings.reasoningHelp`) copia los textos de la TUI por `reasoning_style`, sin el caso de OpenRouter. Lo correcto es que `settings.model_params.get` mande el texto.
-- `ModelSection._parse` decide qué texto es un número (coma decimal, `−`, enteros según `limits.integer`) con los mensajes de la TUI; `Strings.topKNote` y `Strings.extraHelp` repiten reglas del núcleo. Lo correcto es que `settings.model_params.check` acepte el texto de cada campo y que `get` mande las notas.
-- `settings.provider.check` da un solo `error` sin decir de qué campo: va al final de la tarjeta del elegido. `key_status` es solo del proveedor guardado; para los demás, la GUI dice "key guardada" con `key_saved`.
 - `PrefsApp` aplana el `TextScaler` del sistema a lineal (en escritorio siempre lo es).
-- Telegram: las notas de los campos ("El servicio arranca solo al iniciar sesión.", "Sin key propia…"), el estado `se quita: se usará la de la app` y los avisos de cancelar una pregunta ("Cancelado: se guardó, pero no se tocó el servicio.") copian textos de la F2 de la TUI, y "¿Reiniciar ahora?" el de `PROTOCOL.md`. No son reglas, pero lo correcto es que `addons.telegram.get` los mande. Tampoco se muestra el aviso de linger de F2 (`linger: false`): falta su texto en el protocolo. `askYesNo` quita el ` (s/n)` del final de las preguntas del servidor (`-32008`), que son las de la TUI: lo correcto es que el protocolo las mande sin él.
 - `title_search.dart` pliega solo los acentos del español y lenguas cercanas; `arriving.dart` detecta los bloques de código solo por las cercas al principio de línea. Las dos están marcadas con `shortcut:`.

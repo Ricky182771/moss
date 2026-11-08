@@ -50,6 +50,7 @@ sealed class RpcEvent {
         rev,
         p['index'] as int,
         p['text'] as String,
+        p['reasoning_words'] as int? ?? 0,
       ),
       'conversation.entry_updated' => EntryUpdated(
         c,
@@ -115,7 +116,16 @@ class EntryDelta extends ConversationEvent {
 class ReasoningDelta extends ConversationEvent {
   final int index;
   final String text;
-  const ReasoningDelta(super.conversation, super.rev, this.index, this.text);
+
+  /// El total de palabras del pensamiento con este trozo.
+  final int words;
+  const ReasoningDelta(
+    super.conversation,
+    super.rev,
+    this.index,
+    this.text,
+    this.words,
+  );
 }
 
 class EntryUpdated extends ConversationEvent {

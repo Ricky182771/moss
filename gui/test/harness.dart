@@ -59,6 +59,7 @@ Future<(AppState, FakeServer)> startApp(
         'warning': null,
         'bytes': (p['text'] as String).length,
       },
+      'settings.search.check': (_) => {'error': null},
       'settings.model_params.get': (_) => modelParams(),
       'settings.model_params.check': (_) => {
         'field_errors': <String, String>{},
@@ -143,6 +144,7 @@ Map<String, Object?> providerSettings({
       'base_url': 'https://integrate.api.nvidia.com/v1',
       'needs_key': true,
       'key_saved': true,
+      'key_status': 'guardada: …abcd',
       'selectable': true,
       'note': '',
     },
@@ -153,6 +155,7 @@ Map<String, Object?> providerSettings({
       'base_url': 'https://generativelanguage.googleapis.com/v1beta/openai',
       'needs_key': true,
       'key_saved': true,
+      'key_status': 'guardada: …wxyz',
       'selectable': true,
       'note': '',
     },
@@ -163,6 +166,7 @@ Map<String, Object?> providerSettings({
       'base_url': 'https://mi-gateway.example/v1',
       'needs_key': true,
       'key_saved': false,
+      'key_status': null,
       'selectable': false,
       'note': 'sin key',
     },
@@ -174,6 +178,7 @@ Map<String, Object?> providerSettings({
         'base_url': 'http://127.0.0.1:8080/v1',
         'needs_key': false,
         'key_saved': false,
+        'key_status': null,
         'selectable': true,
         'note': '',
       },
@@ -245,15 +250,31 @@ Map<String, Object?> modelParams({
       'integer': true,
     },
   },
+  'help': const {
+    'reasoning': kReasoningHelp,
+    'top_k': kTopKHelp,
+    'extra': kExtraHelp,
+  },
   'preview': '{\n  "model": "z-ai/glm5",\n  "temperature": 0.6\n}',
 };
 
+/// Lo que manda el servidor en `help`: la GUI no tiene estos textos.
+const kReasoningHelp =
+    'En NIM, Bajo, Medio y Alto solo lo encienden (enable_thinking); Apagado '
+    'lo apaga.';
+const kTopKHelp = 'No todos los proveedores lo aceptan.';
+const kExtraHelp =
+    'Se mezcla al final del cuerpo (JSON Merge Patch): gana sobre el '
+    'formulario y null quita una llave.';
+
 Map<String, Object?> providerCheck({
   String? error,
+  String? errorField,
   String? hint,
   bool canRequestModels = true,
 }) => {
   'error': error,
+  'error_field': errorField,
   'hint': hint,
   'can_request_models': canRequestModels,
   'dirty': false,
@@ -299,6 +320,27 @@ const kTelegramLabels = {
   'time_zone': 'Zona horaria',
 };
 
+/// Lo que manda el servidor en `texts`: la GUI no tiene estos textos.
+const kTelegramTexts = {
+  'same_model': 'Mismo que la app',
+  'own_keys_note':
+      'Sin key propia se usan las de la app. Recomendado: una propia con tope '
+      'diario en el proveedor.',
+  'log_details_note':
+      'Puede incluir texto de los alumnos: solo para diagnosticar.',
+  'secret_removed': 'se quita: se usará la de la app',
+  'restart_question':
+      'Este cambio necesita reiniciar el bot y se borran las conversaciones en '
+      'memoria. ¿Reiniciar ahora?',
+  'saved': 'Guardado.',
+  'cancelled_nothing_saved': 'Cancelado: no se guardó nada.',
+  'cancelled_service_untouched':
+      'Cancelado: se guardó, pero no se tocó el servicio.',
+  'foreign_unit_kept': 'Guardado. No se tocó el servicio existente.',
+  'cancelled_foreign_untouched':
+      'Cancelado: se guardó, pero no se tocó el servicio existente.',
+};
+
 Map<String, Object?> telegramGet({
   bool enabled = true,
   bool logErrorDetails = false,
@@ -336,6 +378,12 @@ Map<String, Object?> telegramGet({
     'search_key': 'sin configurar',
   },
   'labels': kTelegramLabels,
+  'texts': kTelegramTexts,
+  'time_zones': const [
+    'America/Mexico_City',
+    'America/Tijuana',
+    'Europe/Madrid',
+  ],
   'env_note': envNote,
   'read_only': readOnly,
   'read_only_reason': readOnlyReason,
@@ -349,13 +397,17 @@ Map<String, Object?> serviceStatus({
   String summary = 'Servicio: activo · habilitado',
   String problem = '',
   String mismatch = '',
+  String? lingerNotice,
+  String? lingerCommand,
 }) => {
   'systemd': systemd,
   'active': active,
   'enabled': 'enabled',
   'exit_status': null,
   'unit': 'current',
-  'linger': true,
+  'linger': lingerNotice == null,
+  'linger_notice': lingerNotice,
+  'linger_command': lingerCommand,
   'last_error': '',
   'summary': summary,
   'problem': problem,
@@ -382,7 +434,12 @@ Map<String, Object? Function(Map<String, dynamic>)> telegramHandlers({
   bool needsRestart = false,
 }) => {
   'addons.telegram.get': (_) => get ?? telegramGet(),
-  'addons.telegram.invited.list': (_) => {'users': invited},
+  'addons.telegram.invited.list': (_) => {
+    'users': invited,
+    'remove_questions': {
+      for (final u in invited) u: '¿Quitar $u ahora? No espera a Guardar.',
+    },
+  },
   'addons.list': (_) => {
     'addons': [addonInstall()],
   },

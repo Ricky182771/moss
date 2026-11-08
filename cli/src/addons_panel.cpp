@@ -2,6 +2,7 @@
 
 #include "input_style.h"
 #include "list_style.h"
+#include "yes_no.h"
 
 #include "chatbot/addon_settings/time_zone.h"
 #include "chatbot/markdown/markdown.h"
@@ -173,7 +174,7 @@ AddonsPanel::AddonsPanel(const Palette& palette, Notice notice, std::function<vo
             };
             break;
         case AddonField::Model:
-            placeholder = "Mismo que la app"; // Cuál, en la fila de abajo.
+            placeholder = std::string{kSameModelHint}; // Cuál, en la fila de abajo.
             break;
         case AddonField::TimeZone:
             placeholder = std::string{settings::default_time_zone()};
@@ -374,13 +375,13 @@ bool AddonsPanel::ask_before_saving() {
     if (text.empty()) {
         return false;
     }
-    question_ = Question{std::move(text),
+    question_ = Question{yes_no_question(text),
                          [this] {
                              discard_confirmed_ = true;
                              retry_save_();
                          },
                          {},
-                         "Cancelado: no se guardó nada."};
+                         std::string{kCancelledNothingSaved}};
     return true;
 }
 
@@ -400,11 +401,10 @@ std::optional<std::string> AddonsPanel::commit() {
     refresh_placeholders();
 
     if (restart) {
-        question_ = Question{"Este cambio necesita reiniciar el bot y se borran las "
-                             "conversaciones en memoria. ¿Reiniciar ahora? (s/n)",
+        question_ = Question{yes_no_question(kRestartQuestion),
                              [this] { apply_service(true, false); },
                              [this] { apply_service(false, false); },
-                             "Cancelado: se guardó, pero no se tocó el servicio."};
+                             std::string{kCancelledServiceUntouched}};
     } else {
         apply_service(false, false);
     }
@@ -413,22 +413,22 @@ std::optional<std::string> AddonsPanel::commit() {
 
 void AddonsPanel::apply_service(bool restart, bool replace_foreign) {
     if (!telegram_->has_service()) {
-        notice_("Guardado.");
+        notice_(std::string{kSaved});
         return;
     }
     notice_(telegram_->saved_form().enabled ? "Guardado. Aplicando al servicio…"
                                             : "Guardado. Deteniendo el servicio…");
     const auto done = [this, restart](const TelegramAddon::Applied& applied) {
         if (applied.action.kind == ServiceAction::Kind::Confirm) {
-            question_ = Question{applied.action.message,
+            question_ = Question{yes_no_question(applied.action.message),
                                  [this, restart] { apply_service(restart, true); },
-                                 [this] { notice_("Guardado. No se tocó el servicio existente."); },
-                                 "Cancelado: se guardó, pero no se tocó el servicio existente."};
+                                 [this] { notice_(std::string{kForeignUnitKept}); },
+                                 std::string{kCancelledForeignUntouched}};
             return;
         }
         const std::string& detail =
             applied.skipped.empty() ? applied.action.message : applied.skipped;
-        notice_(detail.empty() ? "Guardado." : "Guardado. " + detail);
+        notice_(detail.empty() ? std::string{kSaved} : std::string{kSaved} + " " + detail);
     };
     telegram_->apply(restart, replace_foreign, done);
 }
@@ -458,7 +458,7 @@ void AddonsPanel::ask_remove_invited() {
     }
     const std::int64_t user = invited_[static_cast<std::size_t>(invited_selected_)];
     question_ = Question{
-        "¿Quitar " + std::to_string(user) + " ahora? No espera a Guardar. (s/n)",
+        yes_no_question(remove_invited_question(user)),
         [this, user] {
             telegram_->remove_invited(user, [this](const TelegramAddon::Removal& removal) {
                 notice_(removal.error.value_or(removal.message));
@@ -692,17 +692,14 @@ ftxui::Element AddonsPanel::render_fields() const {
             rows.push_back(indented_note("La app usa " + app_model_ + ".") | notice);
         }
         if (field == AddonField::SearchKey) {
-            rows.push_back(indented_note("Sin key propia se usan las de la app. Recomendado: "
-                                         "una propia con tope diario en el proveedor.") |
-                           notice);
+            rows.push_back(indented_note(std::string{kOwnKeysNote}) | notice);
         }
     }
     rows.push_back(read_only() ? ftxui::text(std::string{form_.log_error_details ? "[x]" : "[ ]"} +
                                              " Detalle de errores en el registro") |
                                      notice
                                : details_box_->Render());
-    rows.push_back(indented_note("Puede incluir texto de los alumnos: solo para diagnosticar.") |
-                   notice);
+    rows.push_back(indented_note(std::string{kLogDetailsNote}) | notice);
     rows.push_back(ftxui::separator() | palette_.ink(&Theme::border));
     rows.push_back(render_invited());
     return ftxui::vbox(std::move(rows));

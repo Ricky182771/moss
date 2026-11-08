@@ -3,7 +3,6 @@ library;
 
 import '../models/conversation.dart';
 import '../models/events.dart';
-import '../strings.dart';
 
 /// El snapshot después de [e].
 ///
@@ -31,11 +30,14 @@ ConversationSnapshot? applyEvent(ConversationSnapshot s, ConversationEvent e) {
         rev: e.rev,
         entries: replaceLast((x) => x.copyWith(text: x.text + text)),
       );
-    case ReasoningDelta(:final index, :final text):
+    case ReasoningDelta(:final index, :final text, :final words):
       if (index != last) return null;
       return s.copyWith(
         rev: e.rev,
-        entries: replaceLast((x) => x.copyWith(reasoning: x.reasoning + text)),
+        entries: replaceLast(
+          (x) =>
+              x.copyWith(reasoning: x.reasoning + text, reasoningWords: words),
+        ),
       );
     case EntryUpdated(:final index, :final entry):
       if (index != last) return null;
@@ -49,18 +51,4 @@ ConversationSnapshot? applyEvent(ConversationSnapshot s, ConversationEvent e) {
     case ChatFinished():
       return s.copyWith(rev: e.rev);
   }
-}
-
-/// "Pensamiento · N palabras", contado como la TUI (`reasoning_summary`).
-///
-/// shortcut: copia la lógica de la TUI (`cli/src/conversation.cpp`); lo
-/// correcto es que `moss-rpc` mande el resumen en la entrada (cambio de
-/// protocolo, fuera de G1).
-String thoughtSummary(String reasoning) {
-  final words = RegExp(r'[^ \n\t\r]+').allMatches(reasoning).length;
-  final digits = words.toString().replaceAllMapped(
-    RegExp(r'\B(?=(\d{3})+$)'),
-    (_) => ' ',
-  );
-  return Strings.thoughtSummary(digits, words == 1);
 }
