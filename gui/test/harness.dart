@@ -393,3 +393,33 @@ Map<String, Object? Function(Map<String, dynamic>)> telegramHandlers({
     'ok': true,
   },
 };
+
+String _two(int n) => n.toString().padLeft(2, '0');
+
+/// Una línea `short-iso` del día [day] (relativo a hoy: 0, -1…).
+String journalLine(int day, String time, String message) {
+  final now = DateTime.now();
+  final d = DateTime(now.year, now.month, now.day + day);
+  return '${d.year}-${_two(d.month)}-${_two(d.day)}T$time-0600 moss-prueba '
+      'moss-telegram[4242]: $message';
+}
+
+/// 30 líneas de ayer y 30 de hoy.
+List<String> manyLines() => [
+  for (var i = 0; i < 30; i++)
+    journalLine(-1, '22:${_two(i)}:00', 'mensaje de ayer $i'),
+  for (var i = 0; i < 30; i++)
+    journalLine(0, '09:${_two(i)}:00', 'mensaje de hoy $i'),
+];
+
+Map<String, Object?> logResult({
+  List<String>? lines,
+  List<int> errors = const [],
+  bool truncated = false,
+  String notice = '',
+}) => {
+  'lines': lines ?? manyLines(),
+  'errors': errors,
+  'truncated': truncated,
+  'notice': notice,
+};

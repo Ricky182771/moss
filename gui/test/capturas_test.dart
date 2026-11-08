@@ -199,6 +199,39 @@ Future<void> _typeInBox(WidgetTester tester, String text) async {
   await _settle(tester);
 }
 
+/// El registro de la maqueta `Config-registro`: ayer y hoy, con errores.
+List<String> sampleLog() => [
+  journalLine(-1, '22:41:07', 'Mensaje de 123456789 respondido en 4.1 s'),
+  journalLine(-1, '22:58:30', 'Invitado 555123987 quitado'),
+  journalLine(-1, '23:10:02', 'Deteniendo: SIGTERM'),
+  journalLine(
+    0,
+    '08:58:02',
+    'Started moss-telegram.service - Moss: bot de Telegram.',
+  ),
+  journalLine(
+    0,
+    '08:58:03',
+    'Conectado como @moss_prueba_bot · 2 IDs autorizados',
+  ),
+  journalLine(0, '09:02:11', 'Mensaje de 123456789 respondido en 3.4 s'),
+  journalLine(0, '09:05:46', 'Mensaje de 987654321 respondido en 6.0 s'),
+  journalLine(
+    0,
+    '09:06:20',
+    'Error al responder a 987654321: HTTP 429 del proveedor (límite de '
+        'solicitudes)',
+  ),
+  journalLine(
+    0,
+    '09:20:33',
+    'Error de red con Telegram: tiempo de espera agotado',
+  ),
+  journalLine(0, '09:20:34', 'moss-telegram: una línea fatal de ejemplo'),
+  '-- una línea sin el formato short-iso --',
+  journalLine(0, '09:31:15', 'Mensaje de 123456789 respondido en 2.8 s'),
+];
+
 void main() {
   setUpAll(() async {
     Directory(_out).createSync(recursive: true);
@@ -645,6 +678,36 @@ void main() {
       await edit(tester);
       await _shot(tester, 'config-telegram-error-$mode');
     });
+
+    // Ver registro: con errores y separadores, vacío y cargando.
+    for (final (name, log)
+        in <(String, Object? Function(Map<String, dynamic>))>[
+          (
+            'registro',
+            (_) => logResult(
+              lines: sampleLog(),
+              errors: [7, 8, 9],
+              truncated: true,
+            ),
+          ),
+          (
+            'registro-vacio',
+            (_) => logResult(
+              lines: [],
+              notice: 'El bot todavía no ha escrito nada en el registro.',
+            ),
+          ),
+          ('registro-cargando', (_) => noReply),
+        ]) {
+      testWidgets('telegram: $name ($mode)', (tester) async {
+        await telegram(tester, handlers: {'service.log': log});
+        await tester.tap(find.text(Strings.viewLog));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+        await tester.pump(const Duration(milliseconds: 400));
+        await _shot(tester, 'config-telegram-$name-$mode');
+      });
+    }
 
     testWidgets('telegram: más contraste ($mode)', (tester) async {
       await telegram(tester, highContrast: true);

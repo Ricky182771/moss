@@ -5,6 +5,7 @@ import '../strings.dart';
 import '../theme/colors.dart';
 import '../theme/theme.dart';
 import 'delete_dialog.dart';
+import 'log_dialog.dart';
 import 'settings_form.dart';
 
 /// El color del punto del servicio, según `active` de `service.status`.
@@ -17,25 +18,32 @@ Color serviceDot(MossColors c, ServiceStatus? status) =>
 
 /// Telegram (maqueta `Config-addons`): Servicio, Bot, Acceso, Límites e
 /// Invitados. Solo Linux; en Windows, solo el aviso.
-class TelegramPanel extends StatelessWidget {
+class TelegramPanel extends StatefulWidget {
   final TelegramSection section;
+  const TelegramPanel(this.section, {super.key});
 
-  /// Ver registro (Parte 2); null mientras no exista.
-  final VoidCallback? onViewLog;
-  final FocusNode? viewLogFocus;
+  @override
+  State<TelegramPanel> createState() => _TelegramPanelState();
+}
 
-  const TelegramPanel(
-    this.section, {
-    super.key,
-    this.onViewLog,
-    this.viewLogFocus,
-  });
+class _TelegramPanelState extends State<TelegramPanel> {
+  /// Ver registro: al cerrar la ventana, el foco regresa aquí.
+  final _viewLog = FocusNode(debugLabel: 'Ver registro');
+
+  @override
+  void dispose() {
+    _viewLog.dispose();
+    super.dispose();
+  }
+
+  void _openLog() =>
+      showLogDialog(context, rpc: widget.section.rpc, returnFocus: _viewLog);
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
     final s = context.styles;
-    final t = section;
+    final t = widget.section;
     if (!t.supported) {
       return SettingsCard(
         children: [Text(Strings.telegramLinuxOnly, style: s.row)],
@@ -52,7 +60,7 @@ class TelegramPanel extends StatelessWidget {
             child: Text(problem, style: s.note.copyWith(color: c.error)),
           ),
         if (t.envNote.isNotEmpty) Text(t.envNote, style: s.note),
-        _ServiceCard(t, onViewLog: onViewLog, viewLogFocus: viewLogFocus),
+        _ServiceCard(t, onViewLog: _openLog, viewLogFocus: _viewLog),
         _BotCard(t),
         _AccessCard(t),
         _LimitsCard(t),
