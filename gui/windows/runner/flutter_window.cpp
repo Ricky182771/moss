@@ -1,8 +1,17 @@
 #include "flutter_window.h"
 
+#include <dwmapi.h>
+#include <flutter/standard_method_codec.h>
+
 #include <optional>
+#include <variant>
 
 #include "flutter/generated_plugin_registrant.h"
+
+// Por si el SDK es anterior a 10.0.22000.0, igual que en win32_window.cpp.
+#ifndef DWMWA_USE_IMMERSIVE_DARK_MODE
+#define DWMWA_USE_IMMERSIVE_DARK_MODE 20
+#endif
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
     : project_(project) {}
@@ -27,6 +36,23 @@ bool FlutterWindow::OnCreate() {
   RegisterPlugins(flutter_controller_->engine());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
+  window_channel_ = std::make_unique<flutter::MethodChannel<>>(
+      flutter_controller_->engine()->messenger(), "moss/window",
+      &flutter::StandardMethodCodec::GetInstance());
+  window_channel_->SetMethodCallHandler(
+      [this](const flutter::MethodCall<>& call,
+             std::unique_ptr<flutter::MethodResult<>> result) {
+        const bool* dark = call.arguments() != nullptr
+                               ? std::get_if<bool>(call.arguments())
+                               : nullptr;
+        if (call.method_name() != "setDark" || dark == nullptr) {
+          result->NotImplemented();
+          return;
+        }
+        SetDarkTitleBar(*dark);
+        result->Success();
+      });
+
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
     this->Show();
   });
@@ -39,7 +65,26 @@ bool FlutterWindow::OnCreate() {
   return true;
 }
 
+void FlutterWindow::SetDarkTitleBar(bool dark) {
+  const HWND hwnd = GetHandle();
+  if (hwnd == nullptr) {
+    return;
+  }
+  app_sets_theme_ = true;
+  const BOOL value = dark ? TRUE : FALSE;
+  // Antes de Windows 10 20H1 no existe: devuelve un error y la barra se queda.
+  DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &value,
+                        sizeof(value));
+  // Windows 10 no repinta la barra hasta que cambia la activación.
+  if (IsWindowVisible(hwnd)) {
+    const bool active = GetForegroundWindow() == hwnd;
+    DefWindowProc(hwnd, WM_NCACTIVATE, !active, 0);
+    DefWindowProc(hwnd, WM_NCACTIVATE, active, 0);
+  }
+}
+
 void FlutterWindow::OnDestroy() {
+  window_channel_ = nullptr;
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
   }
@@ -64,6 +109,12 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
   switch (message) {
     case WM_FONTCHANGE:
       flutter_controller_->engine()->ReloadSystemFonts();
+      break;
+    case WM_DWMCOLORIZATIONCOLORCHANGED:
+      // Win32Window pondría el tema del sistema; manda el de la app.
+      if (app_sets_theme_) {
+        return 0;
+      }
       break;
     case WM_GETMINMAXINFO: {
       // El mínimo es del contenido y en píxeles lógicos; Windows lo pide de la

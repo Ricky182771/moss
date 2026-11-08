@@ -12,6 +12,7 @@ import 'screens/error_screen.dart';
 import 'state/app_state.dart';
 import 'strings.dart';
 import 'theme/theme.dart';
+import 'widgets/window_theme.dart';
 
 void main(List<String> args) {
   if (args.contains('--frame-stats')) startFrameStats();
@@ -69,14 +70,16 @@ class PrefsApp extends StatelessWidget {
         final mq = MediaQuery.of(context);
         // shortcut: aplana el escalado del sistema a lineal (en escritorio
         // siempre lo es); si llega Android, componer los dos TextScaler.
-        return MediaQuery(
-          data: mq.copyWith(
-            disableAnimations: mq.disableAnimations || p.reduceMotion,
-            textScaler: TextScaler.linear(
-              mq.textScaler.scale(1) * p.textSize.scale,
+        return WindowTheme(
+          child: MediaQuery(
+            data: mq.copyWith(
+              disableAnimations: mq.disableAnimations || p.reduceMotion,
+              textScaler: TextScaler.linear(
+                mq.textScaler.scale(1) * p.textSize.scale,
+              ),
             ),
+            child: child!,
           ),
-          child: child!,
         );
       },
       home: home,
