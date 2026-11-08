@@ -458,7 +458,7 @@ Si `config.json` o `credentials.json` no se pueden leer (JSON inválido, permiso
 - `error` de `validate_system_prompt` y `warning` de `system_prompt_limit_warning`, los mismos textos que F2 muestra debajo del campo; `bytes` en UTF-8.
 
 **`settings.system_prompt.save`** `→ {text}` `← {mode}`
-- `text` es siempre una cadena (**sin `null`**). `""` = sin mensaje de sistema. **Restaurar** = mandar `default_text`: `system_prompt_to_store` convierte el predeterminado en "borrar la llave", igual que F2.
+- `text` es siempre una cadena (**sin `null`**). `""` = sin mensaje de sistema. **Predeterminadas y Restaurar** = mandar exactamente `default_text`: `system_prompt_to_store` convierte el predeterminado en "borrar la llave", igual que F2, así que `config.json` queda sin `system_prompt`, no con el texto, y la respuesta dice `mode: "default"`. Por eso no hace falta `null`.
 - `Session::save_system_prompt_text`. Se aplica a la conversación abierta con `set_system_prompt`, desde su siguiente mensaje, con los avisos de F2 en el historial.
 - Errores: `-32002` (respuesta en curso), `-32005` con el texto de `validate_system_prompt`, `-32007` si falla la escritura.
 
