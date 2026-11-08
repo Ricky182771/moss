@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# journalctl falso de tools/run-fake.sh: moss-rpc lo encuentra primero en su
+# PATH. Imprime un registro de ejemplo del bot (ayer y hoy, con errores), de
+# la más nueva a la más vieja como `-r -o short-iso`, sin leer tu journal.
+# Cualquier otra cosa (-o cat para el último error): nada.
+set -euo pipefail
+[[ " $* " == *" -o short-iso "* ]] || exit 0
+ayer=$(date -d yesterday +%F)
+hoy=$(date +%F)
+tz=$(date +%z)
+linea() { # <día> <hora> <programa[pid]> <mensaje>
+	printf '%sT%s%s moss-prueba %s: %s\n' "$1" "$2" "$tz" "$3" "$4"
+}
+bot() { # <día> <hora> <nivel> <mensaje>
+	linea "$1" "$2" "moss-telegram[4242]" "$1 $2 $3 $4"
+}
+{
+	bot "$ayer" 22:41:07 info "respondida chat=123456789 ms=4100 bytes=812"
+	bot "$ayer" 22:58:30 info "invitado_quitado"
+	linea "$ayer" 23:10:02 "systemd[1201]" "Stopping moss-telegram.service - Moss: bot de Telegram..."
+	bot "$ayer" 23:10:02 info "fin"
+	linea "$hoy" 08:58:02 "systemd[1201]" "Started moss-telegram.service - Moss: bot de Telegram."
+	bot "$hoy" 08:58:03 info "telegram_conectado bot=@moss_prueba_bot"
+	bot "$hoy" 09:02:11 info "respondida chat=123456789 ms=3400 bytes=640"
+	bot "$hoy" 09:06:20 error 'chat=987654321 origen=modelo tipo="límite de solicitudes" http=429 ms=900 detalle="texto de ejemplo"'
+	bot "$hoy" 09:20:33 error 'chat=123456789 origen=modelo tipo="red" http=0 ms=30000'
+	linea "$hoy" 09:20:39 "moss-telegram[4242]" "moss-telegram: una línea fatal de ejemplo"
+	bot "$hoy" 09:31:15 info "respondida chat=123456789 ms=2800 bytes=1024"
+	echo "una línea sin el formato short-iso"
+} | tac

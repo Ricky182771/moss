@@ -66,10 +66,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text(Strings.colorsLead), findsOneWidget);
 
+    // Da la vuelta: de Proveedor a la última (Telegram).
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
     await tester.pumpAndSettle();
-    expect(find.text(Strings.searchLead), findsOneWidget);
+    expect(find.text(Strings.telegramLead), findsOneWidget);
   });
 
   testWidgets('Guardar está deshabilitado sin cambios', (tester) async {

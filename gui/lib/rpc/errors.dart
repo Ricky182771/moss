@@ -17,6 +17,9 @@ class RpcError implements Exception {
   static const int busy = -32002;
   static const int notConfigured = -32004;
   static const int validationFailed = -32005;
+  static const int unsupported = -32006;
+  static const int storageError = -32007;
+  static const int confirmationRequired = -32008;
   static const int protocolMismatch = -32010;
 
   /// Errores que van junto a la caja del mensaje: Busy, sin configurar y

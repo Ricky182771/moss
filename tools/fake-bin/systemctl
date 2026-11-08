@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# systemctl falso de tools/run-fake.sh, por si acaso: el envoltorio ya deja a
+# moss-rpc sin bus, pero con esto ni una versión de systemd que lo encontrara
+# por otra vía llega a tu moss-telegram.service. Responde como sin systemd de
+# usuario (moss-rpc lo reconoce: salida vacía y "bus" en stderr).
+echo 'Failed to connect to bus: No medium found (systemd de usuario aislado por run-fake.sh)' >&2
+exit 1

@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# loginctl falso de tools/run-fake.sh: moss-rpc lo encuentra primero en su
+# PATH. `loginctl show-user` va por el bus del sistema (no el de la sesión),
+# así que sin esto service.status leería el linger de tu usuario real.
+# Siempre "sin linger".
+echo no

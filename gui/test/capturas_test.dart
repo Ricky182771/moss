@@ -199,6 +199,39 @@ Future<void> _typeInBox(WidgetTester tester, String text) async {
   await _settle(tester);
 }
 
+/// El registro de la maqueta `Config-registro`: ayer y hoy, con errores.
+List<String> sampleLog() => [
+  journalLine(-1, '22:41:07', 'Mensaje de 123456789 respondido en 4.1 s'),
+  journalLine(-1, '22:58:30', 'Invitado 555123987 quitado'),
+  journalLine(-1, '23:10:02', 'Deteniendo: SIGTERM'),
+  journalLine(
+    0,
+    '08:58:02',
+    'Started moss-telegram.service - Moss: bot de Telegram.',
+  ),
+  journalLine(
+    0,
+    '08:58:03',
+    'Conectado como @moss_prueba_bot · 2 IDs autorizados',
+  ),
+  journalLine(0, '09:02:11', 'Mensaje de 123456789 respondido en 3.4 s'),
+  journalLine(0, '09:05:46', 'Mensaje de 987654321 respondido en 6.0 s'),
+  journalLine(
+    0,
+    '09:06:20',
+    'Error al responder a 987654321: HTTP 429 del proveedor (límite de '
+        'solicitudes)',
+  ),
+  journalLine(
+    0,
+    '09:20:33',
+    'Error de red con Telegram: tiempo de espera agotado',
+  ),
+  journalLine(0, '09:20:34', 'moss-telegram: una línea fatal de ejemplo'),
+  '-- una línea sin el formato short-iso --',
+  journalLine(0, '09:31:15', 'Mensaje de 123456789 respondido en 2.8 s'),
+];
+
 void main() {
   setUpAll(() async {
     Directory(_out).createSync(recursive: true);
@@ -393,11 +426,13 @@ void main() {
       TextSize textSize = TextSize.normal,
       Size size = _size,
       Map<String, Object? Function(Map<String, dynamic>)> handlers = const {},
+      List<String> addons = const [],
     }) async {
       final (_, server) = await startApp(
         tester,
         key: _key,
         size: size,
+        addons: addons,
         summaries: _summaries,
         prefs: GuiPrefs(
           theme: choice,
@@ -514,6 +549,169 @@ void main() {
       await tester.ensureVisible(find.text(Strings.preview));
       await tester.pumpAndSettle();
       await _shot(tester, 'config-avanzado-$mode');
+    });
+
+    // Telegram (G4): la sección (arriba y completa), Windows, cada pregunta
+    // y Más contraste.
+    Future<FakeServer> telegram(
+      WidgetTester tester, {
+      Size size = _size,
+      bool highContrast = false,
+      Map<String, Object? Function(Map<String, dynamic>)> handlers = const {},
+    }) => config(
+      tester,
+      page: Strings.telegramMenu,
+      size: size,
+      highContrast: highContrast,
+      addons: ['telegram'],
+      handlers: {
+        ...telegramHandlers(
+          invited: ['555123987', '700100200'],
+          get: telegramGet(
+            fields: {'invite_code': 'q7Xk2_Lm9-ZpR4tA'},
+            envNote:
+                'CHAT_API_KEY está definida en esta terminal, pero el servicio '
+                'no la ve.',
+          ),
+        ),
+        ...handlers,
+      },
+    );
+
+    Future<void> edit(WidgetTester tester) async {
+      final field = find.descendant(
+        of: find.byWidgetPredicate(
+          (w) => w is LabeledField && w.label == 'Mensajes por día',
+        ),
+        matching: find.byType(EditableText),
+      );
+      await tester.ensureVisible(field);
+      await tester.enterText(field, '40');
+      await tester.pumpAndSettle(const Duration(milliseconds: 500));
+      await tester.tap(find.text(Strings.save));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('telegram ($mode)', (tester) async {
+      await telegram(tester);
+      await _shot(tester, 'config-telegram-$mode');
+    });
+
+    testWidgets('telegram completa ($mode)', (tester) async {
+      await telegram(tester, size: const Size(1440, 2300));
+      await _shot(tester, 'config-telegram-completa-$mode');
+    });
+
+    testWidgets('telegram en Windows ($mode)', (tester) async {
+      await config(tester, page: Strings.telegramMenu);
+      await _shot(tester, 'config-telegram-windows-$mode');
+    });
+
+    testWidgets('telegram: ¿descartar llaves? ($mode)', (tester) async {
+      await telegram(
+        tester,
+        handlers: {
+          'addons.telegram.save': (_) => throw const FakeError(
+            -32008,
+            'confirmar',
+            {'message': 'Se descartarán: rara, vieja. ¿Guardar? (s/n)'},
+          ),
+        },
+      );
+      await edit(tester);
+      await _shot(tester, 'config-telegram-descartar-$mode');
+    });
+
+    testWidgets('telegram: ¿reiniciar ahora? ($mode)', (tester) async {
+      await telegram(
+        tester,
+        handlers: {
+          'addons.telegram.check': (_) => {
+            'field_errors': <String, String>{},
+            'form_error': null,
+            'needs_restart': true,
+          },
+          'addons.telegram.save': (_) => {'needs_restart': true},
+        },
+      );
+      await edit(tester);
+      await _shot(tester, 'config-telegram-reiniciar-$mode');
+    });
+
+    testWidgets('telegram: ¿reemplazar el servicio? ($mode)', (tester) async {
+      await telegram(
+        tester,
+        handlers: {
+          'service.apply': (_) => throw const FakeError(-32008, 'confirmar', {
+            'message': '¿Reemplazar el servicio existente? (s/n)',
+          }),
+        },
+      );
+      await edit(tester);
+      await _shot(tester, 'config-telegram-ajena-$mode');
+    });
+
+    testWidgets('telegram: ¿quitar invitado? ($mode)', (tester) async {
+      await telegram(tester);
+      await tester.ensureVisible(find.text(Strings.removeInvited).last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(Strings.removeInvited).last);
+      await tester.pumpAndSettle();
+      await _shot(tester, 'config-telegram-quitar-$mode');
+    });
+
+    testWidgets('telegram: errores de check ($mode)', (tester) async {
+      await telegram(
+        tester,
+        handlers: {
+          'addons.telegram.check': (_) => {
+            'field_errors': {
+              'daily_limit':
+                  'El tope de mensajes por usuario por día debe ser de 1 a '
+                  '10000.',
+            },
+            'form_error': 'Mensajes por día: …',
+            'needs_restart': false,
+          },
+        },
+      );
+      await edit(tester);
+      await _shot(tester, 'config-telegram-error-$mode');
+    });
+
+    // Ver registro: con errores y separadores, vacío y cargando.
+    for (final (name, log)
+        in <(String, Object? Function(Map<String, dynamic>))>[
+          (
+            'registro',
+            (_) => logResult(
+              lines: sampleLog(),
+              errors: [7, 8, 9],
+              truncated: true,
+            ),
+          ),
+          (
+            'registro-vacio',
+            (_) => logResult(
+              lines: [],
+              notice: 'El bot todavía no ha escrito nada en el registro.',
+            ),
+          ),
+          ('registro-cargando', (_) => noReply),
+        ]) {
+      testWidgets('telegram: $name ($mode)', (tester) async {
+        await telegram(tester, handlers: {'service.log': log});
+        await tester.tap(find.text(Strings.viewLog));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+        await tester.pump(const Duration(milliseconds: 400));
+        await _shot(tester, 'config-telegram-$name-$mode');
+      });
+    }
+
+    testWidgets('telegram: más contraste ($mode)', (tester) async {
+      await telegram(tester, highContrast: true);
+      await _shot(tester, 'config-telegram-contraste-$mode');
     });
 
     testWidgets('chat vacío sin configurar ($mode)', (tester) async {

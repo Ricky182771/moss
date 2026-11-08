@@ -7,6 +7,7 @@ import '../state/model_section.dart';
 import '../state/provider_section.dart';
 import '../state/search_section.dart';
 import '../state/settings_state.dart';
+import '../state/telegram_section.dart';
 import '../strings.dart';
 import '../theme/colors.dart';
 import '../theme/motion.dart';
@@ -19,6 +20,7 @@ import '../widgets/model_panel.dart';
 import '../widgets/provider_panel.dart';
 import '../widgets/search_panel.dart';
 import '../widgets/sidebar.dart' show kSidebarWidth;
+import '../widgets/telegram_panel.dart';
 import '../widgets/toast.dart';
 
 /// Lo que cada sección pone en la pantalla: su título, el texto de abajo y
@@ -43,6 +45,7 @@ Map<SettingsPage, SettingsSection> _sections(AppState app) => {
   SettingsPage.colors: ColorsSection(app),
   SettingsPage.model: ModelSection(app),
   SettingsPage.search: SearchSection(app),
+  SettingsPage.telegram: TelegramSection(app),
 };
 
 SettingsPanel _panel(SettingsPage page, SettingsSection? section) =>
@@ -75,6 +78,12 @@ SettingsPanel _panel(SettingsPage page, SettingsSection? section) =>
         lead: Strings.searchLead,
         body: (_) => SearchPanel(section! as SearchSection),
       ),
+      SettingsPage.telegram => SettingsPanel(
+        menu: Strings.telegramMenu,
+        title: Strings.telegramTitle,
+        lead: Strings.telegramLead,
+        body: (_) => TelegramPanel(section! as TelegramSection),
+      ),
     };
 
 /// DISENO.md → Pantallas → Configuración: menú de secciones a la izquierda,
@@ -97,6 +106,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _menu = {
     for (final p in SettingsPage.values) p: FocusNode(debugLabel: p.name),
   };
+
+  @override
+  void initState() {
+    super.initState();
+    _state.ask = (question) => askYesNo(context, question: question);
+  }
+
+  TelegramSection get _telegram =>
+      _state.sections[SettingsPage.telegram]! as TelegramSection;
 
   @override
   void didUpdateWidget(SettingsScreen old) {
@@ -197,7 +215,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _menuColumn(BuildContext context) {
     final c = context.colors;
-    final s = context.styles;
     return Container(
       width: kSidebarWidth,
       decoration: BoxDecoration(
@@ -205,57 +222,111 @@ class _SettingsScreenState extends State<SettingsScreen> {
         border: Border(right: BorderSide(color: c.border)),
       ),
       padding: const EdgeInsets.fromLTRB(14, 20, 14, 20),
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          spacing: 20,
-          children: [
-            Pressable(
-              onPressed: _close,
-              minHeight: 44,
-              padding: const EdgeInsets.symmetric(horizontal: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(child: _menuTop(context)),
+          if (_telegram.supported) _serviceFoot(context),
+        ],
+      ),
+    );
+  }
+
+  /// El estado del servicio de Telegram al pie del menú (maqueta
+  /// `Config-addons`): el `summary` del servidor con su punto.
+  Widget _serviceFoot(BuildContext context) {
+    final c = context.colors;
+    final s = context.styles;
+    final status = _telegram.status;
+    final text = _telegram.statusError ?? status?.summary;
+    return Container(
+      constraints: const BoxConstraints(minHeight: 44),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: c.border)),
+      ),
+      child: text == null
+          ? null
+          : Semantics(
+              liveRegion: true,
               child: Row(
-                spacing: 10,
+                spacing: 8,
                 children: [
-                  Icon(Icons.chevron_left_rounded, size: 18, color: c.text),
-                  Expanded(child: Text(Strings.backToChat, style: s.row)),
-                  Text(Strings.escKey, style: s.kbd),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              child: Row(
-                spacing: 10,
-                children: [
-                  const MossLogo(size: 22),
-                  Flexible(
-                    child: Semantics(
-                      header: true,
-                      child: Text(Strings.settings, style: s.brand),
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: serviceDot(c, status),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      Strings.serviceFoot(text),
+                      style: s.note,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
               ),
             ),
-            Semantics(
-              label: Strings.settingsSections,
-              container: true,
-              explicitChildNodes: true,
-              child: Focus(
-                skipTraversal: true,
-                onKeyEvent: _menuKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  spacing: 2,
-                  children: [
-                    for (final p in SettingsPage.values) _menuItem(context, p),
-                  ],
+    );
+  }
+
+  Widget _menuTop(BuildContext context) {
+    final c = context.colors;
+    final s = context.styles;
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        spacing: 20,
+        children: [
+          Pressable(
+            onPressed: _close,
+            minHeight: 44,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Row(
+              spacing: 10,
+              children: [
+                Icon(Icons.chevron_left_rounded, size: 18, color: c.text),
+                Expanded(child: Text(Strings.backToChat, style: s.row)),
+                Text(Strings.escKey, style: s.kbd),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Row(
+              spacing: 10,
+              children: [
+                const MossLogo(size: 22),
+                Flexible(
+                  child: Semantics(
+                    header: true,
+                    child: Text(Strings.settings, style: s.brand),
+                  ),
                 ),
+              ],
+            ),
+          ),
+          Semantics(
+            label: Strings.settingsSections,
+            container: true,
+            explicitChildNodes: true,
+            child: Focus(
+              skipTraversal: true,
+              onKeyEvent: _menuKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                spacing: 2,
+                children: [
+                  for (final p in SettingsPage.values) _menuItem(context, p),
+                ],
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -401,6 +472,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       key: const ValueKey(Strings.saving),
                       style: s.note,
                     ),
+                    _
+                        when _state.page == SettingsPage.telegram &&
+                            _telegram.supported =>
+                      Text(
+                        Strings.telegramBarHint,
+                        key: const ValueKey(Strings.telegramBarHint),
+                        style: s.note,
+                      ),
                     _ => const SizedBox.shrink(),
                   },
                 ),

@@ -6,6 +6,7 @@ import '../theme/colors.dart';
 import '../theme/motion.dart';
 import '../theme/theme.dart';
 import 'controls.dart';
+import 'indicators.dart';
 
 /// Tarjeta de una sección de Configuración (las maquetas: 24 px de relleno,
 /// radio 16, fondo de barra y borde).
@@ -461,6 +462,10 @@ class SecretField extends StatefulWidget {
   final String? lockedBy;
   final String? help;
   final String? error;
+  final String hint;
+
+  /// Un botón junto al estado (Quitar).
+  final Widget? trailing;
 
   const SecretField({
     super.key,
@@ -472,6 +477,8 @@ class SecretField extends StatefulWidget {
     this.lockedBy,
     this.help,
     this.error,
+    this.hint = Strings.newKeyHint,
+    this.trailing,
   });
 
   @override
@@ -534,7 +541,12 @@ class _SecretFieldState extends State<SecretField> {
           runSpacing: 8,
           children: [
             ConstrainedBox(
-              constraints: const BoxConstraints(minWidth: 280, maxWidth: 520),
+              // Con un botón al lado (Quitar), más angosto para que quepa en
+              // la misma fila, como en la maqueta.
+              constraints: BoxConstraints(
+                minWidth: 280,
+                maxWidth: widget.trailing == null ? 520 : 440,
+              ),
               child: FieldBox(
                 controller: widget.controller,
                 label: widget.label,
@@ -545,12 +557,13 @@ class _SecretFieldState extends State<SecretField> {
                 mono: true,
                 obscure: !_reveal,
                 secret: true,
-                hint: Strings.newKeyHint,
+                hint: widget.hint,
                 suffix: eye,
               ),
             ),
             if (widget.status.isNotEmpty)
               Text(widget.status, style: s.noteMono),
+            ?widget.trailing,
           ],
         ),
         if (widget.lockedBy != null)
@@ -558,6 +571,62 @@ class _SecretFieldState extends State<SecretField> {
         Text(widget.help ?? Strings.keepKeyHelp, style: s.note),
         FieldMessage(widget.error),
       ],
+    );
+  }
+}
+
+/// Botón secundario con borde (Reiniciar, Generar código, Quitar). Con
+/// [waiting] queda deshabilitado; con [slow], además, el indicador en lugar
+/// del ícono (una acción larga que pasa de 300 ms).
+class SecondaryButton extends StatelessWidget {
+  final String label;
+  final IconData? icon;
+  final VoidCallback? onPressed;
+  final bool waiting;
+  final bool slow;
+  final bool bordered;
+  final FocusNode? focusNode;
+
+  const SecondaryButton({
+    super.key,
+    required this.label,
+    this.icon,
+    required this.onPressed,
+    this.waiting = false,
+    this.slow = false,
+    this.bordered = true,
+    this.focusNode,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final s = context.styles;
+    final enabled = onPressed != null && !waiting;
+    final ink = enabled ? c.text : c.textMuted;
+    return Semantics(
+      label: label,
+      excludeSemantics: true,
+      button: true,
+      enabled: enabled,
+      child: Pressable(
+        focusNode: focusNode,
+        onPressed: enabled ? onPressed : null,
+        borderColor: bordered ? c.border : null,
+        minHeight: 44,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          spacing: 8,
+          children: [
+            if (slow)
+              const Spinner()
+            else if (icon != null)
+              Icon(icon, size: 16, color: ink),
+            Text(label, style: s.row.copyWith(color: ink)),
+          ],
+        ),
+      ),
     );
   }
 }

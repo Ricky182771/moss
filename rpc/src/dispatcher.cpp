@@ -1275,7 +1275,8 @@ void Dispatcher::service(const std::string& method, const Json* params, const Js
         }
     };
     if (log) {
-        addon.log(static_cast<int>(lines), [this, key](const cli::ServiceLog& read) {
+        const std::string_view executable = addon.info().executable;
+        addon.log(static_cast<int>(lines), [this, key, executable](const cli::ServiceLog& read) {
             finish_long(key, false, [&](const Json& request) {
                 using Kind = cli::ServiceAction::Kind;
                 if (read.kind == Kind::NoSystemd) {
@@ -1283,10 +1284,18 @@ void Dispatcher::service(const std::string& method, const Json* params, const Js
                 } else if (read.kind == Kind::Failed) {
                     fail(request, true, RpcError::StorageError, message_data(read.message));
                 } else {
+                    // La regla de la TUI para pintarlas, sobre las líneas ya recortadas.
+                    Json errors = Json::array();
+                    for (std::size_t i = 0; i < read.lines.size(); ++i) {
+                        if (cli::log_line_is_error(read.lines[i], executable)) {
+                            errors.push_back(i);
+                        }
+                    }
                     reply(request, true,
                           {{"lines", read.lines},
                            {"truncated", read.truncated},
-                           {"notice", read.message}});
+                           {"notice", read.message},
+                           {"errors", std::move(errors)}});
                 }
             });
         });

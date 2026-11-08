@@ -20,6 +20,8 @@ class Strings {
   static String deleteQuestion(String title) => '¿Borrar «$title»?';
   static const cannotUndo = 'No se puede deshacer.';
   static const cancel = 'Cancelar';
+  static const yes = 'Sí';
+  static const no = 'No';
   static const confirmDelete = 'Borrar';
 
   // Encabezado
@@ -233,6 +235,91 @@ class Strings {
   static const changedOutside =
       'Esto se cambió fuera de aquí mientras lo editabas. Cancelar trae lo '
       'guardado; Guardar lo reemplaza con lo tuyo.';
+
+  // Configuración → Telegram (maqueta Config-addons; preguntas y avisos de la
+  // F2 de la TUI, `addons_panel.cpp`)
+  static const telegramMenu = 'Addons · Telegram';
+  static const telegramTitle = 'Telegram';
+  static const telegramLead =
+      'Un bot para que los alumnos platiquen con Moss desde Telegram.';
+  static const telegramLinuxOnly = 'El bot de Telegram funciona en Linux.';
+  static const telegramBarHint =
+      'Guardar no reinicia el servicio: Moss te pregunta.';
+  static String serviceFoot(String summary) => 'Telegram · $summary';
+  static const serviceSection = 'Servicio';
+  static const installedLabel = 'Instalado';
+  static const serviceLabel = 'Servicio';
+  static const restartService = 'Reiniciar';
+  static const refreshStatus = 'Actualizar estado';
+  static const viewLog = 'Ver registro';
+  static const botSection = 'Bot';
+  static const enabledTitle = 'Activado';
+  static const enabledNote = 'El servicio arranca solo al iniciar sesión.';
+  static const tokenHint = 'Escribe un token nuevo';
+  static const keepTokenHelp =
+      'Déjalo vacío para conservar el guardado. Nunca se muestra completo.';
+  static const optionalHint = 'Opcional';
+  static const removeKey = 'Quitar';
+  static const keepSavedKey = 'No quitar';
+  static const keyWillBeRemoved = 'se quita: se usará la de la app';
+  static const sameModelAsApp = 'Mismo que la app';
+  static const ownKeyHelp =
+      'Sin key propia se usan las de la app. Recomendado: una propia con '
+      'tope diario en el proveedor.';
+  static const accessSection = 'Acceso';
+  static const allowedUsersHelp = 'Separados por comas.';
+  static const generateCode = 'Generar código';
+  static const inviteCodeHelp =
+      'Quien lo mande al bot entra a la lista de invitados.';
+  static const limitsSection = 'Límites';
+  static const logDetailsTitle = 'Detalle de errores en el registro';
+  static const logDetailsNote =
+      'Puede incluir texto de los alumnos: solo para diagnosticar.';
+  static String invitedTitle(int n) => 'Invitados ($n)';
+  static const noInvited = 'Nadie ha entrado con el código';
+  static const noInvitedNote =
+      'Cuando alguien lo use, aparece aquí y lo puedes quitar.';
+  static const removeInvited = 'Quitar';
+  static String removeInvitedLabel(String user) => 'Quitar a $user';
+  static String removeInvitedQuestion(String user) => '¿Quitar $user ahora?';
+  static const removeInvitedDetail = 'No espera a Guardar.';
+  static const restartQuestion =
+      'Este cambio necesita reiniciar el bot y se borran las conversaciones '
+      'en memoria. ¿Reiniciar ahora?';
+  static const cancelledNothingSaved = 'Cancelado: no se guardó nada.';
+  static const savedServiceUntouched =
+      'Cancelado: se guardó, pero no se tocó el servicio.';
+  static const savedForeignKept = 'Guardado. No se tocó el servicio existente.';
+  static const savedForeignUntouched =
+      'Cancelado: se guardó, pero no se tocó el servicio existente.';
+  static String savedWith(String message) =>
+      message.isEmpty ? 'Guardado.' : 'Guardado. $message';
+
+  // Ver registro (maqueta Config-registro)
+  static const logTitle = 'Registro del bot';
+  static const logSubtitle = 'moss-telegram.service · últimas 200 líneas';
+  static const logLines = 'Líneas del registro';
+  static const refreshLog = 'Actualizar';
+  static const closeLog = 'Cerrar · Esc';
+  static const newestBelow = 'La más reciente abajo';
+  static const linesTruncated = 'Se recortaron líneas largas';
+  static const readingLog = 'Leyendo el registro…';
+  static const today = 'Hoy';
+  static const yesterday = 'Ayer';
+  static const monthsShort = [
+    'ene',
+    'feb',
+    'mar',
+    'abr',
+    'may',
+    'jun',
+    'jul',
+    'ago',
+    'sep',
+    'oct',
+    'nov',
+    'dic',
+  ];
 
   // moss-rpc
   static const rpcNotFound = 'No se encontró moss-rpc';

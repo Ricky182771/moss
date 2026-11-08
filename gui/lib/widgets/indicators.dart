@@ -90,3 +90,20 @@ class StreamCursor extends StatelessWidget {
     );
   }
 }
+
+/// Indicador chico de espera ("Cargando modelos…", una acción larga). Fijo
+/// con Reducir animaciones.
+class Spinner extends StatelessWidget {
+  final Color? color;
+  const Spinner({super.key, this.color});
+
+  @override
+  Widget build(BuildContext context) => SizedBox.square(
+    dimension: 14,
+    child: CircularProgressIndicator(
+      value: Motion.of(context).reduced ? 0.75 : null,
+      strokeWidth: 2,
+      color: color ?? context.colors.textMuted,
+    ),
+  );
+}
