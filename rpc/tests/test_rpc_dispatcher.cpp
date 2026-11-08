@@ -1544,6 +1544,28 @@ TEST_CASE("RPC: settings.system_prompt.*", "[rpc][settings]") {
     CHECK(only(rpc)["error"]["code"] == -32602);
 }
 
+TEST_CASE("RPC: guardar exactamente default_text borra la llave de config.json",
+          "[rpc][settings]") {
+    Rpc rpc;
+    rpc.initialize();
+    const auto stored = [&rpc] {
+        std::ifstream file{rpc.config_path()};
+        return Json::parse(file);
+    };
+    rpc.call(2, "settings.system_prompt.get");
+    const std::string default_text = only(rpc)["result"]["default_text"];
+
+    rpc.call(3, "settings.system_prompt.save", {{"text", "Eres un tutor."}});
+    CHECK(rpc.take()[0]["result"]["mode"] == "custom");
+    CHECK(stored()["system_prompt"] == "Eres un tutor.");
+
+    rpc.call(4, "settings.system_prompt.save", {{"text", default_text}});
+    CHECK(rpc.take()[0]["result"]["mode"] == "default");
+    CHECK_FALSE(stored().contains("system_prompt"));
+    rpc.call(5, "settings.system_prompt.get");
+    CHECK(only(rpc)["result"]["mode"] == "default");
+}
+
 TEST_CASE("RPC: settings.search.*", "[rpc][settings]") {
     Rpc rpc;
     SECTION("get y save") {
