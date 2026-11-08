@@ -25,6 +25,7 @@ Versión del protocolo: **1**.
 | `settings.model_params.*`; `settings.changed` con `model_params` | 6.7, 7 | Implementado |
 | `error_field` en `settings.provider.check` | 6.7 | Implementado |
 | `key_status` en cada elemento de `providers` de `settings.provider.get` | 6.7 | Implementado |
+| `settings.search.check` | 6.7 | Implementado |
 | `help` en `settings.model_params.get`; `check` y `save` aceptan cada número como cadena, y `dirty` en `check` | 6.7 | Implementado |
 | Pensamiento: `reasoning` en `Entry`, evento `conversation.reasoning_delta` | 5, 7 | Implementado |
 | `service.log` (el registro del bot) | 6.8 | Implementado |
@@ -519,6 +520,9 @@ Si la petición llevó algún ajuste y el servidor responde 400 o 422, el error 
 
 **`settings.search.get`** `→ {}` `← {configured, locked, key_status}`
 - `configured`: hay key vigente (el `has_search_key` de `app.status`). `locked`: la fija `CHAT_SEARCH_API_KEY`. `key_status`: el de `SearchSettings`, enmascarado.
+
+**`settings.search.check`** `→ {api_key}` `← {error}`
+- La misma validación que `save`, con los mismos textos, sin guardar nada: `error` es `null` si se puede guardar. Una key mal escrita no se repite en la respuesta. Funciona con una respuesta en curso, como los demás `check`. `-32007` si no se pueden leer las credenciales.
 
 **`settings.search.save`** `→ {api_key}` `← {saved: true}`
 - `Session::save_search_key`: `credentials.json` con `search:tavily` y reemplaza el `SearchProvider` (el runner ya acepta el cambio en caliente). Desde ahí `app.status.has_search_key` es `true`. El aviso de F2 va al historial.

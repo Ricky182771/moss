@@ -59,6 +59,7 @@ Future<(AppState, FakeServer)> startApp(
         'warning': null,
         'bytes': (p['text'] as String).length,
       },
+      'settings.search.check': (_) => {'error': null},
       'settings.model_params.get': (_) => modelParams(),
       'settings.model_params.check': (_) => {
         'field_errors': <String, String>{},

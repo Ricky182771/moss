@@ -912,9 +912,11 @@ void Dispatcher::settings(const std::string& method, const Json* params, const J
                 changed("model_params");
             }
         }
-    } else if (method == "settings.search.get" || method == "settings.search.save") {
+    } else if (method == "settings.search.get" || method == "settings.search.check" ||
+               method == "settings.search.save") {
+        const bool get = method == "settings.search.get";
         const bool save = method == "settings.search.save";
-        if (const auto bad = save ? check_params(params, {{"api_key"}}) : check_params(params, {})) {
+        if (const auto bad = get ? check_params(params, {}) : check_params(params, {{"api_key"}})) {
             fail(id, has_id, RpcError::InvalidParams, *bad);
             return;
         }
@@ -927,25 +929,30 @@ void Dispatcher::settings(const std::string& method, const Json* params, const J
             return;
         }
         cli::SearchSettings f = form.value();
-        if (!save) {
+        if (get) {
             reply(id, has_id,
                   {{"configured", session_->has_search_key()},
                    {"locked", f.key_locked()},
                    {"key_status", f.key_status()}});
             return;
         }
+        std::optional<std::string> error;
         if (f.key_locked()) {
-            fail(id, has_id, RpcError::ValidationFailed, message_data(kSearchKeyLocked));
-            return;
-        }
-        (void)f.set_key(params->at("api_key").get<std::string>());
-        if (const std::optional<std::string> error = f.validate()) {
-            fail(id, has_id, RpcError::ValidationFailed, message_data(*error));
-            return;
+            error = std::string{kSearchKeyLocked};
+        } else {
+            (void)f.set_key(params->at("api_key").get<std::string>());
+            error = f.validate();
         }
         const auto update = f.credential_update();
-        if (!update.has_value()) { // Vacía: en F2 no se guarda nada.
-            fail(id, has_id, RpcError::ValidationFailed, message_data(kSearchKeyEmpty));
+        if (!error.has_value() && !update.has_value()) { // Vacía: en F2 no se guarda nada.
+            error = std::string{kSearchKeyEmpty};
+        }
+        if (!save) {
+            reply(id, has_id, {{"error", optional_string(error)}});
+            return;
+        }
+        if (error.has_value()) {
+            fail(id, has_id, RpcError::ValidationFailed, message_data(*error));
             return;
         }
         if (const std::optional<std::string> failed = session_->save_search_key(update->second)) {

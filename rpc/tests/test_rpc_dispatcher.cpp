@@ -1686,6 +1686,48 @@ TEST_CASE("RPC: settings.search.*", "[rpc][settings]") {
     }
 }
 
+TEST_CASE("RPC: settings.search.check valida como save, sin guardar", "[rpc][settings]") {
+    Rpc rpc;
+    const auto same_as_save = [&rpc](const std::string& key) {
+        rpc.call(2, "settings.search.check", {{"api_key", key}});
+        const Json check = only(rpc);
+        CHECK(check["result"].size() == 1);
+        rpc.call(3, "settings.search.save", {{"api_key", key}});
+        const Json save = rpc.take()[0];
+        CHECK(check.dump().find(key.empty() ? "\x01" : key) == std::string::npos);
+        return std::pair{check["result"]["error"], save};
+    };
+    SECTION("mal escrita y vacía: el mismo texto que save") {
+        rpc.initialize();
+        for (const std::string& key : {std::string{"$TAVILY"}, std::string{"corta"}, std::string{}}) {
+            const auto [error, save] = same_as_save(key);
+            REQUIRE(error.is_string());
+            check_error(save, -32005, error.get<std::string>());
+        }
+        CHECK_FALSE(std::filesystem::exists(rpc.credentials_path()));
+    }
+    SECTION("bien escrita: null, y check no guarda") {
+        rpc.initialize();
+        rpc.call(2, "settings.search.check", {{"api_key", chatbot_test::kSearchKey}});
+        const std::vector<Json> got = rpc.take();
+        REQUIRE(got.size() == 1); // Sin settings.changed.
+        CHECK(got[0]["result"].dump() == R"({"error":null})");
+        CHECK_FALSE(std::filesystem::exists(rpc.credentials_path()));
+    }
+    SECTION("con CHAT_SEARCH_API_KEY: el aviso de save") {
+        rpc.env.values["CHAT_SEARCH_API_KEY"] = chatbot_test::kSearchKey;
+        rpc.initialize();
+        const auto [error, save] = same_as_save("tvly-otra-clave-ficticia-de-busqueda");
+        REQUIRE(error.is_string());
+        check_error(save, -32005, error.get<std::string>());
+    }
+    SECTION("sin api_key: -32602") {
+        rpc.initialize();
+        rpc.call(2, "settings.search.check");
+        CHECK(only(rpc)["error"]["code"] == -32602);
+    }
+}
+
 TEST_CASE("RPC: settings.gui.*", "[rpc][settings]") {
     Rpc rpc;
     rpc.initialize();
