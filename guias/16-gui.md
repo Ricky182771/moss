@@ -141,7 +141,7 @@ Una acción que no espera a Guardar (como Borrar endpoint) va dentro de `owner.q
 
 **Contraste alto.** `highContrastTheme` y `highContrastDarkTheme` de `MaterialApp` son los tokens de Más contraste: con el contraste alto del sistema (`MediaQuery.highContrast`, que Flutter sí reporta en Windows) se usan sin tocar lo guardado.
 
-**AltGr.** En Windows llega como `CtrlLeft` falso más `AltRight`. `SingleActivator` compara los modificadores exactos: `control: true` sin `alt` no coincide con AltGr y la tecla sigue hasta el campo. **Todo atajo nuevo con Ctrl va con `SingleActivator`**, nunca revisando `isControlPressed` a mano; un `onKeyEvent` que atienda letras debe mirar también Alt. `test/keyboard_test.dart` lo vigila, con `@ { } [ ] \`, el acento muerto, `ñ`, `¿` y `¡`, en la caja y en Configuración.
+**AltGr.** En Windows llega como `CtrlLeft` falso más `AltRight`. `SingleActivator` compara los modificadores exactos: `control: true` sin `alt` no coincide con AltGr y la tecla sigue hasta el campo. **Todo atajo nuevo con Ctrl va con `SingleActivator`**, nunca revisando `isControlPressed` a mano; un `onKeyEvent` que atienda letras debe mirar también Alt. `test/keyboard_test.dart` vigila que ningún atajo se lleve `@ { } [ ] \`, el acento muerto, `ñ`, `¿` ni `¡`, en la caja y en Configuración; que el carácter salga lo pone Windows y solo se ve a mano.
 
 **El tamaño de la ventana en Windows.** El mínimo de 720×520 es del contenido: `WM_GETMINMAXINFO` le suma el marco y la barra con `AdjustWindowRectExForDpi`, con el DPI del monitor de la ventana. Al crearla, los 1280×800 se recortan al área de trabajo del monitor.
 

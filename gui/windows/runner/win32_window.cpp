@@ -28,9 +28,10 @@ constexpr const wchar_t kGetPreferredBrightnessRegKey[] =
   L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize";
 constexpr const wchar_t kGetPreferredBrightnessRegValue[] = L"AppsUseLightTheme";
 
-// El token `fondo` de MossColors (lib/theme/colors.dart; una prueba vigila que
-// coincidan): el de la ventana antes de que Flutter dibuje. Según el sistema,
-// porque settings.gui todavía no se lee.
+// shortcut: copia del token `fondo` de MossColors (lib/theme/colors.dart), porque
+// la ventana existe antes que Dart; test/window_channel_test.dart vigila que
+// coincidan. Es el fondo antes de que Flutter dibuje, según el sistema, porque
+// settings.gui todavía no se lee.
 constexpr COLORREF kBackgroundDark = RGB(0x0F, 0x14, 0x11);
 constexpr COLORREF kBackgroundLight = RGB(0xFF, 0xFF, 0xFF);
 

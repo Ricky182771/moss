@@ -10,8 +10,9 @@
 
 #include "flutter/generated_plugin_registrant.h"
 
-// El token `fondo` de MossColors (lib/theme/colors.dart; una prueba vigila que
-// coincidan): el de la ventana antes de que Flutter dibuje.
+// shortcut: copia del token `fondo` de MossColors (lib/theme/colors.dart), porque
+// la ventana existe antes que Dart; test/window_channel_test.dart vigila que
+// coincidan. Es el fondo antes de que Flutter dibuje.
 static constexpr char kBackgroundDark[] = "#0F1411";
 static constexpr char kBackgroundLight[] = "#FFFFFF";
 
