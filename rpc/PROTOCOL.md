@@ -27,6 +27,7 @@ Versión del protocolo: **1**.
 | `key_status` en cada elemento de `providers` de `settings.provider.get` | 6.7 | Implementado |
 | `settings.search.check` | 6.7 | Implementado |
 | Las preguntas de `-32008` sin ` (s/n)` | 6.8 | Implementado |
+| `linger_notice` y `linger_command` en `service.status` | 6.8 | Implementado |
 | `help` en `settings.model_params.get`; `check` y `save` aceptan cada número como cadena, y `dirty` en `check` | 6.7 | Implementado |
 | Pensamiento: `reasoning` en `Entry`, evento `conversation.reasoning_delta` | 5, 7 | Implementado |
 | `service.log` (el registro del bot) | 6.8 | Implementado |
@@ -608,6 +609,8 @@ La unidad que escribe `moss-rpc` es **byte por byte** la de la TUI: su `ExecStar
 {"systemd":true, "active":"active", "enabled":"enabled", "exit_status":null,
  "unit":"current",              // missing | foreign | current | stale (UnitState)
  "linger":true, "last_error":"",
+ "linger_notice":null,          // kNoLinger si linger es false, como F2; si no, null
+ "linger_command":null,         // kLingerCommand en el mismo caso: se muestra, nunca se corre
  "summary":"...",              // service_summary
  "problem":"", "mismatch":"",  // service_problem; service_mismatch con Activado guardado
  "journal_command":"..."}      // journal_command

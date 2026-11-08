@@ -271,6 +271,11 @@ Json status_json(const cli::TelegramAddon& addon) {
                                                            : Json(nullptr)},
             {"unit", std::string{unit_state_name(status.unit)}},
             {"linger", status.linger.has_value() ? Json(*status.linger) : Json(nullptr)},
+            // La condición de F2: solo si se sabe que está apagado.
+            {"linger_notice", status.linger == false ? Json(std::string{cli::kNoLinger})
+                                                     : Json(nullptr)},
+            {"linger_command", status.linger == false ? Json(std::string{cli::kLingerCommand})
+                                                      : Json(nullptr)},
             {"last_error", status.last_error},
             {"summary", cli::service_summary(status)},
             {"problem", cli::service_problem(status, addon.info().executable,

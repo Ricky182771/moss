@@ -150,6 +150,10 @@ class _ServiceCard extends StatelessWidget {
           Text(status.problem, style: error),
         if (status != null && status.mismatch.isNotEmpty)
           Text(status.mismatch, style: error),
+        if (status?.lingerNotice case final notice?)
+          Text(notice, style: s.note),
+        if (status?.lingerCommand case final command?)
+          SelectableText(command, style: s.noteMono),
         Wrap(
           spacing: 10,
           runSpacing: 10,

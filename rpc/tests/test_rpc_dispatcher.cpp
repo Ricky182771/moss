@@ -2050,9 +2050,19 @@ TEST_CASE("RPC: service.status y service.apply", "[rpc][addons]") {
         CHECK(status["active"] == "active");
         CHECK(status["unit"] == "missing");
         CHECK(status["linger"] == false);
+        CHECK(status["linger_notice"] == std::string{chatbot::cli::kNoLinger});
+        CHECK(status["linger_command"] == std::string{chatbot::cli::kLingerCommand});
         CHECK(status["exit_status"].is_null());
         CHECK(status["journal_command"] ==
               chatbot::cli::journal_command(*chatbot::addon_settings::find_addon("telegram")));
+    }
+    SECTION("status con linger: sin aviso") {
+        rpc.system.answer("loginctl show-user 1000 -p Linger --value",
+                          chatbot_test::exited(0, "yes\n"));
+        const Json status = long_call(rpc, 2, "service.status", {{"addon", "telegram"}})[0]["result"];
+        CHECK(status["linger"] == true);
+        CHECK(status["linger_notice"].is_null());
+        CHECK(status["linger_command"].is_null());
     }
     SECTION("apply escribe la unidad de la TUI, byte por byte") {
         const std::vector<Json> got = long_call(rpc, 2, "service.apply", {{"addon", "telegram"}});

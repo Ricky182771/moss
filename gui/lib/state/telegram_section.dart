@@ -56,12 +56,18 @@ class ServiceStatus {
   final String summary;
   final String problem;
   final String mismatch;
+
+  /// Sin linger, el aviso y el comando (solo se muestra); si no, null.
+  final String? lingerNotice;
+  final String? lingerCommand;
   const ServiceStatus({
     required this.systemd,
     required this.active,
     required this.summary,
     required this.problem,
     required this.mismatch,
+    this.lingerNotice,
+    this.lingerCommand,
   });
 
   factory ServiceStatus.fromJson(Map<String, dynamic> j) => ServiceStatus(
@@ -70,6 +76,8 @@ class ServiceStatus {
     summary: j['summary'] as String,
     problem: j['problem'] as String,
     mismatch: j['mismatch'] as String,
+    lingerNotice: j['linger_notice'] as String?,
+    lingerCommand: j['linger_command'] as String?,
   );
 }
 

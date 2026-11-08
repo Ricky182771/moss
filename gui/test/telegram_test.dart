@@ -289,6 +289,28 @@ void main() {
     expect(server.methods, contains('service.apply'));
   });
 
+  testWidgets('Servicio: el aviso de linger del servidor, solo si viene', (
+    tester,
+  ) async {
+    const notice = 'Aviso de linger del servidor.';
+    const command = 'loginctl enable-linger "\$USER"';
+    var status = serviceStatus(lingerNotice: notice, lingerCommand: command);
+    final (_, server) = await startApp(
+      tester,
+      addons: ['telegram'],
+      handlers: {...telegramHandlers(), 'service.status': (_) => status},
+    );
+    await _openTelegram(tester);
+    expect(find.text(notice), findsOneWidget);
+    expect(find.text(command), findsOneWidget);
+
+    status = serviceStatus();
+    server.notify('service.changed', {'addon': 'telegram'});
+    await tester.pumpAndSettle();
+    expect(find.text(notice), findsNothing);
+    expect(find.text(command), findsNothing);
+  });
+
   for (final (answer, restart) in [(Strings.yes, true), (Strings.no, false)]) {
     testWidgets('guardar: ¿Reiniciar ahora? $answer', (tester) async {
       final (_, server) = await startApp(
