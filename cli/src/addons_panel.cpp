@@ -2,6 +2,7 @@
 
 #include "input_style.h"
 #include "list_style.h"
+#include "yes_no.h"
 
 #include "chatbot/addon_settings/time_zone.h"
 #include "chatbot/markdown/markdown.h"
@@ -374,7 +375,7 @@ bool AddonsPanel::ask_before_saving() {
     if (text.empty()) {
         return false;
     }
-    question_ = Question{std::move(text),
+    question_ = Question{yes_no_question(text),
                          [this] {
                              discard_confirmed_ = true;
                              retry_save_();
@@ -420,7 +421,7 @@ void AddonsPanel::apply_service(bool restart, bool replace_foreign) {
                                             : "Guardado. Deteniendo el servicio…");
     const auto done = [this, restart](const TelegramAddon::Applied& applied) {
         if (applied.action.kind == ServiceAction::Kind::Confirm) {
-            question_ = Question{applied.action.message,
+            question_ = Question{yes_no_question(applied.action.message),
                                  [this, restart] { apply_service(restart, true); },
                                  [this] { notice_("Guardado. No se tocó el servicio existente."); },
                                  "Cancelado: se guardó, pero no se tocó el servicio existente."};

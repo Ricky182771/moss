@@ -1964,7 +1964,7 @@ TEST_CASE("RPC: addons.telegram.save", "[rpc][addons]") {
         Json form = bot_form(rpc);
         form["fields"]["daily_limit"] = "9";
         rpc.call(2, "addons.telegram.save", {{"form", form}});
-        check_error(only(rpc), -32008, "Se descartarán: rara. ¿Guardar? (s/n)");
+        check_error(only(rpc), -32008, "Se descartarán: rara. ¿Guardar?");
         rpc.call(3, "addons.telegram.save", {{"form", form}, {"discard_confirmed", true}});
         CHECK(summaries(rpc.take()) ==
               std::vector<std::string>{"#3 result", "settings.changed telegram"});

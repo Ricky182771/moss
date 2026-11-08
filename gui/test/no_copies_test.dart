@@ -15,6 +15,7 @@ const _gone = {
   'notANumber': 'el error de un número',
   'notAnInteger': 'el error de un entero',
   'keySaved': 'el estado de la key: `key_status`',
+  "(s/n)": 'recortar las preguntas de -32008',
   'num.parse': 'leer un número',
   r"RegExp(r'^-?\d+": 'decidir qué es un número',
 };

@@ -274,7 +274,7 @@ void main() {
         'addons.telegram.save': (p) => p['discard_confirmed'] == true
             ? {'needs_restart': false}
             : throw const FakeError(-32008, 'confirmar', {
-                'message': 'Se descartarán: rara. ¿Guardar? (s/n)',
+                'message': 'Se descartarán: rara. ¿Guardar?',
               }),
       },
     );
@@ -343,7 +343,7 @@ void main() {
         'service.apply': (p) => p['replace_foreign'] == true
             ? {'message': 'Servicio activado.', 'ok': true}
             : throw const FakeError(-32008, 'confirmar', {
-                'message': '¿Reemplazar el servicio existente? (s/n)',
+                'message': '¿Reemplazar el servicio existente?',
               }),
       },
     );

@@ -31,7 +31,7 @@ inline constexpr std::string_view kNoLinger =
     "Sin linger, el bot se detiene al cerrar sesión y no arranca tras un apagón hasta que "
     "inicies sesión.";
 inline constexpr std::string_view kLingerCommand = "loginctl enable-linger \"$USER\"";
-inline constexpr std::string_view kReplaceForeignUnit = "¿Reemplazar el servicio existente? (s/n)";
+inline constexpr std::string_view kReplaceForeignUnit = "¿Reemplazar el servicio existente?";
 /// Tope de cada programa.
 inline constexpr std::chrono::milliseconds kServiceCommandTimeout{5000};
 

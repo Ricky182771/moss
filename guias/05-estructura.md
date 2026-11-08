@@ -111,7 +111,7 @@ moss/
 │       ├── conversation.h/.cpp        # lógica de la conversación (sin FTXUI ni hilos)
 │       ├── conversation_store.h/.cpp  # archivos de conversación (sin FTXUI)
 │       ├── conversation_list.h/.cpp   # lógica de la lista de conversaciones (sin FTXUI)
-│       ├── yes_no.h                   # yes_no_answer: la regla de toda pregunta (s/n) (sin FTXUI)
+│       ├── yes_no.h                   # yes_no_answer: la regla de toda pregunta (s/n), y yes_no_question (sin FTXUI)
 │       ├── sidebar.h/.cpp             # barra de conversaciones: grupos por fecha, navegación (sin FTXUI)
 │       ├── request_runner.h/.cpp      # hilo de trabajo de la petición (sin FTXUI)
 │       ├── session.h/.cpp             # Session: la lógica de la app sin FTXUI (estado, enviar, comandos, conversaciones, F2, /model: switch_model, provider_choices, delete_endpoint)

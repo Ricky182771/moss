@@ -94,7 +94,7 @@ public:
     [[nodiscard]] std::string section_problem() const;
     /// Las llaves de la sección que guardar descartaría.
     [[nodiscard]] const std::vector<std::string>& discarded() const { return read_.discarded; }
-    /// "Se descartarán: a, b. ¿Guardar? (s/n)", o "" si no hay.
+    /// "Se descartarán: a, b. ¿Guardar?", o "" si no hay.
     [[nodiscard]] std::string discard_question() const;
     [[nodiscard]] const std::vector<std::int64_t>& invited() const { return invited_; }
     /// invitados.json no se pudo leer (o falta HOME): "" si se pudo.

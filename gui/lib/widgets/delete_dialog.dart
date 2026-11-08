@@ -38,10 +38,7 @@ Future<bool?> askYesNo(
     transitionDuration: motion.menuOpen,
     transitionBuilder: _transition,
     pageBuilder: (context, _, _) => _ConfirmDialog(
-      // Las del servidor son las de la TUI: aquí responden los botones.
-      question: question.endsWith(' (s/n)')
-          ? question.substring(0, question.length - ' (s/n)'.length)
-          : question,
+      question: question,
       detail: detail,
       cancelLabel: Strings.no,
       confirmLabel: Strings.yes,

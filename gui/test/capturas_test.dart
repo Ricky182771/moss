@@ -617,7 +617,7 @@ void main() {
           'addons.telegram.save': (_) => throw const FakeError(
             -32008,
             'confirmar',
-            {'message': 'Se descartarán: rara, vieja. ¿Guardar? (s/n)'},
+            {'message': 'Se descartarán: rara, vieja. ¿Guardar?'},
           ),
         },
       );
@@ -646,7 +646,7 @@ void main() {
         tester,
         handlers: {
           'service.apply': (_) => throw const FakeError(-32008, 'confirmar', {
-            'message': '¿Reemplazar el servicio existente? (s/n)',
+            'message': '¿Reemplazar el servicio existente?',
           }),
         },
       );

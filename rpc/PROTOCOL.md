@@ -26,6 +26,7 @@ Versión del protocolo: **1**.
 | `error_field` en `settings.provider.check` | 6.7 | Implementado |
 | `key_status` en cada elemento de `providers` de `settings.provider.get` | 6.7 | Implementado |
 | `settings.search.check` | 6.7 | Implementado |
+| Las preguntas de `-32008` sin ` (s/n)` | 6.8 | Implementado |
 | `help` en `settings.model_params.get`; `check` y `save` aceptan cada número como cadena, y `dirty` en `check` | 6.7 | Implementado |
 | Pensamiento: `reasoning` en `Entry`, evento `conversation.reasoning_delta` | 5, 7 | Implementado |
 | `service.log` (el registro del bot) | 6.8 | Implementado |
@@ -169,7 +170,7 @@ Los códigos estándar de JSON-RPC más los de la aplicación, en el rango que J
 | -32005 | ValidationFailed | No pasa la validación: configuración, texto vacío, número de bloque o nombre de archivo (`data.message` o `data.fields`) |
 | -32006 | Unsupported | No disponible: addons en Windows, sin systemd de usuario o sin `HOME` para la unidad (`data.message`) |
 | -32007 | StorageError | No se pudo leer, escribir o borrar un archivo, o no hay carpeta de descargas (`data.message`) |
-| -32008 | ConfirmationRequired | Hay que preguntarle al usuario: unidad de systemd ajena o llaves de la sección que se descartarían (`data.message`, el texto de F2) |
+| -32008 | ConfirmationRequired | Hay que preguntarle al usuario: unidad de systemd ajena o llaves de la sección que se descartarían (`data.message`, la pregunta de F2, sin el ` (s/n)` de la TUI) |
 | -32010 | ProtocolMismatch | Versión distinta en `initialize` |
 | -32011 | StartupFailed | El arranque falló (carpeta del modo portable no escribible, `config.json` inválido): `initialize` responde esto con `data.message`, el mismo texto que la TUI imprime al salir |
 
@@ -582,7 +583,7 @@ Lee los archivos en cada llamada. Los campos de secretos van vacíos (vacío = s
 
 **`addons.telegram.save`** `→ {form, discard_confirmed?: false}` `← {needs_restart}`
 - Solo lectura → `-32005` con `read_only_reason`. Errores del formulario → `-32005` con `data.message` (`form_error`) y `data.field_errors`.
-- Si guardar descartaría llaves de la sección y `discard_confirmed` no es `true` → `-32008` con el texto de F2 (`Se descartarán: …. ¿Guardar? (s/n)`); la GUI pregunta y repite con `true`.
+- Si guardar descartaría llaves de la sección y `discard_confirmed` no es `true` → `-32008` con la pregunta de F2 (`Se descartarán: …. ¿Guardar?`; el ` (s/n)` lo agrega la TUI, en su línea de estado); la GUI pregunta y repite con `true`.
 - Escribe primero los cambios de `credentials.json` y después `addons.telegram` (si fallan los secretos, la sección no se escribe), como F2. Un error al escribir → `-32007`. Sin cambios no escribe nada (y tampoco pregunta por las llaves descartadas).
 - Si escribió: `{needs_restart}` y después `settings.changed {section: "telegram"}`. `needs_restart` es el criterio de F2: el cambio lo necesita (token o respuestas a la vez), está activado y el servicio está activo **según el último estado que trajo `service.status` o una acción**; por eso la GUI pide `service.status` al abrir la sección, como F2.
 - **No toca el servicio. Paso obligatorio después de `save`:** `service.apply`, como hace F2 al guardar. Con `needs_restart`, la GUI pregunta "Este cambio necesita reiniciar el bot y se borran las conversaciones en memoria. ¿Reiniciar ahora?" y manda `restart: true` si contesta que sí. Si no lo llama, el servicio sigue como estaba (F2 lo marca como "no coincide" la próxima vez).
@@ -616,7 +617,7 @@ La unidad que escribe `moss-rpc` es **byte por byte** la de la TUI: su `ExecStar
 **`service.apply`** `→ {addon, restart?: false, replace_foreign?: false}` `← {message, ok}`
 - **Sin `enabled`:** aplica lo guardado en `addons.telegram`, como F2 después de guardar (`ServiceControl::apply`): con Activado, escribe la unidad si falta o está vieja, `daemon-reload`, `enable --now` si no corre, y si ya corría `reload`, o `restart` con `restart: true`; sin Activado, `disable --now` si corre o está habilitado.
 - Activado y el addon no está instalado: no toca el servicio y responde `{message, ok: false}` con el problema (`No instalado: …`; F2 lo muestra como `Guardado. …`). No es un error.
-- Unidad ajena y `replace_foreign` no es `true` → `-32008` con `¿Reemplazar el servicio existente? (s/n)` (`kReplaceForeignUnit`); la GUI pregunta y repite con `true`.
+- Unidad ajena y `replace_foreign` no es `true` → `-32008` con `¿Reemplazar el servicio existente?` (`kReplaceForeignUnit`); la GUI pregunta y repite con `true`.
 - Sin systemd de usuario → `-32006` con `No hay systemd de usuario en esta sesión.`
 - `ok: false` si un `systemctl` falló; `message` dice cuál (`No se pudo …`). `message` puede ser `""` si no hubo nada que hacer.
 

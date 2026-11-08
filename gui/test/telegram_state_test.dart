@@ -149,7 +149,7 @@ void main() {
         {
           'addons.telegram.save': (p) => p['discard_confirmed'] == true
               ? {'needs_restart': false}
-              : throw _error(-32008, 'Se descartarán: rara. ¿Guardar? (s/n)'),
+              : throw _error(-32008, 'Se descartarán: rara. ¿Guardar?'),
         },
         answers: [true],
       );
@@ -173,7 +173,7 @@ void main() {
     final (t, state, server) = await _start(
       {
         'addons.telegram.save': (p) =>
-            throw _error(-32008, 'Se descartarán: rara. ¿Guardar? (s/n)'),
+            throw _error(-32008, 'Se descartarán: rara. ¿Guardar?'),
       },
       answers: [false],
     );
@@ -204,10 +204,7 @@ void main() {
         {
           'service.apply': (p) => p['replace_foreign'] == true
               ? {'message': 'Servicio activado.', 'ok': true}
-              : throw _error(
-                  -32008,
-                  '¿Reemplazar el servicio existente? (s/n)',
-                ),
+              : throw _error(-32008, '¿Reemplazar el servicio existente?'),
         },
         answers: [true],
       );

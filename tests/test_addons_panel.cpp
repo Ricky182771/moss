@@ -4,6 +4,7 @@
 // archivos en una carpeta temporal.
 
 #include "settings_screen.h"
+#include "yes_no.h"
 
 #include "chatbot/addon_settings/invited.h"
 #include "chatbot/addon_settings/paths.h"
@@ -509,6 +510,7 @@ TEST_CASE("addons: con Activado, una unidad hecha a mano pregunta antes de reemp
     h.save(by_click);
     // La pregunta llega del hilo del servicio, con su Event::Custom detrás.
     REQUIRE(h.wait_for_text(std::string{chatbot::cli::kReplaceForeignUnit}));
+    CHECK(h.shows(chatbot::cli::yes_no_question(chatbot::cli::kReplaceForeignUnit)));
     CHECK(h.section().at("daily_message_limit") == 20); // La sección sí se guardó.
     h.poke_question(std::string{chatbot::cli::kReplaceForeignUnit});
     CHECK(h.service_actions().empty());

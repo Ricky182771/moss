@@ -114,7 +114,7 @@ std::string TelegramAddon::discard_question() const {
         std::replace(clean.begin(), clean.end(), '\n', ' ');
         keys += (keys.empty() ? "" : ", ") + clean;
     }
-    return "Se descartarán: " + keys + ". ¿Guardar? (s/n)";
+    return "Se descartarán: " + keys + ". ¿Guardar?";
 }
 
 std::string TelegramAddon::out_of_sync(bool enabled) const {
