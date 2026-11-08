@@ -91,7 +91,8 @@ esac
 # nada toca tu moss-telegram.service. Solo a moss-rpc, con un envoltorio: la
 # GUI necesita XDG_RUNTIME_DIR para Wayland. `journalctl --user` no usa el bus
 # (lee los archivos del journal) y `loginctl` usa el del sistema: van los
-# falsos de tools/fake-bin (un registro de ejemplo y "sin linger").
+# falsos de tools/fake-bin (un registro de ejemplo y "sin linger"), y uno de
+# `systemctl` que responde como sin bus, por si acaso.
 envoltorio=$prueba/moss-rpc
 {
 	echo '#!/usr/bin/env bash'

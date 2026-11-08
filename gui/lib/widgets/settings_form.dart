@@ -585,7 +585,6 @@ class SecondaryButton extends StatelessWidget {
   final bool waiting;
   final bool slow;
   final bool bordered;
-  final Color? color;
   final FocusNode? focusNode;
 
   const SecondaryButton({
@@ -596,7 +595,6 @@ class SecondaryButton extends StatelessWidget {
     this.waiting = false,
     this.slow = false,
     this.bordered = true,
-    this.color,
     this.focusNode,
   });
 
@@ -605,7 +603,7 @@ class SecondaryButton extends StatelessWidget {
     final c = context.colors;
     final s = context.styles;
     final enabled = onPressed != null && !waiting;
-    final ink = enabled ? (color ?? c.text) : c.textMuted;
+    final ink = enabled ? c.text : c.textMuted;
     return Semantics(
       label: label,
       excludeSemantics: true,

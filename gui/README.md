@@ -67,7 +67,8 @@ usuario en esta sesión." y `service.apply` (al guardar Telegram) responde
 `loginctl` usa el del sistema, así que el envoltorio pone primero en el
 `PATH` los falsos de `tools/fake-bin/`: Ver registro muestra un registro de
 ejemplo (ayer y hoy, con errores, una línea fatal y una sin formato), nunca
-el tuyo, y el linger siempre es "no".
+el tuyo, y el linger siempre es "no". Por si acaso, también va un
+`systemctl` falso que responde como sin bus.
 
 ## Medir cuadros (`--frame-stats`)
 

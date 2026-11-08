@@ -480,7 +480,6 @@ class TelegramSection extends SettingsSection {
           await _long('service.status', {'addon': kTelegram}),
         );
         statusError = null;
-        await _loadInstall();
       } on RpcError catch (e) {
         if (e.code == RpcError.cancelled) return;
         statusError = e.displayMessage;
@@ -494,6 +493,13 @@ class TelegramSection extends SettingsSection {
         }
       }
       if (disposed) return;
+      if (statusError == null) {
+        try {
+          await _loadInstall(); // Ya con `config_version_ok`.
+        } on RpcError {
+          // Se queda lo de antes.
+        }
+      }
       try {
         final r = await rpc.request('addons.telegram.get');
         if (!disposed) _apply(r, form: !dirty);
