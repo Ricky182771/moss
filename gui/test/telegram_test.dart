@@ -289,6 +289,126 @@ void main() {
     expect(server.methods, contains('service.apply'));
   });
 
+  group('listas para elegir', () {
+    testWidgets('Zona horaria: filtra lo del servidor y deja escribir a mano', (
+      tester,
+    ) async {
+      final (_, server) = await startApp(
+        tester,
+        addons: ['telegram'],
+        handlers: telegramHandlers(),
+      );
+      await _openTelegram(tester);
+      await _type(tester, 'Zona horaria', 'tiju');
+      await tester.pumpAndSettle();
+      expect(find.text('America/Tijuana'), findsOneWidget);
+      expect(find.text('Europe/Madrid'), findsNothing);
+
+      await tester.tap(find.text('America/Tijuana'));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<EditableText>(_field('Zona horaria')).controller.text,
+        'America/Tijuana',
+      );
+
+      // A mano: lo que no está en la lista también se manda.
+      await _type(tester, 'Zona horaria', '-06:00');
+      await tester.pumpAndSettle(const Duration(milliseconds: 500));
+      await _save(tester);
+      final form = server.lastParams('addons.telegram.save')['form'] as Map;
+      expect((form['fields'] as Map)['time_zone'], '-06:00');
+    });
+
+    testWidgets('↑ ↓ y Enter eligen; Esc cierra sin salir de Configuración', (
+      tester,
+    ) async {
+      await startApp(
+        tester,
+        addons: ['telegram'],
+        handlers: telegramHandlers(),
+      );
+      await _openTelegram(tester);
+      await _type(tester, 'Zona horaria', 'america');
+      await tester.pumpAndSettle();
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<EditableText>(_field('Zona horaria')).controller.text,
+        'America/Tijuana',
+      );
+
+      await _type(tester, 'Zona horaria', 'europe');
+      await tester.pumpAndSettle();
+      expect(find.text('Europe/Madrid'), findsOneWidget);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      expect(find.text('Europe/Madrid'), findsNothing);
+      expect(find.byType(SettingsScreen), findsOneWidget);
+
+      // Un clic en el campo, que sigue con el foco, la abre otra vez.
+      await tester.tap(_field('Zona horaria'));
+      await tester.pumpAndSettle();
+      expect(find.text('Europe/Madrid'), findsOneWidget);
+    });
+
+    testWidgets('Modelo: models.list del proveedor de la app, al entrar', (
+      tester,
+    ) async {
+      final (_, server) = await startApp(
+        tester,
+        addons: ['telegram'],
+        handlers: {
+          ...telegramHandlers(),
+          'models.list': (_) => {
+            'models': ['z-ai/glm5', 'qwen/qwen3'],
+          },
+        },
+      );
+      await _openTelegram(tester);
+      // La sección Proveedor ya pidió los suyos: al entrar, otra vez.
+      int asked() => server.methods.where((m) => m == 'models.list').length;
+      final before = asked();
+      await _type(tester, 'Modelo', 'qwen');
+      await tester.pumpAndSettle();
+      expect(asked(), before + 1);
+      final draft = server.lastParams('models.list')['draft'] as Map;
+      expect(draft, {'provider': 'nvidia', 'base_url': '', 'model': ''});
+      expect(find.text('qwen/qwen3'), findsOneWidget);
+      expect(find.text('z-ai/glm5'), findsNothing);
+      await tester.tap(find.text('qwen/qwen3'));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<EditableText>(_field('Modelo')).controller.text,
+        'qwen/qwen3',
+      );
+    });
+
+    testWidgets('Modelo: si falla la lista, su error y se escribe a mano', (
+      tester,
+    ) async {
+      const wrong = '[error de red] no se pudo conectar';
+      await startApp(
+        tester,
+        addons: ['telegram'],
+        handlers: {
+          ...telegramHandlers(),
+          'models.list': (_) =>
+              throw const FakeError(-32005, 'Error', {'message': wrong}),
+        },
+      );
+      await _openTelegram(tester);
+      await _type(tester, 'Modelo', 'a-mano');
+      await tester.pumpAndSettle();
+      expect(find.text(wrong), findsOneWidget);
+      expect(
+        tester.widget<EditableText>(_field('Modelo')).controller.text,
+        'a-mano',
+      );
+    });
+  });
+
   testWidgets('Servicio: el aviso de linger del servidor, solo si viene', (
     tester,
   ) async {

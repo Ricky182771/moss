@@ -7,6 +7,8 @@ import '../theme/motion.dart';
 import '../theme/theme.dart';
 import 'controls.dart';
 import 'indicators.dart';
+import 'list_keys.dart';
+import 'popover.dart';
 
 /// Tarjeta de una sección de Configuración (las maquetas: 24 px de relleno,
 /// radio 16, fondo de barra y borde).
@@ -340,6 +342,221 @@ class LabeledField extends StatelessWidget {
         if (help != null) Text(help!, style: s.note),
         FieldMessage(error),
       ],
+    );
+  }
+}
+
+/// Un campo con una lista que se filtra al escribir y flota encima de lo demás,
+/// sin moverlo. Lo que no está en la lista se escribe a mano. ↑ ↓ y Enter eligen;
+/// Esc cierra la lista.
+class ChoiceField extends StatefulWidget {
+  final String label;
+  final TextEditingController controller;
+  final List<String> options;
+  final ValueChanged<String>? onChanged;
+  final bool enabled;
+  final String? hint;
+  final String? help;
+  final String? error;
+
+  /// Al entrar al campo (para pedir las opciones).
+  final VoidCallback? onFocus;
+
+  const ChoiceField({
+    super.key,
+    required this.label,
+    required this.controller,
+    required this.options,
+    this.onChanged,
+    this.enabled = true,
+    this.hint,
+    this.help,
+    this.error,
+    this.onFocus,
+  });
+
+  @override
+  State<ChoiceField> createState() => _ChoiceFieldState();
+}
+
+class _ChoiceFieldState extends State<ChoiceField> {
+  static const _rowHeight = 44.0;
+  static const _listHeight = 240.0;
+  static const _minListWidth = 280.0;
+
+  final _link = LayerLink();
+  final _scroll = ScrollController();
+  late final _focus = FocusNode(onKeyEvent: _onKey)..addListener(_focusChanged);
+  bool _open = false;
+  bool _above = false;
+  bool _alignEnd = false;
+  int _index = -1;
+
+  List<String> get _shown {
+    final q = widget.controller.text.trim().toLowerCase();
+    if (q.isEmpty) return widget.options;
+    return widget.options.where((o) => o.toLowerCase().contains(q)).toList();
+  }
+
+  void _show() {
+    final box = context.findRenderObject() as RenderBox?;
+    if (box != null && box.hasSize) {
+      final corner = box.localToGlobal(Offset(0, box.size.height));
+      final window = MediaQuery.sizeOf(context);
+      _above = corner.dy + _listHeight > window.height;
+      _alignEnd = corner.dx + _minListWidth > window.width;
+    }
+    setState(() {
+      _open = true;
+      _index = -1;
+    });
+  }
+
+  void _focusChanged() {
+    if (!mounted) return;
+    if (_focus.hasFocus) {
+      widget.onFocus?.call();
+      _show();
+    } else {
+      setState(() => _open = false);
+    }
+  }
+
+  void _edited(String text) {
+    widget.onChanged?.call(text);
+    _show();
+  }
+
+  void _pick(String option) {
+    widget.controller.value = TextEditingValue(
+      text: option,
+      selection: TextSelection.collapsed(offset: option.length),
+    );
+    widget.onChanged?.call(option);
+    setState(() => _open = false);
+  }
+
+  KeyEventResult _onKey(FocusNode node, KeyEvent e) {
+    final shown = _shown;
+    if (!_open || shown.isEmpty) return KeyEventResult.ignored;
+    if (e.logicalKey == LogicalKeyboardKey.escape) {
+      if (e is KeyDownEvent) setState(() => _open = false);
+      return KeyEventResult.handled;
+    }
+    return listKeys(
+      e,
+      count: shown.length,
+      index: _index,
+      move: (i) {
+        setState(() => _index = i);
+        revealRow(_scroll, i, _rowHeight);
+      },
+      activate: _index >= 0 ? () => _pick(shown[_index]) : null,
+    );
+  }
+
+  @override
+  void dispose() {
+    _focus.dispose();
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final shown = _shown;
+    final side = _alignEnd ? 1.0 : -1.0;
+    return LayoutBuilder(
+      builder: (context, box) => Popover(
+        open: _open && widget.enabled && shown.isNotEmpty,
+        link: _link,
+        targetAnchor: Alignment(side, _above ? -1 : 1),
+        followerAnchor: Alignment(side, _above ? 1 : -1),
+        offset: Offset(0, _above ? -4 : 4),
+        builder: (context) => _ChoiceList(
+          width: box.maxWidth < _minListWidth ? _minListWidth : box.maxWidth,
+          height: _listHeight,
+          rowHeight: _rowHeight,
+          scroll: _scroll,
+          options: _shown,
+          index: _index,
+          onPick: _pick,
+        ),
+        // Un clic en el campo que ya tiene el foco también abre la lista.
+        child: Listener(
+          onPointerDown: (_) {
+            if (_focus.hasFocus && !_open) _show();
+          },
+          child: LabeledField(
+            label: widget.label,
+            controller: widget.controller,
+            focusNode: _focus,
+            mono: true,
+            enabled: widget.enabled,
+            hint: widget.hint,
+            help: widget.help,
+            error: widget.error,
+            onChanged: _edited,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ChoiceList extends StatelessWidget {
+  final double width;
+  final double height;
+  final double rowHeight;
+  final ScrollController scroll;
+  final List<String> options;
+  final int index;
+  final ValueChanged<String> onPick;
+
+  const _ChoiceList({
+    required this.width,
+    required this.height,
+    required this.rowHeight,
+    required this.scroll,
+    required this.options,
+    required this.index,
+    required this.onPick,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final s = context.styles;
+    // Un clic aquí es parte del campo: no le quita el foco. Las filas tampoco.
+    return TextFieldTapRegion(
+      child: ExcludeFocus(
+        child: PopoverFrame(
+          width: width,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: height),
+            child: ListView.builder(
+              controller: scroll,
+              shrinkWrap: true,
+              itemExtent: rowHeight,
+              itemCount: options.length,
+              itemBuilder: (context, i) => Pressable(
+                onPressed: () => onPick(options[i]),
+                selected: i == index,
+                color: i == index ? c.accentSoft : null,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: Text(
+                    options[i],
+                    style: s.model,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

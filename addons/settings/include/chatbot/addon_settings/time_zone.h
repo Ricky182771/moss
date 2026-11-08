@@ -7,6 +7,7 @@
 #include <functional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace chatbot::addon_settings {
 
@@ -25,6 +26,11 @@ inline constexpr std::string_view kDefaultUtcOffset = "-06:00";
 /// prueba (CHATBOT_TZDB): libstdc++ 13 o posterior sí; libc++ (Clang en
 /// Termux, macOS) puede no tenerla.
 [[nodiscard]] bool time_zone_database_available();
+
+/// Los nombres de la base con la que valida day_in_zone (zonas y sus alias),
+/// en orden. Vacía si no hay base o no se pudo leer. Un desfase fijo también
+/// es válido y no está en la lista.
+[[nodiscard]] std::vector<std::string> available_time_zones();
 
 /// kDefaultTimeZone si hay base de zonas; si no, kDefaultUtcOffset.
 [[nodiscard]] std::string_view default_time_zone();

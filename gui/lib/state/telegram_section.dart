@@ -111,6 +111,15 @@ class TelegramSection extends SettingsSection {
   bool _savedLogDetails = false;
   Map<String, String> secrets = const {};
   Map<String, String> labels = const {};
+
+  /// `time_zones` de `addons.telegram.get`, para elegir de una lista.
+  List<String> timeZones = const [];
+
+  /// `models.list` del proveedor de la app, el que usa el bot; se pide al
+  /// entrar al campo.
+  List<String> models = const [];
+  String? modelsError;
+  String? _modelsFor;
   String envNote = '';
   bool readOnly = false;
   String? readOnlyReason;
@@ -204,6 +213,7 @@ class TelegramSection extends SettingsSection {
   void _apply(Map<String, dynamic> r, {required bool form}) {
     secrets = (r['secrets'] as Map).cast<String, String>();
     labels = (r['labels'] as Map).cast<String, String>();
+    timeZones = (r['time_zones'] as List? ?? const []).cast<String>();
     envNote = r['env_note'] as String;
     readOnly = r['read_only'] as bool;
     readOnlyReason = r['read_only_reason'] as String?;
@@ -217,6 +227,30 @@ class TelegramSection extends SettingsSection {
     _savedEnabled = f['enabled'] as bool;
     _savedLogDetails = f['log_error_details'] as bool;
     discard();
+  }
+
+  /// Los modelos del proveedor de la app, una vez por proveedor. Un error se
+  /// muestra y se puede escribir a mano; al volver a entrar, se reintenta.
+  Future<void> loadModels() async {
+    try {
+      final r = await rpc.request('settings.provider.get');
+      final provider = (r['saved'] as Map)['provider'] as String? ?? '';
+      if (disposed || provider.isEmpty || provider == _modelsFor) return;
+      _modelsFor = provider;
+      final list = await _long('models.list', {
+        'draft': {'provider': provider, 'base_url': '', 'model': ''},
+      });
+      if (disposed) return;
+      models = (list['models'] as List).cast<String>();
+      modelsError = null;
+    } on RpcError catch (e) {
+      if (disposed) return;
+      _modelsFor = null;
+      modelsError = e.code == RpcError.cancelled ? null : e.displayMessage;
+    } on StateError {
+      return; // El canal se cerró.
+    }
+    notifyListeners();
   }
 
   Future<void> _loadInvited() async {

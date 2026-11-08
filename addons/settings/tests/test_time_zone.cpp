@@ -7,11 +7,14 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <chrono>
 #include <string>
+#include <vector>
 
 namespace {
 
+using chatbot::addon_settings::available_time_zones;
 using chatbot::addon_settings::day_at_offset;
 using chatbot::addon_settings::day_in_zone;
 using chatbot::addon_settings::DayFunction;
@@ -88,6 +91,26 @@ TEST_CASE("zona horaria: un desfase fijo funciona siempre", "[addon_settings][zo
     REQUIRE(bad_zone.is_error());
     CHECK(bad_zone.error().message.find("Zona horaria") != std::string::npos);
     CHECK(bad_zone.error().message.find("-HH:MM") != std::string::npos);
+}
+
+TEST_CASE("zona horaria: la lista sale de la base con que se valida", "[addon_settings][zona]") {
+    const std::vector<std::string> zones = available_time_zones();
+    if (!time_zone_database_available()) {
+        CHECK(zones.empty());
+        return;
+    }
+    REQUIRE_FALSE(zones.empty());
+    CHECK(std::is_sorted(zones.begin(), zones.end()));
+    CHECK(std::binary_search(zones.begin(), zones.end(),
+                             std::string{chatbot::addon_settings::kDefaultTimeZone}));
+    // Todo lo que ofrece la lista lo acepta la misma validación.
+    std::vector<std::string> rejected;
+    for (const std::string& zone : zones) {
+        if (day_in_zone(zone).is_error()) {
+            rejected.push_back(zone);
+        }
+    }
+    CHECK(rejected.empty());
 }
 
 TEST_CASE("zona horaria: el valor por defecto funciona en esta compilación", "[addon_settings][zona]") {

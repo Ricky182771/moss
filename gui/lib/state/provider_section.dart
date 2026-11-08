@@ -310,7 +310,17 @@ class ProviderSection extends SettingsSection {
     try {
       list = ((await result)['models'] as List).cast<String>();
     } on RpcError catch (e) {
-      if (e.code == RpcError.cancelled) return;
+      if (e.code == RpcError.cancelled) {
+        // Otro models.list lo reemplazó (el de Telegram): ya no llega nada, y
+        // el siguiente `check` lo vuelve a pedir.
+        if (generation != _generation || disposed) return;
+        _modelsFor = null;
+        _pendingModels = null;
+        _slow?.cancel();
+        loadingVisible = false;
+        notifyListeners();
+        return;
+      }
       failure = e.displayMessage;
     } on Object {
       failure = Strings.modelsFailed; // Canal cerrado o respuesta rara.

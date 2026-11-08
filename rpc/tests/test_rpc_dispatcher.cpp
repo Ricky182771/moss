@@ -28,6 +28,7 @@
 #include "chatbot/addon_settings/paths.h"
 #include "chatbot/addon_settings/registry.h"
 #include "chatbot/addon_settings/systemd_unit.h"
+#include "chatbot/addon_settings/time_zone.h"
 #include "chatbot/addon_settings/token.h"
 #include "chatbot/config.h"
 #include "chatbot/credentials.h"
@@ -1888,6 +1889,7 @@ TEST_CASE("RPC: addons.telegram.get y check", "[rpc][addons]") {
     CHECK(result["secrets"]["model_key"] == chatbot::cli::addon_secret_status("", false));
     CHECK(result["labels"]["daily_limit"] ==
           std::string{chatbot::cli::addon_field_label(chatbot::cli::AddonField::DailyLimit)});
+    CHECK(result["time_zones"] == Json(chatbot::addon_settings::available_time_zones()));
     CHECK(result["read_only"] == false);
     CHECK(result["read_only_reason"].is_null());
     CHECK(result["discarded"] == Json::array());

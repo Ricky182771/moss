@@ -357,6 +357,11 @@ Map<String, Object?> telegramGet({
     'search_key': 'sin configurar',
   },
   'labels': kTelegramLabels,
+  'time_zones': const [
+    'America/Mexico_City',
+    'America/Tijuana',
+    'Europe/Madrid',
+  ],
   'env_note': envNote,
   'read_only': readOnly,
   'read_only_reason': readOnlyReason,

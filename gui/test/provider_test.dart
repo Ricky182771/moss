@@ -378,6 +378,20 @@ void main() {
     );
   });
 
+  testWidgets('models.list reemplazado por otro: no se queda cargando', (
+    tester,
+  ) async {
+    await startApp(
+      tester,
+      handlers: {
+        'models.list': (_) => throw const FakeError(-32800, 'Cancelado'),
+      },
+    );
+    await _open(tester);
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text(Strings.loadingModels), findsNothing);
+  });
+
   testWidgets('modelos con error: su mensaje y escribir a mano', (
     tester,
   ) async {

@@ -9,6 +9,7 @@
 
 #include "chatbot/addon_settings/registry.h"
 #include "chatbot/addon_settings/systemd_unit.h"
+#include "chatbot/addon_settings/time_zone.h"
 #include "chatbot/model_params.h"
 #include "chatbot/system_prompt.h"
 
@@ -1159,6 +1160,7 @@ void Dispatcher::addons(const std::string& method, const Json* params, const Jso
                  {"model_key", cli::addon_secret_status(secrets.model_key, false)},
                  {"search_key", cli::addon_secret_status(secrets.search_key, false)}}},
                {"labels", std::move(labels)},
+               {"time_zones", addon_settings::available_time_zones()},
                {"env_note", cli::addon_env_note(addon.environment().env_defined)},
                {"read_only", addon.read_only()},
                {"read_only_reason", non_empty_or_null(reason)},

@@ -37,6 +37,10 @@ bool time_zone_database_available() {
     return detail::zone_database_available();
 }
 
+std::vector<std::string> available_time_zones() {
+    return detail::zone_names();
+}
+
 std::string_view default_time_zone() {
     return time_zone_database_available() ? kDefaultTimeZone : kDefaultUtcOffset;
 }

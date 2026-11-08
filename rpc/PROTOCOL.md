@@ -28,6 +28,7 @@ Versión del protocolo: **1**.
 | `settings.search.check` | 6.7 | Implementado |
 | Las preguntas de `-32008` sin ` (s/n)` | 6.8 | Implementado |
 | `linger_notice` y `linger_command` en `service.status` | 6.8 | Implementado |
+| `time_zones` en `addons.telegram.get` | 6.8 | Implementado |
 | `help` en `settings.model_params.get`; `check` y `save` aceptan cada número como cadena, y `dirty` en `check` | 6.7 | Implementado |
 | Pensamiento: `reasoning` en `Entry`, evento `conversation.reasoning_delta` | 5, 7 | Implementado |
 | `service.log` (el registro del bot) | 6.8 | Implementado |
@@ -570,12 +571,15 @@ Los parámetros `name` y `addon` solo aceptan un nombre de `known_addons` (`"tel
          "remove_model_key":false, "remove_search_key":false},
  "secrets":{"token":"guardada: …abcd", "model_key":"sin configurar", "search_key":"..."},  // addon_secret_status
  "labels":{"token":"Token", "model":"Modelo", ...},   // addon_field_label, para que la GUI no los copie
+ "time_zones":["Africa/Abidjan", ...],   // available_time_zones: la base con que se valida time_zone
  "env_note":"",              // addon_env_note: CHAT_* de la terminal que el servicio no ve
  "read_only":false,          // error al leer, sección más nueva o addon incompatible
  "read_only_reason":null,    // el texto de F2, o null
  "discarded":["rara"],       // llaves que guardar descartaría
  "load_error":null}          // config.json o credentials.json no se pudieron leer
 ```
+
+`time_zones` sale de la misma base que usa la validación de `time_zone` (`std::chrono::get_tzdb`: zonas y alias, en orden); vacía si esta compilación no tiene base o no se pudo leer. Un desfase fijo como `-06:00` también es válido y no está en la lista: la GUI siempre deja escribir a mano. Para el campo `model` no hay lista aquí: el bot usa el proveedor de la app, así que sale de `models.list` con ese proveedor.
 
 Lee los archivos en cada llamada. Los campos de secretos van vacíos (vacío = se conserva lo guardado), igual que en `AddonForm`; los secretos nunca salen, solo su estado enmascarado. Los nombres de `fields` son los de `AddonField` en snake_case. El `form` que reciben `check` y `save` tiene esta misma forma, con todas sus llaves (`-32602` con `form.…` o `form.fields.…` si falta o sobra una).
 
