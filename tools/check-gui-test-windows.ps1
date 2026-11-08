@@ -79,6 +79,28 @@ try {
     Wait-Until { Test-Path (Join-Path $dir 'datos') } 30 'se creara datos\'
     Write-Output 'datos\ está junto a los .exe'
 
+    # La ventana se encoge hasta su mínimo: el contenido queda en 720×520 lógicos.
+    Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+public static class MossWindow {
+    [StructLayout(LayoutKind.Sequential)] public struct Rect { public int L, T, R, B; }
+    [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr w, IntPtr a, int x, int y, int cx, int cy, uint f);
+    [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr w, out Rect r);
+    [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr w);
+}
+'@
+    $window = $gui.MainWindowHandle
+    $noMoveZOrderActivate = 0x2 -bor 0x4 -bor 0x10
+    [void][MossWindow]::SetWindowPos($window, [IntPtr]::Zero, 0, 0, 100, 100, $noMoveZOrderActivate)
+    $client = New-Object MossWindow+Rect
+    [void][MossWindow]::GetClientRect($window, [ref]$client)
+    $dpi = [MossWindow]::GetDpiForWindow($window)
+    $expected = "$([math]::Floor(720 * $dpi / 96 + 0.5))x$([math]::Floor(520 * $dpi / 96 + 0.5))"
+    $got = "$($client.R - $client.L)x$($client.B - $client.T)"
+    Write-Output "Contenido al mínimo, a $dpi DPI: $got"
+    if ($got -ne $expected) { throw "El mínimo debía ser $expected y fue $got" }
+
     if (-not $gui.CloseMainWindow()) { throw 'No se pudo mandar el cierre a la ventana' }
     Wait-Until { $gui.HasExited } 20 'moss-gui.exe saliera al cerrar la ventana'
     Wait-Until { $null -eq (Get-Rpc) } 10 'moss-rpc.exe saliera después de moss-gui.exe'

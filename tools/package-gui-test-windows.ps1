@@ -59,9 +59,9 @@ do {
 } while ($added)
 
 # El arranque en el runner no lo notaría: las encuentra en System32.
-$missing = @('msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll') |
+$missing = @('msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll' |
     Where-Object { -not (Test-Path (Join-Path $Out $_)) } |
-    ForEach-Object { "la carpeta no trae $_" }
+    ForEach-Object { "la carpeta no trae $_" })
 foreach ($binary in Get-Binaries | Sort-Object Name) {
     $deps = @(Get-Dependencies $binary.FullName | Sort-Object)
     $local = @($deps | Where-Object { Test-Path (Join-Path $Out $_) })

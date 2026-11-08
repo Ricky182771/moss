@@ -66,13 +66,20 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
       flutter_controller_->engine()->ReloadSystemFonts();
       break;
     case WM_GETMINMAXINFO: {
-      // El mínimo es en píxeles lógicos; Windows lo pide en físicos.
-      const UINT dpi = GetDpiForWindow(hwnd);  // 0 si hwnd no es válido.
-      const double scale = (dpi != 0 ? dpi : 96) / 96.0;
+      // El mínimo es del contenido y en píxeles lógicos; Windows lo pide de la
+      // ventana entera (con marco y barra) y en físicos, con el DPI del monitor
+      // donde está: al cambiar de monitor, WM_DPICHANGED la mide otra vez.
+      const UINT window_dpi = GetDpiForWindow(hwnd);  // 0 si hwnd no es válido.
+      const UINT dpi = window_dpi != 0 ? window_dpi : USER_DEFAULT_SCREEN_DPI;
+      RECT frame{0, 0, MulDiv(720, static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI),
+                 MulDiv(520, static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI)};
+      AdjustWindowRectExForDpi(
+          &frame, static_cast<DWORD>(GetWindowLong(hwnd, GWL_STYLE)), FALSE,
+          static_cast<DWORD>(GetWindowLong(hwnd, GWL_EXSTYLE)), dpi);
       auto* info = reinterpret_cast<MINMAXINFO*>(lparam);
-      info->ptMinTrackSize.x = static_cast<LONG>(720 * scale);
-      info->ptMinTrackSize.y = static_cast<LONG>(520 * scale);
-      break;
+      info->ptMinTrackSize.x = frame.right - frame.left;
+      info->ptMinTrackSize.y = frame.bottom - frame.top;
+      return 0;
     }
   }
 
