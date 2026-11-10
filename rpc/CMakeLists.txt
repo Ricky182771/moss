@@ -29,6 +29,7 @@ target_link_libraries(moss-rpc PRIVATE chatbot_rpc_lib)
 target_compile_definitions(moss-rpc PRIVATE CHATBOT_VERSION="${PROJECT_VERSION}")
 chatbot_set_warnings(moss-rpc)
 chatbot_windows_manifest(moss-rpc)
+chatbot_windows_version(moss-rpc "Moss — servidor RPC")
 # Junto a moss, como en el ZIP: el servicio arranca ese moss y el addon
 # se busca junto a él (rpc/PROTOCOL.md, sección 6.8).
 set_target_properties(moss-rpc PROPERTIES RUNTIME_OUTPUT_DIRECTORY $<TARGET_FILE_DIR:moss>)
