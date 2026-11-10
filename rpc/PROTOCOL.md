@@ -792,6 +792,8 @@ printf '%s\n' \
 
 Para una sesión interactiva: `rlwrap ./build/dev/cli/moss-rpc 2>rpc.log`.
 
+`moss-rpc` se compila con todo lo demás (también en Windows) y sale en `build/<preset>/cli/moss-rpc`, junto a `moss`. Usa la misma configuración que la terminal (y el modo portable), así que hace lo mismo que ella: configuración, conversaciones guardadas, `/buscar`. [`jq`](https://jqlang.org/) solo sirve para leer la salida. `CHAT_DEBUG_RPC` (sección 10) **contiene la conversación**: solo para diagnosticar.
+
 ---
 
 ## 13. Lado de Dart (referencia)
