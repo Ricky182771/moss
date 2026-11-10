@@ -116,7 +116,7 @@ vs=$("$vswhere" -latest -products '*' -requires Microsoft.VisualStudio.Component
 [[ -n $vs ]] || die "Visual Studio sin las herramientas de C++ (gui/README.md)"
 vs=$(cygpath -u "$vs")
 redist=$(tr -d '\r\n' < "$vs/VC/Auxiliary/Build/Microsoft.VCRedistVersion.default.txt")
-crt=$(find "$vs/VC/Redist/MSVC/$redist/x64" -maxdepth 1 -type d -name 'Microsoft.VC*.CRT' | head -n 1)
+crt=$(find "$vs/VC/Redist/MSVC/$redist/x64" -maxdepth 1 -type d -name 'Microsoft.VC*.CRT' -print -quit)
 [[ -n $crt ]] || die "no encontré las DLL de Visual C++ en $vs/VC/Redist/MSVC/$redist/x64"
 echo "DLL de Visual C++ de $crt"
 visual_cpp=(msvcp140.dll vcruntime140.dll vcruntime140_1.dll)

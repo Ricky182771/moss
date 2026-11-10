@@ -3,10 +3,10 @@
 # - Con una etiqueta v*: revisa que la etiqueta sea la de VERSION y que
 #   CHANGELOG.md tenga su sección, arma y prueba los paquetes de Linux
 #   (package-linux.yml) y el ZIP de Windows (package-windows.yml), junta un
-#   solo SHA256SUMS y crea un GitHub Release en BORRADOR con los cinco
+#   solo SHA256SUMS y crea un GitHub Release en BORRADOR con los cuatro
 #   archivos y SHA256SUMS. Publicarlo es a mano.
 # - Con workflow_dispatch: lo mismo, pero sin etiqueta ni release: deja los
-#   seis archivos en el artefacto moss-release. Así se prueba.
+#   cinco archivos en el artefacto moss-release. Así se prueba.
 name: Release
 
 on:
@@ -55,7 +55,7 @@ jobs:
     with:
       retention-days: 14
 
-  # Los cinco archivos y un solo SHA256SUMS, ya probados en linux y windows.
+  # Los cuatro paquetes y un solo SHA256SUMS, ya probados en linux y windows.
   files:
     name: juntar los archivos
     needs: [linux, windows]
@@ -86,7 +86,7 @@ jobs:
           cd release
           sha256sum -- * > SHA256SUMS
           cat SHA256SUMS
-          test "$(ls | wc -l)" -eq 6
+          test "$(ls | wc -l)" -eq 5
 
       - name: Subir
         uses: actions/upload-artifact@v7

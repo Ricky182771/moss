@@ -59,14 +59,14 @@ Un binario hecho con una glibc nueva no corre con una más vieja. La CI arma en 
 
 - **`package-linux.yml`** (reutilizable): arma en `ubuntu:22.04` con `MOSS_MAX_GLIBC=2.35` (el script falla si algo pide una glibc más nueva) y sube `moss-linux-x86_64` (7 días); después, `tools/check-linux-package.sh` instala y prueba en contenedores: el `.rpm` en `fedora:latest`, el `.deb` en `debian:12` y `ubuntu:22.04`, y el `.tar.gz` en `debian:12` con solo lo que dice su `LEEME.md` (en Fedora, antes del checkout, `tar`, `gzip` y `findutils`, que la imagen no trae). En cada uno: `--version`, `ldd` sin `not found`, permisos, enlaces, `.desktop`, ícono y metainfo, una sesión de `moss-rpc` sin red ni configuración (`initialize`, `shutdown`, `exit`), `moss-gui` en Xvfb hasta que manda `initialize` a `moss-rpc`, y desinstalar sin dejar nada en `/usr/lib/moss`.
 - **`ci.yml`** lo llama en cada PR (trabajo `paquetes de Linux`).
-- **`release.yml`**: con una etiqueta `v*`, revisa que sea `v<VERSION>` y que `CHANGELOG.md` tenga la sección, arma y prueba Linux y Windows (`package-linux.yml` y `package-windows.yml`, 14 días), junta los cinco archivos con un solo `SHA256SUMS` (trabajo `files`, artefacto `moss-release`) y crea un GitHub Release **en borrador** con los seis y las notas de `CHANGELOG.md` (`tools/release-notes.sh`). Con `workflow_dispatch`, lo mismo pero solo deja los artefactos.
+- **`release.yml`**: con una etiqueta `v*`, revisa que sea `v<VERSION>` y que `CHANGELOG.md` tenga la sección, arma y prueba Linux y Windows (`package-linux.yml` y `package-windows.yml`, 14 días), junta los cuatro paquetes con un solo `SHA256SUMS` (trabajo `files`, artefacto `moss-release`) y crea un GitHub Release **en borrador** con los cinco archivos y las notas de `CHANGELOG.md` (`tools/release-notes.sh`). Con `workflow_dispatch`, lo mismo pero solo deja los artefactos.
 
 ### Sacar un release
 
 1. En una rama: subir `VERSION`, `gui/pubspec.yaml` y `kClientVersion`, y escribir la sección `## X.Y.Z` de `CHANGELOG.md`. PR y merge a `main` con la CI en verde.
 2. (Opcional) Actions → Release → Run workflow sobre `main`: deja los artefactos para probarlos (`gh run download <id>`).
 3. Etiqueta sobre ese commit de `main`: `git tag vX.Y.Z && git push origin vX.Y.Z`.
-4. `release.yml` crea el borrador: revisar en GitHub → Releases los cinco archivos, `SHA256SUMS` y las notas.
+4. `release.yml` crea el borrador: revisar en GitHub → Releases los cuatro paquetes, `SHA256SUMS` y las notas.
 5. Publicarlo a mano.
 
 ### Windows
