@@ -12,10 +12,15 @@ con retardo.
 
 Uso (comando completo en gui/README.md):
   python3 tools/fake-llm.py [--port 8765] [--reasoning] [--slow] [--status 429]
+                            [--tls CERT KEY]
+
+Con --tls responde por HTTPS con TLS 1.2 como máximo (lo que tiene Schannel en
+Windows 10): lo usa la CI de Windows (tools/check-rpc-https.ps1).
 """
 
 import argparse
 import json
+import ssl
 import sys
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -145,9 +150,18 @@ def main():
                         help="responde lento (250 ms entre trozos)")
     parser.add_argument("--status", type=int, default=200,
                         help="responde siempre con este código, p. ej. 429")
+    parser.add_argument("--tls", nargs=2, metavar=("CERT", "KEY"),
+                        help="HTTPS con este certificado y su llave (PEM), hasta TLS 1.2")
     Handler.opts = parser.parse_args()
     server = ThreadingHTTPServer(("127.0.0.1", Handler.opts.port), Handler)
-    print("fake-llm en http://127.0.0.1:%d/v1" % Handler.opts.port, file=sys.stderr)
+    scheme = "http"
+    if Handler.opts.tls:
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.maximum_version = ssl.TLSVersion.TLSv1_2
+        context.load_cert_chain(*Handler.opts.tls)
+        server.socket = context.wrap_socket(server.socket, server_side=True)
+        scheme = "https"
+    print("fake-llm en %s://127.0.0.1:%d/v1" % (scheme, Handler.opts.port), file=sys.stderr)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
