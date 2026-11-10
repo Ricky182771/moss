@@ -2,9 +2,11 @@ MOSS PARA WINDOWS
 =================
 
 Moss es un asistente con el que platicas por escrito, como en un chat.
-Funciona en Windows 10 (versión 1903 o posterior) y en Windows 11.
 Necesita internet y una "API key" (una clave) de un proveedor de
-inteligencia artificial, por ejemplo NVIDIA NIM u OpenRouter.
+inteligencia artificial, por ejemplo NVIDIA NIM.
+
+Requisitos: Windows 10 u 11 de 64 bits. Funciona hasta en computadoras
+viejas. No hay que instalar nada más.
 
 
 1. ABRIRLO
@@ -12,125 +14,86 @@ inteligencia artificial, por ejemplo NVIDIA NIM u OpenRouter.
 
 1. Descomprime el ZIP: clic derecho sobre el archivo .zip, "Extraer todo..."
    y "Extraer". No lo abras desde adentro del ZIP: así no funciona.
-2. Entra a la carpeta que se creó y haz doble clic en moss.exe.
-   Se abre una ventana negra: es normal, Moss se usa ahí.
+2. Entra a la carpeta que se creó y haz doble clic en moss-gui.exe.
 
-Si Windows muestra "Windows protegió tu PC", haz clic en "Más información"
-y luego en "Ejecutar de todas formas". Pasa con programas descargados que
-no tienen firma digital.
+La primera vez, abre la Configuración (F2 o la fila "Configuración" abajo a
+la izquierda), elige el proveedor, pega tu key, elige un modelo y presiona
+Guardar.
 
-También puedes abrirlo desde CMD: escribe cd seguido de la ruta de la
-carpeta, presiona Enter, escribe moss y presiona Enter otra vez.
+¿Prefieres la terminal? Haz doble clic en moss.exe: es el mismo Moss en una
+ventana negra. Ahí la Configuración también se abre con F2 y se sale con
+Ctrl+C.
 
-Si al abrirlo aparece un mensaje de error y "Presiona Enter para cerrar
-esta ventana.", léelo: dice qué falta y qué hacer.
-
-Para salir: Ctrl+C.
+No abras moss-rpc.exe: moss-gui.exe lo usa por detrás.
 
 
-2. PONER LA API KEY (la primera vez)
-------------------------------------
+2. SI WINDOWS NO TE DEJA ABRIRLO
+--------------------------------
 
-La primera vez se abre solo la Configuración. Después, ábrela con F2 o con
-la fila "Configuración" de la barra de la izquierda.
+"Windows protegió su PC" (SmartScreen)
+  Sale con programas descargados que todavía no tienen firma digital.
+  Haz clic en "Más información" y luego en "Ejecutar de todas formas".
+  Para que no salga, antes de descomprimir: clic derecho en el ZIP >
+  Propiedades > marca "Desbloquear" > Aceptar.
 
-1. En "Proveedor de IA", elige el proveedor con Enter y las flechas.
-2. Pasa al campo "API key" con Tab y pega tu key (Ctrl+V). Se ve como
-   puntitos: nunca se muestra completa.
-3. Elige un modelo de la lista (flechas y Enter) o escríbelo.
-4. Ve a "[ Guardar ]" con Tab y presiona Enter.
-
-Tab y Shift+Tab pasan de un campo a otro. Esc cierra sin guardar.
-
-
-3. ESCRIBIR Y PEGAR
--------------------
-
-- Escribe tu mensaje abajo y presiona Enter para enviarlo.
-- Para pegar: Ctrl+V. También funciona Shift + clic derecho.
-- Para pasar a la siguiente línea sin enviar: escribe \ (barra invertida)
-  y presiona Enter.
-- Esc cancela una respuesta que todavía está llegando.
+"Control inteligente de aplicaciones bloqueó..." (solo Windows 11)
+  Es una protección de Windows 11 que bloquea los programas sin firma que
+  no conoce. No tiene botón para dejar pasar a un solo programa: la única
+  forma es apagarla para toda la computadora, y no te lo recomendamos:
+  te protege de programas peligrosos. Estamos tramitando la firma
+  digital de Moss para que esto deje de pasar. Mientras, usa Moss en una
+  computadora con Windows 10 o con esa protección apagada.
 
 
-4. COMANDOS
------------
+3. EN LA ESCUELA: MODO PORTABLE
+-------------------------------
 
-Escribe / al principio de la caja y aparece la lista de comandos:
+Si la computadora borra todo al reiniciar, o si quieres llevar Moss en una
+memoria USB, usa el modo portable:
 
-  /buscar <pregunta>   busca en internet y responde con las fuentes
-                       (necesita otra key, de Tavily: F2 > Búsqueda web)
-  /copiar              copia el último bloque de código
-  /guardar             guarda el último bloque de código en un archivo
-  /exportar            guarda toda la conversación en un archivo
+1. En esta carpeta hay un archivo llamado moss.portable.ejemplo. Cámbiale
+   el nombre a moss.portable (bórrale ".ejemplo"). Si Windows pregunta si
+   quieres cambiar la extensión, di que sí.
+2. Abre Moss. Desde ahora la configuración, tu key y tus chats se guardan
+   en la carpeta "datos", dentro de esta misma carpeta.
 
-Lo que guardas o exportas queda en tu carpeta Descargas, dentro de la
-carpeta "moss".
+Si la carpeta no deja escribir (por ejemplo, dentro de Archivos de
+programa), Moss no abre y te lo explica: mueve la carpeta a Documentos, al
+Escritorio o a una memoria USB.
 
-
-5. SELECCIONAR Y COPIAR TEXTO DE LA PANTALLA
---------------------------------------------
-
-Mantén presionada la tecla Shift y arrastra con el ratón. Mientras hay
-algo seleccionado, la pantalla se congela (la respuesta deja de avanzar):
-presiona Enter para copiar lo seleccionado o Esc para cancelar, y todo
-sigue normal.
-
-Para copiar código es más fácil el botón [Copiar] de cada bloque.
+IMPORTANTE: en modo portable tu key queda guardada sin cifrar en la carpeta
+"datos". Cualquiera que abra la carpeta puede usarla. Al terminar en una
+computadora que no es tuya, borra la carpeta de Moss completa.
 
 
-6. SI SE VEN CUADRITOS EN LUGAR DE SÍMBOLOS
+4. DÓNDE SE GUARDA TODO (SIN MODO PORTABLE)
 -------------------------------------------
 
-F2 > Colores y Accesibilidad > Símbolos > Sencillos, y Guardar.
+- La configuración y tu key: %APPDATA%\moss
+- Los chats: %LOCALAPPDATA%\moss
+- Lo que guardas o exportas: tu carpeta Descargas, dentro de "moss".
+
+(Puedes pegar %APPDATA%\moss en la barra de direcciones del Explorador de
+archivos para abrir esa carpeta.)
 
 
-7. DÓNDE SE GUARDA TODO Y MODO PORTABLE
----------------------------------------
+5. DESINSTALAR
+--------------
 
-Normalmente, la configuración y la key se guardan en la carpeta de tu
-usuario de Windows (%APPDATA%\moss) y las conversaciones en
-%LOCALAPPDATA%\moss\conversations.
-
-Si la computadora borra todo al reiniciar (como en muchas escuelas), o si
-quieres llevar Moss en una memoria USB, usa el MODO PORTABLE:
-
-1. En esta carpeta hay un archivo llamado moss.portable.ejemplo.
-   Cámbiale el nombre a moss.portable (bórrale ".ejemplo"). Si Windows
-   pregunta si quieres cambiar la extensión, di que sí.
-2. Abre moss.exe. Desde ahora, la configuración, la key y las
-   conversaciones se guardan en la carpeta "datos", junto a moss.exe.
-   En F2 > Proveedor de IA, abajo, dice "Modo portable: datos en ...".
-
-Ojo: el nombre debe quedar exactamente moss.portable. Si Windows oculta
-las extensiones, un archivo nuevo de texto quedaría como
-moss.portable.txt y no funcionaría; por eso conviene renombrar el de
-ejemplo.
-
-Si la carpeta no permite escribir (por ejemplo, dentro de Archivos de
-programa), Moss no abre y explica el problema: mueve la carpeta a
-Documentos, al Escritorio o a una memoria USB.
-
-IMPORTANTE: en modo portable la key queda guardada SIN CIFRAR en
-datos\credentials.json. Cualquiera que pueda abrir esta carpeta puede leerla
-y usarla. No compartas la carpeta "datos" ni la subas a internet. Quien
-administre las keys de la escuela: usa una key por computadora y ponle un
-límite de gasto diario.
+Borra la carpeta de Moss. Si no usaste el modo portable, borra también
+%APPDATA%\moss y %LOCALAPPDATA%\moss.
 
 
-8. ARCHIVOS DE ESTA CARPETA
+6. ARCHIVOS DE ESTA CARPETA
 ---------------------------
 
-  moss.exe                   el programa
-  moss-rpc.exe               para la versión gráfica (ver abajo): no lo abras
-  *.dll                      bibliotecas que necesitan moss.exe y
-                             moss-rpc.exe: no las borres ni las muevas
-  moss.portable.ejemplo      renómbralo para el modo portable (sección 7)
-  LEEME.txt                  este archivo
-  LICENSE.txt                la licencia de Moss (GPL versión 3)
-  AVISOS-TERCEROS.txt        las licencias de las bibliotecas incluidas
+  moss-gui.exe             Moss (ventana normal)
+  moss.exe                 Moss en la terminal
+  moss-rpc.exe             lo usa moss-gui.exe: no lo abras
+  *.dll y data             lo que necesita moss-gui.exe: no los borres
+  moss.portable.ejemplo    renómbralo para el modo portable (sección 3)
+  LEEME.txt                este archivo
+  LICENSE                  la licencia de Moss (GPL versión 3 o posterior)
+  AVISOS-TERCEROS.txt      las licencias de lo que Moss trae adentro
 
-moss-rpc.exe es para la versión gráfica de Moss, que viene después:
-ella lo abre sola, por detrás. No hay que abrirlo. Si le das doble clic por
-error, se abre una ventana negra con un aviso que dice esto mismo:
-ciérrala y abre moss.exe.
+Moss es software libre: https://github.com/Ricky182771/moss

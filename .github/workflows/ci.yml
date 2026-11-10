@@ -1,5 +1,6 @@
 # Integración continua: compila y corre las pruebas con GCC y Clang en Linux
-# y con GCC de MSYS2 en Windows, en cada PR y en cada push a main. Nunca usa
+# y con GCC de MSYS2 en Windows, y arma y prueba los paquetes de Linux y el ZIP
+# de Windows, en cada PR y en cada push a main. Nunca usa
 # una API key ni llama a una API real:
 # las pruebas usan FakeTransport y el único arranque del ejecutable es sin key.
 name: CI
@@ -240,78 +241,6 @@ jobs:
           grep -q "error de configuración" errores.txt
           grep -q "CHAT_API_KEY" errores.txt
 
-      # El ZIP de distribución (tools/package-windows.sh): moss.exe y
-      # moss-rpc.exe (falla si piden alguna DLL que no sea de Windows), LICENSE.txt,
-      # AVISOS-TERCEROS.txt, LEEME.txt y moss.portable.ejemplo. El script
-      # falla si falta el texto de alguna licencia o si el ZIP no trae
-      # exactamente esos archivos.
-      - name: Empaquetar
-        if: matrix.preset == 'release'
-        run: tools/package-windows.sh build/release build/moss-windows-x64.zip
-
-      # Desde la carpeta descomprimida y sin /ucrt64/bin en el PATH, como en
-      # una PC sin MSYS2: sin key y sin terminal sale con 1 y el error de
-      # configuración; con moss.portable, igual, pero crea datos/ ahí.
-      # moss-rpc.exe: initialize, shutdown y exit → 0; con moss.portable,
-      # tools/check-rpc-pipes.sh completo (portable:true y config en datos\).
-      - name: Probar el ZIP
-        if: matrix.preset == 'release'
-        run: |
-          set -euo pipefail
-          rm -rf zip-prueba
-          mkdir zip-prueba
-          cd zip-prueba
-          cmake -E tar xf ../build/moss-windows-x64.zip
-          ls -l
-          arrancar() {
-            local status=0
-            env -u CHAT_API_KEY -u CHAT_DATA_DIR PATH=/usr/bin:/c/Windows/System32:/c/Windows \
-              timeout 60 ./moss.exe < /dev/null > ../salida-zip.txt 2> ../errores-zip.txt ||
-              status=$?
-            cat ../errores-zip.txt
-            if [ "$status" -ne 1 ]; then
-              echo "Se esperaba el código de salida 1 y fue $status"
-              exit 1
-            fi
-            grep -q "error de configuración" ../errores-zip.txt
-            grep -q "CHAT_API_KEY" ../errores-zip.txt
-          }
-          arrancar
-          status=0
-          printf '%s\n' \
-            '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocol_version":1,"client":{"name":"ci","version":"0"}}}' \
-            '{"jsonrpc":"2.0","id":2,"method":"shutdown","params":{}}' \
-            '{"jsonrpc":"2.0","method":"exit"}' |
-            env -u CHAT_API_KEY -u CHAT_DATA_DIR PATH=/usr/bin:/c/Windows/System32:/c/Windows \
-              timeout 60 ./moss-rpc.exe 2> ../errores-rpc.txt | cat > ../salida-rpc.txt ||
-            status=$?
-          cat ../errores-rpc.txt
-          cut -c1-200 ../salida-rpc.txt
-          if [ "$status" -ne 0 ]; then
-            echo "moss-rpc.exe: se esperaba el código de salida 0 y fue $status"
-            exit 1
-          fi
-          grep -q '"portable":false' ../salida-rpc.txt
-          grep -q '"jsonrpc":"2.0","id":2,"result":{}' ../salida-rpc.txt
-          test ! -e datos
-          cp moss.portable.ejemplo moss.portable
-          arrancar
-          test -d datos
-          if grep -q "Modo portable" ../errores-zip.txt; then
-            echo "datos/ se podía escribir y aun así salió el error del modo portable"
-            exit 1
-          fi
-          PATH=/usr/bin:/c/Windows/System32:/c/Windows \
-            ../tools/check-rpc-pipes.sh ./moss-rpc.exe windows
-
-      - name: Subir el artefacto
-        if: matrix.preset == 'release'
-        uses: actions/upload-artifact@v7
-        with:
-          name: moss-windows-x64
-          path: build/moss-windows-x64.zip
-          if-no-files-found: error
-
   # Interfaz gráfica (Flutter, gui/): formato, análisis, pruebas (sin moss-rpc
   # ni red: canal falso) y el release de Linux. La prueba de capturas no corre
   # aquí (dart_test.yaml la salta). Windows: gui-windows, abajo.
@@ -353,14 +282,11 @@ jobs:
       - name: Release de Linux
         run: flutter build linux --release
 
-  # La GUI en Windows, con MSVC (el runner de Flutter): análisis, pruebas (atrapan
-  # rutas con \, procesos y saltos de línea) y dos ZIP de PRUEBA, no el oficial:
-  # release para probar a mano y profile para medir con --frame-stats. Cada uno
-  # con moss.exe, moss-rpc.exe y sus DLL, del ZIP del trabajo windows, y las DLL
-  # de Visual C++. El formato se revisa en el trabajo gui.
+  # La GUI en Windows, con MSVC (el runner de Flutter): análisis y pruebas (atrapan
+  # rutas con \, procesos y saltos de línea). El formato se revisa en el trabajo
+  # gui; el release de Windows lo compila package-windows.
   gui-windows:
     name: gui (Flutter) / windows
-    needs: windows
     runs-on: windows-latest
     defaults:
       run:
@@ -386,54 +312,11 @@ jobs:
       - name: Pruebas
         run: flutter test
 
-      - name: Release de Windows
-        run: flutter build windows --release
-
-      - name: Profile de Windows
-        run: flutter build windows --profile
-
-      - name: ZIP de C++
-        uses: actions/download-artifact@v8
-        with:
-          name: moss-windows-x64
-          path: ${{ runner.temp }}/cpp
-
-      # Imprime qué DLL pide cada ejecutable y falla si alguna no se encuentra.
-      - name: Armar las carpetas de prueba
-        working-directory: .
-        run: |
-          foreach ($mode in 'Release', 'Profile') {
-            tools/package-gui-test-windows.ps1 `
-              -Bundle "gui/build/windows/x64/runner/$mode" `
-              -CppZip "$env:RUNNER_TEMP/cpp/moss-windows-x64.zip" `
-              -Out "$env:RUNNER_TEMP/prueba-$mode"
-          }
-
-      # Sin MSYS2 en el PATH y en una ruta con espacios y acentos: moss-rpc.exe
-      # responde initialize; la GUI abre su ventana, arranca el moss-rpc.exe de
-      # su carpeta y, al cerrarla, no deja ninguno vivo.
-      - name: Probar las carpetas
-        working-directory: .
-        timeout-minutes: 10
-        run: |
-          tools/check-gui-test-windows.ps1 -Source "$env:RUNNER_TEMP/prueba-Release"
-          tools/check-gui-test-windows.ps1 -Source "$env:RUNNER_TEMP/prueba-Profile" -FrameStats
-
-      - name: Subir el ZIP de prueba (release)
-        uses: actions/upload-artifact@v7
-        with:
-          name: moss-gui-windows-prueba-release
-          path: ${{ runner.temp }}/prueba-Release
-          retention-days: 7
-          if-no-files-found: error
-
-      - name: Subir el ZIP de prueba (profile)
-        uses: actions/upload-artifact@v7
-        with:
-          name: moss-gui-windows-prueba-profile
-          path: ${{ runner.temp }}/prueba-Profile
-          retention-days: 7
-          if-no-files-found: error
+  # El ZIP oficial de Windows y su prueba sin MSYS2, como en un release pero sin
+  # publicar nada (package-windows.yml).
+  package-windows:
+    name: ZIP de Windows
+    uses: ./.github/workflows/package-windows.yml
 
   # Los paquetes de Linux (.tar.gz, .rpm y .deb) y su prueba de instalación,
   # como en un release pero sin publicar nada (package-linux.yml).

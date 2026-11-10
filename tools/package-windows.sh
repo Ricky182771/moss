@@ -1,85 +1,157 @@
 #!/usr/bin/env bash
-# Arma moss-windows-x64.zip desde un build release. Corre en la terminal
-# "MSYS2 UCRT64" (la usa también la CI):
+# Arma moss-<versión>-windows-x64.zip (guias/17-empaquetado.md). Corre en la
+# terminal "MSYS2 UCRT64" de Windows con Visual Studio instalado (de ahí salen
+# las DLL de Visual C++); la usa también la CI (package-windows.yml):
 #
-#   tools/package-windows.sh [--allow-missing-licenses] [build] [zip]
+#   tools/package-windows.sh [--allow-missing-licenses] [--out=<carpeta>]
 #
-#   build  carpeta del build (por defecto, build/release)
-#   zip    ZIP de salida (por defecto, <build>/../moss-windows-x64.zip)
+#   --out  dónde dejar el ZIP (por defecto, build/package-windows/out)
 #
-# El ZIP lleva, sin carpeta de por medio:
-#   moss.exe y moss-rpc.exe (para la interfaz gráfica), sin DLL: falla si
-#     objdump -p reporta alguna que no sea de Windows;
-#   LICENSE.txt (el LICENSE del proyecto);
-#   AVISOS-TERCEROS.txt: las licencias de lo que va adentro, sacadas de los
-#     paquetes de MSYS2 (pacman -Qo dice de qué paquete es cada biblioteca) y
-#     de las fuentes que bajó FetchContent (FTXUI, md4c y curl);
-#   LEEME.txt y moss.portable.ejemplo (tools/windows-dist/).
-# Si un paquete de MSYS2 no instala su licencia, los textos salen de
-# tools/windows-dist/licenses/<paquete sin prefijo>/ (del tarball oficial);
-# si la versión instalada no es la de su README.md, avisa sin fallar.
-# Los .txt van con saltos de línea CRLF, para el Bloc de notas.
+# Antes, compila: en la raíz, cmake --preset release && cmake --build --preset
+# release; en gui/, flutter build windows --release.
 #
-# Si no encuentra el texto de alguna licencia, lo dice y falla sin armar el
-# ZIP; con --allow-missing-licenses lo arma igual y AVISOS-TERCEROS.txt dice
-# qué falta. Al final lista el ZIP y revisa que traiga exactamente lo esperado.
+# 1. Revisa que la versión sea la misma en VERSION, gui/pubspec.yaml,
+#    kClientVersion y el --version de moss.exe y moss-rpc.exe.
+# 2. Arma build/package-windows/moss-<versión>/: la GUI (lo que deja flutter
+#    build en runner/Release: moss-gui.exe, flutter_windows.dll, los plugins y
+#    data/), moss.exe y moss-rpc.exe sin símbolos, msvcp140.dll,
+#    vcruntime140.dll y vcruntime140_1.dll (Microsoft permite llevarlas junto
+#    a la app: en una PC sin el Visual C++ Redistributable no estarían),
+#    LEEME.txt y moss.portable.ejemplo (tools/windows-dist/), LICENSE y
+#    AVISOS-TERCEROS.txt.
+# 3. Revisa con objdump -p qué DLL pide cada .exe y .dll: moss.exe y
+#    moss-rpc.exe, solo de Windows (curl y el runtime de GCC van estáticos);
+#    los de la GUI, de Windows o de la carpeta. Falla si no.
+# 4. Saca el ZIP, con todo dentro de la carpeta moss-<versión>/, y revisa
+#    que traiga exactamente lo esperado.
+#
+# AVISOS-TERCEROS.txt: las licencias de lo que va adentro, de los paquetes de
+# MSYS2 (pacman -Qo dice de qué paquete es cada biblioteca), de las fuentes
+# que bajó FetchContent (FTXUI, md4c y curl), el OFL de Geist y el NOTICES que
+# genera flutter build. Si un paquete de MSYS2 no instala su licencia, los
+# textos salen de tools/windows-dist/licenses/<paquete sin prefijo>/ (del
+# tarball oficial); si la versión instalada no es la de su README.md, avisa sin
+# fallar. Si no encuentra el texto de alguna licencia, lo dice y falla sin
+# armar el ZIP; con --allow-missing-licenses lo arma igual y
+# AVISOS-TERCEROS.txt dice qué falta. Los .txt van con CRLF, para el Bloc de
+# notas.
 set -euo pipefail
 export LC_ALL=C # La salida de pacman en inglés, para leer sus campos.
-
-allow_missing=0
-if [[ ${1:-} == --allow-missing-licenses ]]; then
-    allow_missing=1
-    shift
-fi
 
 die() {
     echo "package-windows.sh: $*" >&2
     exit 1
 }
+say() { echo "==> $*"; }
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-build=$(cd "${1:-$root/build/release}" && pwd) || die "no existe la carpeta del build"
-zip=${2:-$(dirname "$build")/moss-windows-x64.zip}
+allow_missing=0
+out=$root/build/package-windows/out
+for arg in "$@"; do
+    case $arg in
+    --allow-missing-licenses) allow_missing=1 ;;
+    --out=*) out=${arg#*=} ;;
+    -h | --help)
+        sed -n '2,/^set -euo/{/^set -euo/d;s/^# \{0,1\}//;p}' "${BASH_SOURCE[0]}"
+        exit 0
+        ;;
+    *) die "argumento desconocido: $arg (ver --help)" ;;
+    esac
+done
 
 [[ ${MSYSTEM:-} == UCRT64 ]] || die "corre esto en la terminal MSYS2 UCRT64 (MSYSTEM=${MSYSTEM:-})"
 prefix=${MINGW_PREFIX:-/ucrt64}
-for tool in objdump pacman cmake gcc; do
+for tool in objdump strip pacman cmake gcc gzip cygpath; do
     command -v "$tool" > /dev/null || die "falta $tool"
 done
 
+build=$root/build/release
+bundle=$root/gui/build/windows/x64/runner/Release
 exes=("$build/cli/moss.exe" "$build/cli/moss-rpc.exe")
 for exe in "${exes[@]}"; do
     [[ -f $exe ]] || die "no existe $exe: compila antes con cmake --build --preset release"
 done
+[[ -f $bundle/moss-gui.exe ]] ||
+    die "no existe $bundle/moss-gui.exe: compila antes con flutter build windows --release en gui/"
 
-# Ruta absoluta (se usa desde la carpeta de preparación) y sin el ZIP de
-# una corrida anterior, para que un error no deje uno viejo como si fuera nuevo.
-mkdir -p "$(dirname "$zip")"
-zip=$(cd "$(dirname "$zip")" && pwd)/$(basename "$zip")
-rm -f "$zip"
+# --- 1. La versión -------------------------------------------------------------
 
-stage=$build/package
-rm -rf "$stage"
-mkdir -p "$stage"
-
-# --- Los ejecutables, sin DLL de terceros --------------------------------------
-
-# Con curl estática y -static (CMakeLists.txt, core/CMakeLists.txt), los .exe
-# solo piden DLL de Windows. Cualquier otra (de MSYS2, de Visual C++) falla:
-# no va en el ZIP y en una PC sin ella no arrancaría.
-system_dlls='^(api-ms-win-.*|kernel32|user32|advapi32|shell32|ole32|ws2_32|crypt32|secur32|bcrypt|iphlpapi)\.dll$'
+say "Versión"
+cmake -DSOURCE_DIR="$root" -P "$root/tests/version.cmake" > /dev/null ||
+    die "la versión no coincide (arriba, el detalle)"
+version=$(tr -d '\r' < "$root/VERSION")
+grep -q "^const kClientVersion = '$version';" "$root/gui/lib/rpc/client.dart" ||
+    die "kClientVersion de gui/lib/rpc/client.dart no dice '$version'"
 for exe in "${exes[@]}"; do
     name=${exe##*/}
+    said=$("$exe" --version < /dev/null | tr -d '\r') || die "$name --version falló"
+    [[ $said == "${name%.exe} $version" ]] ||
+        die "$name --version dice '$said', no '${name%.exe} $version': ¿build viejo?"
+done
+echo "$version"
+
+# --- 2. La carpeta ---------------------------------------------------------------
+
+say "Carpeta moss-$version"
+folder=moss-$version
+pkg=$root/build/package-windows
+stage=$pkg/$folder
+rm -rf "$stage"
+mkdir -p "$stage" "$out"
+out=$(cd "$out" && pwd)
+zip=$out/moss-$version-windows-x64.zip
+rm -f "$zip" # Que un error no deje uno viejo como si fuera nuevo.
+
+cp -r "$bundle"/. "$stage/"
+for exe in "${exes[@]}"; do
     cp "$exe" "$stage/"
-    mapfile -t deps < <(objdump -p "$exe" | sed -n 's/^\s*DLL Name: //p' | tr 'A-Z' 'a-z' | sort -u)
+    strip --strip-unneeded "$stage/${exe##*/}"
+done
+
+# Las DLL de Visual C++ del Visual Studio de esta máquina (vswhere).
+vswhere="/c/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe"
+[[ -x $vswhere ]] || die "no encontré vswhere.exe: instala Visual Studio (gui/README.md)"
+vs=$("$vswhere" -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 \
+    -property installationPath | tr -d '\r')
+[[ -n $vs ]] || die "Visual Studio sin las herramientas de C++ (gui/README.md)"
+vs=$(cygpath -u "$vs")
+redist=$(tr -d '\r\n' < "$vs/VC/Auxiliary/Build/Microsoft.VCRedistVersion.default.txt")
+crt=$(find "$vs/VC/Redist/MSVC/$redist/x64" -maxdepth 1 -type d -name 'Microsoft.VC*.CRT' | head -n 1)
+[[ -n $crt ]] || die "no encontré las DLL de Visual C++ en $vs/VC/Redist/MSVC/$redist/x64"
+echo "DLL de Visual C++ de $crt"
+visual_cpp=(msvcp140.dll vcruntime140.dll vcruntime140_1.dll)
+for dll in "${visual_cpp[@]}"; do
+    cp "$crt/$dll" "$stage/"
+done
+
+# --- 3. Las DLL que pide cada binario ------------------------------------------
+
+# De Windows: api-ms-win-* (el CRT universal, parte de Windows 10) o las de
+# System32 que no son de Visual C++ (esas, en el runner, vienen de Visual
+# Studio, no de Windows). moss.exe y moss-rpc.exe no pueden pedir ninguna de la
+# carpeta: no llevan DLL de terceros.
+say "DLL de cada binario"
+system32=/c/Windows/System32
+from_windows() {
+    [[ $1 == api-ms-win-* ]] && return 0
+    [[ $1 =~ ^(msvcp|vcruntime|concrt|vccorlib|vcomp|ucrtbased) ]] && return 1
+    [[ -f $system32/$1 ]]
+}
+for file in "$stage"/*.exe "$stage"/*.dll; do
+    name=${file##*/}
+    mapfile -t deps < <(objdump -p "$file" | sed -n 's/^\s*DLL Name: //p' | tr 'A-Z' 'a-z' | sort -u)
     [[ ${#deps[@]} -gt 0 ]] || die "objdump no reportó ninguna DLL para $name"
-    echo "$name usa: ${deps[*]}"
+    echo "$name: ${deps[*]}"
     for dll in "${deps[@]}"; do
-        [[ $dll =~ $system_dlls ]] || die "$name pide $dll, que no es de Windows"
+        if [[ $name == moss.exe || $name == moss-rpc.exe ]]; then
+            from_windows "$dll" || die "$name pide $dll, que no es de Windows"
+        elif ! from_windows "$dll" && [[ ! -f $stage/$dll ]]; then
+            die "$name pide $dll, que no es de Windows ni está en la carpeta"
+        fi
     done
 done
 
-# --- Licencias -----------------------------------------------------------------
+# --- Licencias (AVISOS-TERCEROS.txt) --------------------------------------------------------
 
 missing=()
 notices=$stage/AVISOS-TERCEROS.txt
@@ -164,14 +236,21 @@ package_section() {
 }
 
 cat > "$notices" << EOF
-AVISOS DE TERCEROS - Moss para Windows (x64)
+AVISOS DE TERCEROS - Moss $version para Windows (x64)
 
-moss.exe y moss-rpc.exe son software libre bajo la Licencia Pública
-General de GNU, versión 3 o posterior (ver LICENSE.txt). Los dos llevan
-enlazados de forma estática curl, md4c, nlohmann/json, winpthread y partes
-del runtime de GCC y de mingw-w64; moss.exe, además, FTXUI. No llevan DLL
-de terceros. Abajo está la licencia de cada uno, en qué ejecutables va, y
-su texto tal como lo instala su paquete o como viene en sus fuentes.
+moss-gui.exe, moss.exe y moss-rpc.exe son software libre bajo la Licencia
+Pública General de GNU, versión 3 o, a tu elección, cualquier versión
+posterior (ver LICENSE). Llevan dentro:
+
+- moss.exe y moss-rpc.exe, enlazados de forma estática: curl, md4c,
+  nlohmann/json, winpthread y partes del runtime de GCC y de mingw-w64;
+  moss.exe, además, FTXUI. No llevan DLL de terceros.
+- la interfaz gráfica (moss-gui.exe, las .dll de Flutter y data/): Flutter,
+  su motor y los paquetes de Dart, y las fuentes Geist y Geist Mono; y las
+  DLL de Visual C++ de Microsoft.
+
+Abajo está la licencia de cada uno, en qué archivos va, y su texto tal como
+lo instala su paquete o como viene en sus fuentes.
 
 Generado por tools/package-windows.sh.
 EOF
@@ -247,6 +326,32 @@ section "curl ${curl_version:-(versión desconocida)}" \
     "Incluido como: enlazado estático en moss.exe y moss-rpc.exe (fuentes de"$'\n'"FetchContent; solo HTTP y HTTPS, con el TLS de Windows)" \
     "$(ls "$curl_src"/COPYING 2> /dev/null || true)"
 
+# La interfaz gráfica: Geist y el NOTICES de flutter build (motor, framework y
+# paquetes de Dart, cada uno con su licencia). Que cada paquete de Dart esté en
+# ese NOTICES lo revisa tools/package-linux.sh, con el mismo pubspec.lock.
+notices_z=$stage/data/flutter_assets/NOTICES.Z
+[[ -f $notices_z ]] || die "el bundle no trae data/flutter_assets/NOTICES.Z"
+flutter_notices=$pkg/flutter-NOTICES.txt
+gzip -dc "$notices_z" > "$flutter_notices"
+section "Geist y Geist Mono" \
+    "Incluido como: fuentes de la interfaz gráfica (data/flutter_assets/assets/fonts)." \
+    "$root/gui/assets/fonts/OFL.txt"
+section "Flutter, su motor y los paquetes de Dart" \
+    "Incluido como: moss-gui.exe, flutter_windows.dll, url_launcher_windows_plugin.dll"$'\n'"y data/. El texto es el NOTICES que genera flutter build"$'\n'"(data/flutter_assets/NOTICES.Z), con cada componente y su licencia." \
+    "$flutter_notices"
+cat >> "$notices" << NOTICE
+
+$rule
+Microsoft Visual C++ Redistributable ($(basename "$crt"), $redist)
+$rule
+Incluido como: ${visual_cpp[*]}, que piden moss-gui.exe,
+flutter_windows.dll y url_launcher_windows_plugin.dll.
+
+Son de Microsoft, firmadas por Microsoft, y van junto a la app como
+"código distribuible" de Visual Studio, según sus términos de licencia:
+https://learn.microsoft.com/visualstudio/releases/2022/redistribution
+NOTICE
+
 for warning in "${warnings[@]}"; do
     echo "AVISO: $warning" >&2
     if [[ -n ${GITHUB_ACTIONS:-} ]]; then
@@ -266,26 +371,33 @@ if [[ ${#missing[@]} -gt 0 ]]; then
     fi
 fi
 
-# --- Textos y ZIP ---------------------------------------------------------------
+# --- 4. Textos y ZIP ------------------------------------------------------------
 
-cp "$root/LICENSE" "$stage/LICENSE.txt"
+say "ZIP"
+cp "$root/LICENSE" "$stage/LICENSE"
 cp "$root/tools/windows-dist/LEEME.txt" "$root/tools/windows-dist/moss.portable.ejemplo" \
     "$stage/"
-for text in LICENSE.txt LEEME.txt AVISOS-TERCEROS.txt moss.portable.ejemplo; do
+for text in LICENSE LEEME.txt AVISOS-TERCEROS.txt moss.portable.ejemplo; do
     sed -i 's/\r*$/\r/' "$stage/$text"
 done
 
-expected=(moss.exe moss-rpc.exe LICENSE.txt AVISOS-TERCEROS.txt LEEME.txt
-          moss.portable.ejemplo)
-(cd "$stage" && cmake -E tar cf "$zip" --format=zip -- "${expected[@]}")
-
-# Que el ZIP traiga exactamente lo esperado, ni más ni menos.
-listed=$(cmake -E tar tf "$zip" | sed 's/\r$//' | sort)
+expected=(moss-gui.exe flutter_windows.dll url_launcher_windows_plugin.dll data
+          "${visual_cpp[@]}" moss.exe moss-rpc.exe
+          LEEME.txt AVISOS-TERCEROS.txt LICENSE moss.portable.ejemplo)
 wanted=$(printf '%s\n' "${expected[@]}" | sort)
-if [[ $listed != "$wanted" ]]; then
-    diff <(echo "$wanted") <(echo "$listed") >&2 || true
-    die "el ZIP no trae exactamente lo esperado"
+got=$(ls -A "$stage" | sort)
+if [[ $got != "$wanted" ]]; then
+    diff <(echo "$wanted") <(echo "$got") >&2 || true
+    die "la carpeta no trae exactamente lo esperado (arriba: < falta, > sobra)"
 fi
+(cd "$pkg" && cmake -E tar cf "$zip" --format=zip -- "$folder")
 
-echo "Listo: $zip"
-echo "$listed"
+# Todo dentro de moss-<versión>/ y, arriba, exactamente lo esperado.
+listed=$(cmake -E tar tf "$zip" | sed 's/\r$//')
+if grep -qv "^$folder/" <<< "$listed"; then
+    die "el ZIP trae algo fuera de $folder/"
+fi
+top=$(sed -n "s|^$folder/\([^/]*\).*|\1|p" <<< "$listed" | grep -v '^$' | sort -u)
+[[ $top == "$wanted" ]] || die "el ZIP no trae exactamente lo esperado"
+
+echo "Listo: $zip ($(du -k "$zip" | cut -f1) KB, $(du -sk "$stage" | cut -f1) KB sin comprimir)"
