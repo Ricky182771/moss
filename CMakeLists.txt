@@ -54,6 +54,13 @@ function(chatbot_windows_manifest target)
     endif()
 endfunction()
 
+# Windows (MinGW): libstdc++, libgcc y winpthread van dentro de cada .exe, como
+# curl (core/CMakeLists.txt). Los ejecutables solo piden DLL de Windows; la CI
+# lo revisa (tools/package-windows.sh).
+if(MINGW)
+    add_link_options(-static)
+endif()
+
 option(CHATBOT_BUILD_TESTS "Compilar las pruebas (requiere Catch2 v3)" ON)
 
 # Addons (addons/, sección "Addons" de AGENTS.md): cada uno con su opción.
