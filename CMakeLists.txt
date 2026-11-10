@@ -54,6 +54,32 @@ function(chatbot_windows_manifest target)
     endif()
 endfunction()
 
+# Windows (MinGW): libstdc++, libgcc y winpthread van dentro de cada .exe, como
+# curl (core/CMakeLists.txt). Los ejecutables solo piden DLL de Windows; la CI
+# lo revisa (tools/package-windows.sh).
+if(MINGW)
+    add_link_options(-static)
+endif()
+
+# Recursos de versión de un ejecutable que se distribuye (moss.exe y
+# moss-rpc.exe): nombre, descripción y versión de VERSION
+# (cmake/windows/version.rc.in). Con ICON, además el ícono de la app
+# (packaging/windows/moss.ico).
+function(chatbot_windows_version target description)
+    if(WIN32)
+        cmake_parse_arguments(PARSE_ARGV 2 arg "ICON" "" "")
+        set(MOSS_RC_NAME ${target})
+        set(MOSS_RC_DESCRIPTION ${description})
+        set(MOSS_RC_ICON "")
+        if(arg_ICON)
+            set(MOSS_RC_ICON "1 ICON \"${PROJECT_SOURCE_DIR}/packaging/windows/moss.ico\"")
+        endif()
+        configure_file(${PROJECT_SOURCE_DIR}/cmake/windows/version.rc.in
+                       ${CMAKE_CURRENT_BINARY_DIR}/${target}-version.rc @ONLY)
+        target_sources(${target} PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/${target}-version.rc)
+    endif()
+endfunction()
+
 option(CHATBOT_BUILD_TESTS "Compilar las pruebas (requiere Catch2 v3)" ON)
 
 # Addons (addons/, sección "Addons" de AGENTS.md): cada uno con su opción.

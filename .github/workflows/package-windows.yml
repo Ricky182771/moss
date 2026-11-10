@@ -1,0 +1,98 @@
+# El ZIP oficial de Windows (tools/package-windows.sh, guias/17-empaquetado.md):
+# moss-<versión>-windows-x64.zip con la GUI, moss.exe, moss-rpc.exe y las DLL de
+# Visual C++, y su prueba en un runner sin MSYS2 (tools/check-windows-zip.ps1).
+# Solo sube el artefacto; lo llaman ci.yml (cada PR) y release.yml. Sin keys ni
+# API real.
+name: ZIP de Windows
+
+on:
+  workflow_call:
+    inputs:
+      retention-days:
+        description: Días que se guarda el artefacto.
+        type: number
+        default: 7
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: armar
+    runs-on: windows-2025
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # Lo mismo que el trabajo windows de ci.yml (C++ con MSYS2 y GCC).
+      - name: MSYS2 (UCRT64) y dependencias
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            git
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-nlohmann-json
+            mingw-w64-ucrt-x86_64-catch
+
+      # La misma versión de Flutter que ci.yml; la GUI se compila con MSVC.
+      - name: Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.9
+
+      - name: GUI (flutter build windows --release)
+        shell: pwsh
+        working-directory: gui
+        run: |
+          flutter pub get
+          flutter build windows --release
+
+      # Sin pruebas: las corre el trabajo windows de ci.yml con el mismo preset.
+      - name: C++ (preset release)
+        run: cmake --preset release && cmake --build --preset release
+
+      - name: Empaquetar
+        run: tools/package-windows.sh --out=dist
+
+      - name: Subir el ZIP
+        uses: actions/upload-artifact@v7
+        with:
+          name: moss-windows-x64
+          path: dist/
+          retention-days: ${{ inputs.retention-days }}
+          if-no-files-found: error
+
+  # En otra máquina, sin MSYS2 ni Flutter en el PATH: lo que tendría un alumno.
+  test:
+    name: probar (sin MSYS2)
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: |
+            VERSION
+            tools/check-windows-zip.ps1
+          sparse-checkout-cone-mode: false
+
+      - name: Bajar el ZIP
+        uses: actions/download-artifact@v8
+        with:
+          name: moss-windows-x64
+          path: dist
+
+      - name: Probar
+        shell: pwsh
+        timeout-minutes: 10
+        run: |
+          $version = (Get-Content VERSION -TotalCount 1).Trim()
+          tools/check-windows-zip.ps1 -Zip "dist/moss-$version-windows-x64.zip" -Version $version

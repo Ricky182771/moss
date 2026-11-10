@@ -1,9 +1,9 @@
-# Guía: 17. Empaquetado de Linux y releases
+# Guía: 17. Empaquetado de Linux y Windows, y releases
 > Las reglas resumidas están en [AGENTS.md](../AGENTS.md).
 
-## 17. Empaquetado de Linux y releases
+## 17. Empaquetado de Linux y Windows, y releases
 
-Moss se distribuye en Linux x86_64 en tres formatos, con lo mismo adentro: `moss-<versión>-linux-x86_64.tar.gz`, `moss-<versión>-1.x86_64.rpm` y `moss_<versión>-1_amd64.deb`, más `SHA256SUMS`. Los arma `tools/package-linux.sh`, igual en una máquina de desarrollo y en la CI. Windows (el ZIP) es G5b. Fuera de alcance: AppImage, Flatpak y Snap (el `ExecStart` de la unidad del bot necesita una ruta fija de `moss` y el sandbox no llega al systemd del usuario), COPR, PPA, AUR, firmas GPG y ARM.
+Moss se distribuye en Linux x86_64 en tres formatos, con lo mismo adentro: `moss-<versión>-linux-x86_64.tar.gz`, `moss-<versión>-1.x86_64.rpm` y `moss_<versión>-1_amd64.deb`, más `SHA256SUMS`. Los arma `tools/package-linux.sh`, igual en una máquina de desarrollo y en la CI. En Windows x64, un ZIP: `moss-<versión>-windows-x64.zip` (`tools/package-windows.sh`, [abajo](#windows)). Fuera de alcance: AppImage, Flatpak y Snap (el `ExecStart` de la unidad del bot necesita una ruta fija de `moss` y el sandbox no llega al systemd del usuario), COPR, PPA, AUR, firmas GPG y ARM.
 
 ### La versión
 
@@ -59,12 +59,51 @@ Un binario hecho con una glibc nueva no corre con una más vieja. La CI arma en 
 
 - **`package-linux.yml`** (reutilizable): arma en `ubuntu:22.04` con `MOSS_MAX_GLIBC=2.35` (el script falla si algo pide una glibc más nueva) y sube `moss-linux-x86_64` (7 días); después, `tools/check-linux-package.sh` instala y prueba en contenedores: el `.rpm` en `fedora:latest`, el `.deb` en `debian:12` y `ubuntu:22.04`, y el `.tar.gz` en `debian:12` con solo lo que dice su `LEEME.md` (en Fedora, antes del checkout, `tar`, `gzip` y `findutils`, que la imagen no trae). En cada uno: `--version`, `ldd` sin `not found`, permisos, enlaces, `.desktop`, ícono y metainfo, una sesión de `moss-rpc` sin red ni configuración (`initialize`, `shutdown`, `exit`), `moss-gui` en Xvfb hasta que manda `initialize` a `moss-rpc`, y desinstalar sin dejar nada en `/usr/lib/moss`.
 - **`ci.yml`** lo llama en cada PR (trabajo `paquetes de Linux`).
-- **`release.yml`**: con una etiqueta `v*`, revisa que sea `v<VERSION>` y que `CHANGELOG.md` tenga la sección, arma y prueba (`package-linux.yml`, 14 días) y crea un GitHub Release **en borrador** con los cuatro archivos y las notas de `CHANGELOG.md` (`tools/release-notes.sh`). Con `workflow_dispatch`, lo mismo pero solo deja los artefactos.
+- **`release.yml`**: con una etiqueta `v*`, revisa que sea `v<VERSION>` y que `CHANGELOG.md` tenga la sección, arma y prueba Linux y Windows (`package-linux.yml` y `package-windows.yml`, 14 días), junta los cuatro paquetes con un solo `SHA256SUMS` (trabajo `files`, artefacto `moss-release`) y crea un GitHub Release **en borrador** con los cinco archivos y las notas de `CHANGELOG.md` (`tools/release-notes.sh`). Con `workflow_dispatch`, lo mismo pero solo deja los artefactos.
 
 ### Sacar un release
 
 1. En una rama: subir `VERSION`, `gui/pubspec.yaml` y `kClientVersion`, y escribir la sección `## X.Y.Z` de `CHANGELOG.md`. PR y merge a `main` con la CI en verde.
 2. (Opcional) Actions → Release → Run workflow sobre `main`: deja los artefactos para probarlos (`gh run download <id>`).
 3. Etiqueta sobre ese commit de `main`: `git tag vX.Y.Z && git push origin vX.Y.Z`.
-4. `release.yml` crea el borrador: revisar en GitHub → Releases los cuatro archivos y las notas.
+4. `release.yml` crea el borrador: revisar en GitHub → Releases los cuatro paquetes, `SHA256SUMS` y las notas.
 5. Publicarlo a mano.
+
+### Windows
+
+`tools/package-windows.sh [--allow-missing-licenses] [--out=<carpeta>]` corre en la terminal MSYS2 UCRT64 de Windows con Visual Studio, después de `cmake --build --preset release` y `flutter build windows --release` (no compila: el C++ sale de MSYS2 y la GUI de MSVC). Revisa la versión como el de Linux (más el `--version` de `moss.exe` y `moss-rpc.exe`) y deja `moss-<versión>-windows-x64.zip` en `build/package-windows/out/` (o en `--out`), con todo dentro de la carpeta `moss-<versión>\`:
+
+```text
+moss-gui.exe  flutter_windows.dll  url_launcher_windows_plugin.dll  data\
+msvcp140.dll  vcruntime140.dll  vcruntime140_1.dll
+moss.exe  moss-rpc.exe
+LEEME.txt  AVISOS-TERCEROS.txt  LICENSE  moss.portable.ejemplo
+```
+
+- **Sin `moss-telegram`:** el bot es solo de Linux.
+- **DLL de Visual C++:** las tres del `VC\Redist\MSVC\<versión>\x64\Microsoft.VC*.CRT` del Visual Studio de la máquina (`vswhere`), en despliegue local (Microsoft lo permite): una PC de la escuela puede no tener el Visual C++ Redistributable. Vienen firmadas por Microsoft.
+- **Revisión de DLL:** `objdump -p` de cada `.exe` y `.dll`. `moss.exe` y `moss-rpc.exe` solo pueden pedir DLL de Windows (`api-ms-win-*` o de `System32` que no sean de Visual C++); los de la GUI, además, las de la carpeta. Si no, falla. Al final revisa que la carpeta y el ZIP traigan exactamente la lista de arriba.
+- **Símbolos:** `strip --strip-unneeded` en `moss.exe` y `moss-rpc.exe`; lo de MSVC ya sale sin símbolos de depuración.
+- **`LEEME.txt`** (`tools/windows-dist/`): para alumnos, sin tecnicismos: abrirlo (descomprimir primero), SmartScreen, el Control Inteligente de Aplicaciones, el modo portable en la escuela, dónde se guarda todo, desinstalar y requisitos. Los `.txt`, `LICENSE` y `moss.portable.ejemplo` van con CRLF.
+- **`AVISOS-TERCEROS.txt`:** generado en cada corrida: FTXUI, md4c y curl de las fuentes de FetchContent; nlohmann/json, el runtime de GCC, el CRT de mingw-w64 y winpthread de sus paquetes de MSYS2 (`pacman -Qo`); el OFL de Geist; el `NOTICES` de `flutter build` (motor, framework y paquetes de Dart; que cada paquete de Dart esté ahí lo revisa `package-linux.sh`, con el mismo `pubspec.lock`); y las DLL de Visual C++ con el enlace a sus términos de redistribución. Si falta un texto, falla (`--allow-missing-licenses` lo arma igual y lo dice; nunca en la CI).
+
+**Enlace estático.** En Windows, curl va estática y mínima por FetchContent (solo HTTP y HTTPS, Schannel, sin OpenSSL, HTTP/2, compresión, IDN, PSL ni SSH) y los `.exe` se enlazan con `-static` (libstdc++, libgcc y winpthread adentro): `moss.exe` y `moss-rpc.exe` no llevan ninguna DLL de terceros, así que la firma de los dos cubre todo lo que corren ([04-stack.md](04-stack.md)). Schannel usa el almacén de certificados de Windows; en Windows 10, hasta TLS 1.2. HTTP/1.1 en vez de HTTP/2: el streaming SSE no lo necesita. La CI prueba una conversación por HTTPS con TLS 1.2 (`tools/check-rpc-https.ps1`).
+
+**Recursos de versión.** SignPath pide nombre de producto y versión en cada binario firmado. `moss.exe` y `moss-rpc.exe` los toman de `cmake/windows/version.rc.in` (`chatbot_windows_version` en `CMakeLists.txt`) y `moss-gui.exe` de `gui/windows/runner/Runner.rc`: `ProductName` "Moss", `FileDescription` ("Moss — terminal", "Moss — servidor RPC", "Moss — interfaz gráfica"), `ProductVersion` y `FileVersion` de `VERSION` (en la GUI, por `pubspec.yaml` sin el `+N`: `MOSS_VERSION` en `runner/CMakeLists.txt`), `CompanyName` "Ricky182771" y `LegalCopyright` con la GPL. El ícono (`packaging/windows/moss.ico`, el cuadro redondeado de Linux) va en `moss-gui.exe` y `moss.exe`; se regenera con `python3 -I packaging/windows/make-ico.py` (necesita `rsvg-convert`) cuando cambia el SVG. La prueba del ZIP lee los metadatos de los tres y falla si la versión no coincide.
+
+**Prueba (`package-windows.yml`).** El trabajo `armar` (`windows-2025`: MSYS2 y Flutter) compila y empaqueta; `probar` baja el ZIP en otro runner sin MSYS2 y corre `tools/check-windows-zip.ps1`: lo descomprime en una ruta con espacios y acentos y, con solo Windows en el `PATH`, revisa los recursos de versión, `--version`, `moss-rpc.exe` (`initialize`, `shutdown`, `exit`) y `moss.exe` sin key, primero sin `moss.portable` (sin `datos\`) y luego con él (todo en `datos\`), y abre `moss-gui.exe` como en G6: encuentra el `moss-rpc.exe` de su carpeta, respeta el mínimo de 720×520 y al cerrarla no deja ningún `moss-rpc.exe`. Lo llaman `ci.yml` (cada PR) y `release.yml`; sube `moss-windows-x64`.
+
+### Firmas (inventario de G5b, para G5c)
+
+Antes de G5b, en el ZIP de prueba de G6 (`Get-AuthenticodeSignature` en la CI):
+
+| Archivo | Firma | De dónde sale |
+|---|---|---|
+| `moss-gui.exe` | sin firma | lo compilamos (runner de Flutter, MSVC) |
+| `moss.exe`, `moss-rpc.exe` | sin firma | lo compilamos (MSYS2, GCC) |
+| `url_launcher_windows_plugin.dll` | sin firma | lo compila nuestra CI desde el código del plugin |
+| `flutter_windows.dll` | **sin firma** (ni metadatos de versión) | precompilado de Flutter 3.47.9 |
+| `msvcp140.dll`, `vcruntime140.dll`, `vcruntime140_1.dll` | válida: Microsoft Windows Software Compatibility Publisher | Microsoft (Visual Studio 14.51) |
+| 20 DLL de MSYS2 (`libcurl-4`, OpenSSL 3.6.5, nghttp2/3, ngtcp2, libssh2, libidn2, libpsl, brotli, zstd, zlib, iconv, intl, unistring, libstdc++, libgcc, winpthread) | sin firma | precompiladas de terceros (MSYS2) |
+
+Con G5b, las 20 de MSYS2 ya no van (enlace estático). **Conclusión:** SignPath Foundation solo firma binarios construidos desde este repositorio, y `flutter_windows.dll` viene sin firma: aunque firmemos `moss-gui.exe`, el Control Inteligente de Aplicaciones de Windows 11 puede bloquear la GUI por esa DLL. Para el Control Inteligente, la salida es **la Microsoft Store (MSIX)**, que firma el paquete completo; **SignPath es para el ZIP** (SmartScreen, Windows 10 y Windows 11 sin el Control Inteligente). Queda por preguntar a SignPath si acepta `url_launcher_windows_plugin.dll` (código de terceros compilado por nuestra CI).

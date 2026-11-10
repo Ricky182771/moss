@@ -1,4 +1,48 @@
-find_package(CURL REQUIRED)
+# libcurl. Linux: la del sistema. Windows: siempre por FetchContent, estática y
+# mínima (AGENTS.md §4, guias/04-stack.md): solo HTTP y HTTPS, TLS de Windows
+# (Schannel, con el almacén de certificados del sistema), sin OpenSSL, HTTP/2,
+# compresión, IDN, PSL ni SSH. Así moss.exe y moss-rpc.exe no llevan DLL de
+# terceros. Los proxys de HTTP(S)_PROXY siguen activos, como con la del sistema.
+# Estas variables solo valen dentro de core/ (y de curl, que se agrega aquí).
+if(WIN32)
+    set(BUILD_SHARED_LIBS OFF)
+    set(BUILD_STATIC_LIBS ON)
+    set(BUILD_CURL_EXE OFF)
+    set(BUILD_TESTING OFF)
+    set(BUILD_EXAMPLES OFF)
+    set(BUILD_LIBCURL_DOCS OFF)
+    set(BUILD_MISC_DOCS OFF)
+    set(ENABLE_CURL_MANUAL OFF)
+    set(CURL_DISABLE_INSTALL ON)
+    set(CURL_USE_PKGCONFIG OFF)
+    set(CURL_USE_SCHANNEL ON)
+    set(CURL_USE_OPENSSL OFF)
+    set(USE_NGHTTP2 OFF)
+    # CURL_ZLIB, CURL_BROTLI y CURL_ZSTD son set(... CACHE STRING "AUTO") en curl,
+    # que pide CMake 3.18: sin CMP0126 en NEW, ese set borra estos OFF y curl
+    # enlaza las DLL de MSYS2 que encuentre.
+    set(CMAKE_POLICY_DEFAULT_CMP0126 NEW)
+    set(CURL_ZLIB OFF)
+    set(CURL_BROTLI OFF)
+    set(CURL_ZSTD OFF)
+    set(USE_LIBIDN2 OFF)
+    set(CURL_USE_LIBPSL OFF)
+    set(CURL_USE_LIBSSH2 OFF)
+    # curl 8.23 ya no tiene HTTP_ONLY: se apaga cada protocolo que no es HTTP(S).
+    foreach(protocol DICT FILE FTP GOPHER IMAP IPFS LDAP LDAPS MQTT POP3 RTSP SMTP TELNET TFTP
+                     WEBSOCKETS)
+        set(CURL_DISABLE_${protocol} ON)
+    endforeach()
+    include(FetchContent)
+    FetchContent_Declare(
+        curl
+        GIT_REPOSITORY https://github.com/curl/curl.git
+        GIT_TAG curl-8_23_0
+        GIT_SHALLOW TRUE)
+    FetchContent_MakeAvailable(curl)
+else()
+    find_package(CURL REQUIRED)
+endif()
 find_package(nlohmann_json 3.9 REQUIRED)
 
 # Capa de plataforma (chatbot/platform.h): CMake elige la implementación.

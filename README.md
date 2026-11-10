@@ -4,6 +4,33 @@
 
 Repositorio para almacenar el código de Moss hecho por estudiantes de CECyTE como servicio social.
 
+## Descargas
+
+Moss es un asistente con el que platicas por escrito, como en un chat: usa el proveedor de inteligencia artificial que tú elijas (por ejemplo, NVIDIA NIM, con su plan gratuito) con tu propia API key, guarda tus chats en tu computadora, puede buscar en la web y responder con las fuentes, y tiene interfaz gráfica y de terminal.
+
+Bájalo de la página de [releases](https://github.com/Ricky182771/moss/releases):
+
+| Sistema | Archivo |
+|---|---|
+| Windows 10 u 11 (64 bits) | `moss-<versión>-windows-x64.zip` ([instalar](#instalar-en-windows)) |
+| Fedora | `moss-<versión>-1.x86_64.rpm` ([instalar](#instalar-en-linux)) |
+| Debian 12, Ubuntu 22.04 o más nuevos | `moss_<versión>-1_amd64.deb` ([instalar](#instalar-en-linux)) |
+| Otro Linux x86_64 | `moss-<versión>-linux-x86_64.tar.gz` ([instalar](#instalar-en-linux)) |
+
+`SHA256SUMS` trae la suma de cada archivo. Los binarios de Windows todavía no están firmados: ver [Code signing policy](#code-signing-policy).
+
+## Instalar en Windows
+
+1. Baja `moss-<versión>-windows-x64.zip` y descomprímelo (clic derecho → "Extraer todo..."). No lo abras desde adentro del ZIP.
+2. Abre `moss-gui.exe` con doble clic. `moss.exe` es la versión de terminal; `moss-rpc.exe` lo usa la GUI por detrás y no se abre a mano.
+
+No hace falta instalar nada más: las DLL que necesita van en la carpeta. El `LEEME.txt` del ZIP lo explica para quien nunca ha usado algo así.
+
+- **SmartScreen** ("Windows protegió su PC"): sale porque los binarios todavía no están firmados. "Más información" → "Ejecutar de todas formas"; o, antes de descomprimir, clic derecho en el ZIP → Propiedades → Desbloquear.
+- **Control Inteligente de Aplicaciones** (Windows 11): bloquea los programas sin firma que no conoce y no tiene excepción por programa; solo se puede apagar para toda la computadora, y no lo recomendamos. Estamos tramitando la firma (ver [Code signing policy](#code-signing-policy)).
+- **Modo portable** (escuelas, memoria USB): renombra `moss.portable.ejemplo` a `moss.portable` y todo (configuración, key y chats) queda en `datos\`, dentro de la carpeta; ver [Modo portable](#modo-portable). La key queda ahí sin cifrar: al terminar en una computadora ajena, borra la carpeta.
+- **Desinstalar:** borra la carpeta y, si no usaste el modo portable, `%APPDATA%\moss` y `%LOCALAPPDATA%\moss`.
+
 ## Instalar en Linux
 
 Cada [release](https://github.com/Ricky182771/moss/releases) trae tres formatos para Linux x86_64, con la interfaz gráfica (`moss-gui`), la de terminal (`moss`) y el bot de Telegram, más `SHA256SUMS` para revisarlos (`sha256sum -c SHA256SUMS --ignore-missing`):
@@ -85,7 +112,7 @@ Funciona en Windows 10 (versión 1903 o posterior; se prueba en Windows 10 IoT L
 2. Abre la terminal **MSYS2 UCRT64** (desde el menú Inicio) e instala los paquetes:
 
    ```bash
-   pacman -S --needed git mingw-w64-ucrt-x86_64-{gcc,cmake,ninja,curl,nlohmann-json,catch}
+   pacman -S --needed git mingw-w64-ucrt-x86_64-{gcc,cmake,ninja,nlohmann-json,catch}
    ```
 
 3. En esa misma terminal, clona el repositorio y compila con los mismos presets que en Linux (`asan` y `tsan` son solo de Linux):
@@ -99,21 +126,15 @@ Funciona en Windows 10 (versión 1903 o posterior; se prueba en Windows 10 IoT L
 
    También puedes clonar con Git for Windows: `.gitattributes` fija los saltos de línea, así que no hace falta cambiar `core.autocrlf`.
 
-**Ejecutar.** El programa es una aplicación de consola: córrelo desde **Windows Terminal** (recomendado), **CMD** o **PowerShell**. En la terminal de MSYS2 (mintty) no corre, porque no es una consola de Windows. Necesita las DLL de `C:\msys64\ucrt64\bin` en el `PATH`:
+   curl no sale de MSYS2: CMake la baja y la compila estática, solo con HTTP y HTTPS y el TLS de Windows (Schannel), y `moss.exe` y `moss-rpc.exe` se enlazan con `-static`. Por eso no piden ninguna DLL de MSYS2 ([guias/04-stack.md](guias/04-stack.md)).
+
+**Ejecutar.** El programa es una aplicación de consola: córrelo desde **Windows Terminal** (recomendado), **CMD** o **PowerShell**. En la terminal de MSYS2 (mintty) no corre, porque no es una consola de Windows. No necesita nada en el `PATH`:
 
 ```bat
-:: CMD
-set PATH=C:\msys64\ucrt64\bin;%PATH%
 build\release\cli\moss.exe
 ```
 
-```powershell
-# PowerShell
-$env:PATH = "C:\msys64\ucrt64\bin;" + $env:PATH
-.\build\release\cli\moss.exe
-```
-
-Para usarlo en una PC sin MSYS2, usa el ZIP (ver [Descargar para Windows](#descargar-para-windows)).
+La interfaz gráfica se compila aparte, con Visual Studio ([gui/README.md](gui/README.md)). Para armar el ZIP, ver [Empaquetar para Windows](#empaquetar-para-windows).
 
 **Qué cambia en Windows:**
 
@@ -122,33 +143,23 @@ Para usarlo en una PC sin MSYS2, usa el ZIP (ver [Descargar para Windows](#desca
 - `credentials.json` no necesita `chmod`: lo protege la carpeta de tu perfil de Windows, que solo tu usuario puede leer. Todavía no va cifrado.
 - `/copiar` y `[Copiar]` usan el portapapeles de Windows (con acentos y saltos de línea que el Bloc de notas respeta); por SSH, OSC 52 primero.
 - Para pegar, usa Ctrl+V, Ctrl+Shift+V o Shift+Insert: Moss lee el portapapeles de Windows y pega en la caja o en el campo de la configuración que tenga el foco (con el foco en la barra de conversaciones no pega nada; en una lista o un botón avisa `Aquí no se puede pegar.`, y si el portapapeles no tiene texto, `El portapapeles no tiene texto.`). En Windows Terminal esos atajos los atiende la propia terminal, con el mismo resultado. En conhost (CMD o PowerShell sin Windows Terminal) está comprobado con `CHAT_DEBUG_KEYS`: Ctrl+V y Ctrl+Shift+V llegan como el byte `16` y Shift+Insert como `1b 5b 32 3b 32 7e` (`ESC [ 2 ; 2 ~`), y los tres pegan. Shift + clic derecho es el pegado propio de conhost: no pasa por el portapapeles de Moss. Si los atajos no hacen nada, revisa que el `moss.exe` que abres sea del preset que acabas de compilar (`build\release` no se actualiza al compilar `dev`).
-- Los certificados HTTPS salen del almacén de Windows: no hace falta instalar nada más.
+- HTTPS usa el TLS de Windows (Schannel) y los certificados de su almacén: no hace falta instalar nada más. En Windows 10 llega hasta TLS 1.2, que es lo que piden NVIDIA NIM, Tavily y Telegram. Si la red bloquea los servidores de revocación de certificados (como algunas escolares), la conexión sigue: la revocación se revisa cuando se puede y la cadena del certificado, siempre.
 - Al arrancar, la consola se pone en UTF-8 para que los acentos se vean bien, y al salir vuelve a la página de códigos que tenía (`chcp` muestra lo mismo que antes).
 - Ctrl+C sale limpio, también a mitad de una respuesta. Ctrl+Break y cerrar la ventana terminan el programa de golpe: lo que ya estaba guardado sigue ahí, pero la respuesta en curso se pierde y, con Ctrl+Break, `chcp` puede quedar en 65001.
 - En CMD y PowerShell sin Windows Terminal (conhost) de Windows 10, la fuente de la consola no tiene algunos símbolos: por eso **Símbolos** en `Automático` usa `Sencillos` ahí (ver [Colores y accesibilidad](#colores-y-accesibilidad)). En Windows 11 conhost busca el símbolo en otra fuente y se usa `Unicode`; en Windows Terminal, siempre `Unicode`.
 - El ratón en conhost funciona como en las demás terminales: clics, rueda, arrastrar el borde de la barra y pasar el puntero sobre el menú y los botones. Conhost se queda con Shift + clic para su propia selección (*QuickEdit*): **Shift + arrastrar** selecciona texto de la pantalla y **Enter** lo copia (Esc cancela); Shift + clic derecho pega. La selección toma líneas completas de la pantalla, así que con la barra lateral abierta también copia su borde y sus filas: ciérrala con Ctrl+B antes de seleccionar, o usa `[Copiar]` en los bloques de código. Mientras hay una selección, conhost detiene la salida de Moss (la respuesta deja de avanzar en pantalla) hasta que copias o cancelas; después aparece de golpe lo que llegó mientras tanto. Es así en todas las apps de consola, no es una falla de Moss.
 
-### Descargar para Windows
+### Empaquetar para Windows
 
-El ZIP `moss-windows-x64.zip` lo arma la CI en cada push y en cada pull request, en el trabajo `windows / release`: en GitHub, **Actions** → la ejecución → **Artifacts** → `moss-windows-x64`. GitHub lo entrega dentro de otro ZIP: descomprime ese y adentro está `moss-windows-x64.zip`. Por ahora no hay releases publicados.
-
-Trae, sin carpeta de por medio:
-
-- `moss.exe` y las DLL de MSYS2 que necesita (no hace falta instalar MSYS2);
-- `moss-rpc.exe`, para la interfaz gráfica que viene después ([`moss-rpc`](#otras-interfaces-moss-rpc)): no se abre a mano;
-- `LEEME.txt`: instrucciones en español para quien nunca usó una terminal (abrirlo, poner la key, pegar, comandos, seleccionar texto, modo portable, símbolos);
-- `moss.portable.ejemplo`: se renombra a `moss.portable` para activar el [modo portable](#modo-portable);
-- `LICENSE.txt` (la licencia del proyecto, GPL v3) y `AVISOS-TERCEROS.txt` (las licencias de FTXUI, md4c, nlohmann/json, el runtime de GCC y mingw-w64, y de cada DLL).
-
-Descomprímelo en una carpeta y abre `moss.exe` con doble clic o desde CMD. Windows SmartScreen puede avisar porque el programa no tiene firma digital ("Más información" → "Ejecutar de todas formas").
-
-Para armarlo tú, en la terminal **MSYS2 UCRT64**, después de compilar `release`:
+En la terminal **MSYS2 UCRT64**, con Visual Studio y Flutter instalados ([gui/README.md](gui/README.md)), después de compilar `release` y la GUI:
 
 ```bash
-tools/package-windows.sh   # deja build/moss-windows-x64.zip
+cmake --preset release && cmake --build --preset release
+(cd gui && cmd //c flutter build windows --release)
+tools/package-windows.sh   # deja build/package-windows/out/moss-<versión>-windows-x64.zip
 ```
 
-El script toma las DLL que reporta `ldd`, busca con `pacman -Qo` el paquete de cada una y copia su licencia de `/ucrt64/share/licenses/`. Algunos paquetes de MSYS2 no instalan su licencia (libidn2, que trae libcurl): para esos, los textos van en el repositorio, en `tools/windows-dist/licenses/<paquete>/`, copiados del tarball oficial, con un `README.md` que dice de qué versión son; si MSYS2 instala otra versión, el script avisa (sin fallar) para revisarlos. Si falta el texto de alguna licencia, lo dice y no arma el ZIP (`--allow-missing-licenses` lo arma igual y `AVISOS-TERCEROS.txt` dice cuál falta). Al final revisa que el ZIP traiga exactamente esos archivos.
+El ZIP trae la carpeta `moss-<versión>\` con `moss-gui.exe` y lo de Flutter (`flutter_windows.dll`, `url_launcher_windows_plugin.dll` y `data\`), `moss.exe`, `moss-rpc.exe`, las DLL de Visual C++ (`msvcp140.dll`, `vcruntime140.dll` y `vcruntime140_1.dll`), `LEEME.txt` (para alumnos), `AVISOS-TERCEROS.txt`, `LICENSE` y `moss.portable.ejemplo`. El script revisa la versión, las DLL que pide cada binario (`moss.exe` y `moss-rpc.exe`, solo de Windows) y que el ZIP traiga exactamente eso; los detalles están en [guias/17-empaquetado.md](guias/17-empaquetado.md). La CI lo arma en cada pull request (artefacto `moss-windows-x64`) y lo prueba en otra máquina sin MSYS2.
 
 ### Empaquetar para Linux
 
@@ -167,7 +178,7 @@ La versión vive solo en `VERSION`; cómo sacar un release está en [guias/17-em
 
 ### Integración continua
 
-En cada pull request y en cada push a `main`, GitHub Actions (`.github/workflows/ci.yml`) compila el proyecto en Ubuntu 24.04 y corre las pruebas. Usa GCC con los presets `dev`, `asan`, `tsan` y `release`, y Clang con `dev` y `release`; todos con el bot de Telegram, y revisan que `moss telegram` desactivado salga con 0 y sin token con 78; aparte, compila y prueba `dev` con GCC sin addons (`-DCHATBOT_BUILD_TELEGRAM=OFF`) y revisa que `moss telegram` salga con 69. En Windows (MSYS2 UCRT64 con GCC) compila y prueba `dev` y `release`, sin `CHATBOT_STRICT_PERF` (los tiempos de esas máquinas varían mucho), y en `release` arma el ZIP con `tools/package-windows.sh`, lo descomprime y arranca `moss.exe` desde ahí sin MSYS2 en el `PATH` (también con `moss.portable`), y lo sube como `moss-windows-x64`. El trabajo `paquetes de Linux` (`package-linux.yml`) arma los paquetes de Linux en Ubuntu 22.04, los instala en contenedores de Fedora, Debian 12 y Ubuntu 22.04 (y el `.tar.gz` en Debian 12) y los sube como `moss-linux-x86_64`. En todos, los warnings cuentan como errores. Además, comprueba que el programa, sin `CHAT_API_KEY` y sin terminal, salga con código 1 y el mensaje de error de configuración. La CI nunca usa una API key ni se conecta a ninguna API real: las pruebas usan un transporte falso.
+En cada pull request y en cada push a `main`, GitHub Actions (`.github/workflows/ci.yml`) compila el proyecto en Ubuntu 24.04 y corre las pruebas. Usa GCC con los presets `dev`, `asan`, `tsan` y `release`, y Clang con `dev` y `release`; todos con el bot de Telegram, y revisan que `moss telegram` desactivado salga con 0 y sin token con 78; aparte, compila y prueba `dev` con GCC sin addons (`-DCHATBOT_BUILD_TELEGRAM=OFF`) y revisa que `moss telegram` salga con 69. En Windows (MSYS2 UCRT64 con GCC) compila y prueba `dev` y `release`, sin `CHATBOT_STRICT_PERF` (los tiempos de esas máquinas varían mucho), además prueba `moss-rpc.exe` con pipes de verdad y una conversación por HTTPS (Schannel, TLS 1.2) contra el servidor falso. El trabajo `ZIP de Windows` (`package-windows.yml`) arma el ZIP oficial y lo prueba en otra máquina sin MSYS2 (recursos de versión, `--version`, `moss-rpc.exe`, la GUI y el modo portable), y lo sube como `moss-windows-x64`. El trabajo `paquetes de Linux` (`package-linux.yml`) arma los paquetes de Linux en Ubuntu 22.04, los instala en contenedores de Fedora, Debian 12 y Ubuntu 22.04 (y el `.tar.gz` en Debian 12) y los sube como `moss-linux-x86_64`. En todos, los warnings cuentan como errores. Además, comprueba que el programa, sin `CHAT_API_KEY` y sin terminal, salga con código 1 y el mensaje de error de configuración. La CI nunca usa una API key ni se conecta a ninguna API real: las pruebas usan un transporte falso.
 
 ### Addons
 
@@ -684,6 +695,24 @@ CHAT_TELEGRAM_TOKEN=123456789:AA... ./build/release/cli/moss-telegram-probe --ch
 ```
 
 Los mensajes con formato llegaron a Telegram en junio de 2026 (Bot API 10.1); en una app desactualizada podrían no verse bien. Falta probarlo con un celular real.
+
+## Code signing policy
+
+Los binarios de Windows todavía no están firmados. Estamos solicitando la firma gratuita de SignPath Foundation.
+
+Solo se firmarían los binarios que se construyen desde este repositorio, en GitHub Actions (`release.yml`).
+
+- Authors: [Ricky182771](https://github.com/Ricky182771)
+- Reviewers: [Ricky182771](https://github.com/Ricky182771)
+- Approvers: [Ricky182771](https://github.com/Ricky182771)
+
+**Privacidad:** Moss no manda información a ningún otro sistema salvo lo que el usuario pide: los mensajes van al proveedor de IA que él configura, y la búsqueda web y el bot de Telegram solo si los activa. No hay telemetría.
+
+Tres detalles:
+
+- Al abrir F2 en la terminal o Configuración en la ventana, si ya pusiste la URL y la key, Moss le pide al mismo proveedor la lista de sus modelos. No manda ningún mensaje tuyo.
+- Mientras el bot de Telegram está activo, le pregunta a Telegram todo el tiempo si llegaron mensajes nuevos. Si lo apagas, deja de hacerlo.
+- La búsqueda web no tiene un interruptor aparte: se usa solo cuando escribes `/buscar` y tienes una key de búsqueda guardada. Sin key, no se manda nada.
 
 ## Licencia
 
