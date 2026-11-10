@@ -42,6 +42,7 @@ Lee la guía correspondiente antes de hacer cambios:
 | `rpc/` | `rpc/PROTOCOL.md` y `guias/05-estructura.md` |
 | Presets, compilación, pruebas o CI | `guias/11-compilacion.md` |
 | `gui/` (Flutter) | `gui/diseno/DISENO.md`, `guias/16-gui.md` y `rpc/PROTOCOL.md` |
+| `VERSION`, `packaging/`, paquetes de Linux o releases | `guias/17-empaquetado.md` |
 
 ## 3. Alcance por hitos
 
@@ -209,8 +210,18 @@ cd gui && flutter pub get && dart format --output=none --set-exit-if-changed . &
 cd gui && flutter build linux --release   # una vez, al final
 ```
 
+Paquetes de Linux (`.tar.gz`, `.rpm`, `.deb` y `SHA256SUMS` en `build/package/out/`; necesita `nfpm`, `desktop-file-validate`, `appstreamcli` y `rsvg-convert`):
+
+```bash
+tools/package-linux.sh                 # compila release y la GUI, y arma los tres
+tools/package-linux.sh --skip-build    # con lo ya compilado
+```
+
+- La versión vive solo en `VERSION` (CMake la lee; `chatbot_version` revisa `gui/pubspec.yaml` y el `--version` de cada ejecutable). Subirla: `VERSION`, `pubspec.yaml`, `kClientVersion` y `CHANGELOG.md`, juntos.
+- Los paquetes se arman en Ubuntu 22.04 (glibc 2.35) y se prueban instalándolos en contenedores (`package-linux.yml`); nunca etiquetas ni releases sin que lo pida el usuario.
+
 - Comprobar también el loop real de FTXUI con `./build/tsan/cli/moss`, conversación y cancelación manuales, sin `WARNING: ThreadSanitizer` (API real solo con permiso).
-- CI: GCC en los cuatro presets, Clang dev/release, dev sin addons, Windows dev/release, `gui` (Flutter en Linux), `gui-windows` (Flutter con MSVC y dos ZIP de prueba); **sin keys ni API real**. TSan: `vm.mmap_rnd_bits=28`.
+- CI: GCC en los cuatro presets, Clang dev/release, dev sin addons, Windows dev/release, `gui` (Flutter en Linux), `gui-windows` (Flutter con MSVC y dos ZIP de prueba), paquetes de Linux con su prueba de instalación; **sin keys ni API real**. `release.yml` (etiqueta `v*` o a mano) deja un release en borrador. TSan: `vm.mmap_rnd_bits=28`.
 - Latencia de cancelación **< 2 s en todos los presets**, incluido apagado y destructores. Las pruebas de tiempo siempre miden y reportan con `WARN`; los demás límites de rendimiento fallan solo con `CHATBOT_STRICT_PERF=1` (CI solo release). Las esperas funcionales entre hilos siempre son obligatorias.
 - No desactivar comprobaciones de dependencias/includes ni permitir licencias ausentes en el ZIP.
 
