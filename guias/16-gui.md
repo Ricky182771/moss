@@ -126,6 +126,27 @@ Los agrega el servidor al historial (`Session::report`, `PROTOCOL.md` §6.5) y l
 
 Una acción que no espera a Guardar (como Borrar endpoint) va dentro de `owner.quietly(...)` para que su `settings.changed` no cuente como de afuera.
 
+## La ventana y el sistema (G6)
+
+**El canal `moss/window`** (`widgets/window_channel.dart`, `StandardMethodCodec`; en `gui/windows/runner/flutter_window.cpp` y `gui/linux/runner/my_application.cc`). `WindowChannel` vive en el `builder` de `PrefsApp`, debajo del tema. Si falta el canal o un método, la app sigue.
+
+| Método | De | Qué hace |
+|---|---|---|
+| `setDark(bool)` | Dart | La barra de título con el tema **de la app**, al arrancar y al cambiar (también con Sistema). Windows: `DwmSetWindowAttribute` con `DWMWA_USE_IMMERSIVE_DARK_MODE`; si la versión no lo soporta, devuelve un error y la barra se queda. Después de la primera llamada, `WM_DWMCOLORIZATIONCOLORCHANGED` ya no le pone el tema del sistema. Linux: `gtk-application-prefer-dark-theme`. |
+| `animationsEnabled` | Dart, y Windows si cambia | "Efectos de animación" de Windows (`SPI_GETCLIENTAREAANIMATION`, revisado en cada `WM_SETTINGCHANGE`). Flutter no lo reporta allá; se suma a Reducir animaciones sin guardarse. Linux no lo implementa: Flutter ya lo reporta. |
+
+**La barra en Linux.** En Wayland, sin `GtkHeaderBar` si `gdk_wayland_display_prefers_ssd` (Niri con `prefer-no-csd`, Plasma): la decoración es del compositor y `setDark` no le llega. Una barra de GTK necesita un tema con variante oscura (Adwaita la tiene); un tema como `Adwaita-dark` se queda oscuro aunque la app sea clara.
+
+**El primer cuadro.** Los dos runners muestran la ventana con el `fondo` del tema del sistema, porque `settings.gui` todavía no se lee: `kBackgroundDark` y `kBackgroundLight`, copias de `MossColors` que vigila `test/window_channel_test.dart`. Windows lee el registro (`AppsUseLightTheme`); Linux, lo mismo que Flutter (`color-scheme` del portal y, si no, el nombre del tema de GTK). Si `settings.gui` pide otro tema, cambia cuando se lee.
+
+**Contraste alto.** `highContrastTheme` y `highContrastDarkTheme` de `MaterialApp` son los tokens de Más contraste: con el contraste alto del sistema (`MediaQuery.highContrast`, que Flutter sí reporta en Windows) se usan sin tocar lo guardado.
+
+**AltGr.** En Windows llega como `CtrlLeft` falso más `AltRight`. `SingleActivator` compara los modificadores exactos: `control: true` sin `alt` no coincide con AltGr y la tecla sigue hasta el campo. **Todo atajo nuevo con Ctrl va con `SingleActivator`**, nunca revisando `isControlPressed` a mano; un `onKeyEvent` que atienda letras debe mirar también Alt. `test/keyboard_test.dart` vigila que ningún atajo se lleve `@ { } [ ] \`, el acento muerto, `ñ`, `¿` ni `¡`, en la caja y en Configuración; que el carácter salga lo pone Windows y solo se ve a mano.
+
+**El tamaño de la ventana en Windows.** El mínimo de 720×520 es del contenido: `WM_GETMINMAXINFO` le suma el marco y la barra con `AdjustWindowRectExForDpi`, con el DPI del monitor de la ventana. Al crearla, los 1280×800 se recortan al área de trabajo del monitor.
+
+**Cerrar en Windows.** `WM_CLOSE` llega a `AppLifecycleListener.onExitRequested` por el motor; ahí van `shutdown`, `exit` y `kill` a los 3 s. Si la GUI muere de otro modo, el pipe se cierra y `moss-rpc.exe` sale solo (`PROTOCOL.md`).
+
 ## Deuda conocida
 
 - Resaltado de sintaxis en los bloques de código: la maqueta pinta las palabras clave con el token `code`, pero `DISENO.md` no lo pide; queda para después.

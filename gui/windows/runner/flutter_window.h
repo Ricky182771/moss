@@ -3,6 +3,7 @@
 
 #include <flutter/dart_project.h>
 #include <flutter/flutter_view_controller.h>
+#include <flutter/method_channel.h>
 
 #include <memory>
 
@@ -28,6 +29,15 @@ class FlutterWindow : public Win32Window {
 
   // The Flutter instance hosted by this window.
   std::unique_ptr<flutter::FlutterViewController> flutter_controller_;
+
+  // El canal moss/window: `setDark(bool)` pone la barra de título con el tema
+  // de la app (después de la primera llamada, ya no sigue al del sistema) y
+  // `animationsEnabled` dice si están encendidos los "Efectos de animación",
+  // que Flutter no reporta en Windows. Si cambian, se avisa por el mismo método.
+  void SetDarkTitleBar(bool dark);
+  std::unique_ptr<flutter::MethodChannel<>> window_channel_;
+  bool app_sets_theme_ = false;
+  bool animations_enabled_ = true;
 };
 
 #endif  // RUNNER_FLUTTER_WINDOW_H_

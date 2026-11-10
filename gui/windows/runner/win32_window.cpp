@@ -3,6 +3,8 @@
 #include <dwmapi.h>
 #include <flutter_windows.h>
 
+#include <algorithm>
+
 #include "resource.h"
 
 namespace {
@@ -25,6 +27,22 @@ constexpr const wchar_t kWindowClassName[] = L"FLUTTER_RUNNER_WIN32_WINDOW";
 constexpr const wchar_t kGetPreferredBrightnessRegKey[] =
   L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize";
 constexpr const wchar_t kGetPreferredBrightnessRegValue[] = L"AppsUseLightTheme";
+
+// shortcut: copia del token `fondo` de MossColors (lib/theme/colors.dart), porque
+// la ventana existe antes que Dart; test/window_channel_test.dart vigila que
+// coincidan. Es el fondo antes de que Flutter dibuje, según el sistema, porque
+// settings.gui todavía no se lee.
+constexpr COLORREF kBackgroundDark = RGB(0x0F, 0x14, 0x11);
+constexpr COLORREF kBackgroundLight = RGB(0xFF, 0xFF, 0xFF);
+
+bool SystemPrefersDark() {
+  DWORD light_mode;
+  DWORD light_mode_size = sizeof(light_mode);
+  return RegGetValue(HKEY_CURRENT_USER, kGetPreferredBrightnessRegKey,
+                     kGetPreferredBrightnessRegValue, RRF_RT_REG_DWORD, nullptr,
+                     &light_mode, &light_mode_size) == ERROR_SUCCESS &&
+         light_mode == 0;
+}
 
 // The number of Win32Window objects that currently exist.
 static int g_active_window_count = 0;
@@ -97,7 +115,9 @@ const wchar_t* WindowClassRegistrar::GetWindowClass() {
     window_class.hInstance = GetModuleHandle(nullptr);
     window_class.hIcon =
         LoadIcon(window_class.hInstance, MAKEINTRESOURCE(IDI_APP_ICON));
-    window_class.hbrBackground = 0;
+    // Windows la borra al quitar la clase con UnregisterClass.
+    window_class.hbrBackground = CreateSolidBrush(
+        SystemPrefersDark() ? kBackgroundDark : kBackgroundLight);
     window_class.lpszMenuName = nullptr;
     window_class.lpfnWndProc = Win32Window::WndProc;
     RegisterClass(&window_class);
@@ -134,10 +154,21 @@ bool Win32Window::Create(const std::wstring& title,
   UINT dpi = FlutterDesktopGetDpiForMonitor(monitor);
   double scale_factor = dpi / 96.0;
 
+  const int x = Scale(origin.x, scale_factor);
+  const int y = Scale(origin.y, scale_factor);
+  int width = Scale(size.width, scale_factor);
+  int height = Scale(size.height, scale_factor);
+  // Una pantalla de 1366×768 no es tan alta: la caja de abajo quedaría fuera.
+  MONITORINFO monitor_info{};
+  monitor_info.cbSize = sizeof(monitor_info);
+  if (GetMonitorInfo(monitor, &monitor_info)) {
+    width = std::min(width, static_cast<int>(monitor_info.rcWork.right) - x);
+    height = std::min(height, static_cast<int>(monitor_info.rcWork.bottom) - y);
+  }
+
   HWND window = CreateWindow(
       window_class, title.c_str(), WS_OVERLAPPEDWINDOW,
-      Scale(origin.x, scale_factor), Scale(origin.y, scale_factor),
-      Scale(size.width, scale_factor), Scale(size.height, scale_factor),
+      x, y, width, height,
       nullptr, nullptr, GetModuleHandle(nullptr), this);
 
   if (!window) {
@@ -273,16 +304,7 @@ void Win32Window::OnDestroy() {
 }
 
 void Win32Window::UpdateTheme(HWND const window) {
-  DWORD light_mode;
-  DWORD light_mode_size = sizeof(light_mode);
-  LSTATUS result = RegGetValue(HKEY_CURRENT_USER, kGetPreferredBrightnessRegKey,
-                               kGetPreferredBrightnessRegValue,
-                               RRF_RT_REG_DWORD, nullptr, &light_mode,
-                               &light_mode_size);
-
-  if (result == ERROR_SUCCESS) {
-    BOOL enable_dark_mode = light_mode == 0;
-    DwmSetWindowAttribute(window, DWMWA_USE_IMMERSIVE_DARK_MODE,
-                          &enable_dark_mode, sizeof(enable_dark_mode));
-  }
+  BOOL enable_dark_mode = SystemPrefersDark() ? TRUE : FALSE;
+  DwmSetWindowAttribute(window, DWMWA_USE_IMMERSIVE_DARK_MODE,
+                        &enable_dark_mode, sizeof(enable_dark_mode));
 }

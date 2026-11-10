@@ -4,15 +4,72 @@
 #ifdef GDK_WINDOWING_X11
 #include <gdk/gdkx.h>
 #endif
+#ifdef GDK_WINDOWING_WAYLAND
+#include <gdk/gdkwayland.h>
+#endif
 
 #include "flutter/generated_plugin_registrant.h"
+
+// shortcut: copia del token `fondo` de MossColors (lib/theme/colors.dart), porque
+// la ventana existe antes que Dart; test/window_channel_test.dart vigila que
+// coincidan. Es el fondo antes de que Flutter dibuje.
+static constexpr char kBackgroundDark[] = "#0F1411";
+static constexpr char kBackgroundLight[] = "#FFFFFF";
 
 struct _MyApplication {
   GtkApplication parent_instance;
   char** dart_entrypoint_arguments;
+  FlMethodChannel* window_channel;
 };
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
+
+// El tema del sistema, de donde lo lee Flutter (fl_settings_portal.cc): el
+// color-scheme del portal y, si no, el nombre del tema de GTK. settings.gui
+// todavía no se lee, así que el primer cuadro sale con este.
+static gboolean system_prefers_dark() {
+  g_autoptr(GDBusConnection) bus =
+      g_bus_get_sync(G_BUS_TYPE_SESSION, nullptr, nullptr);
+  if (bus != nullptr) {
+    g_autoptr(GVariant) reply = g_dbus_connection_call_sync(
+        bus, "org.freedesktop.portal.Desktop",
+        "/org/freedesktop/portal/desktop", "org.freedesktop.portal.Settings",
+        "ReadOne",
+        g_variant_new("(ss)", "org.freedesktop.appearance", "color-scheme"),
+        G_VARIANT_TYPE("(v)"), G_DBUS_CALL_FLAGS_NONE, 500, nullptr, nullptr);
+    if (reply != nullptr) {
+      g_autoptr(GVariant) scheme = nullptr;
+      g_variant_get(reply, "(v)", &scheme);
+      if (g_variant_is_of_type(scheme, G_VARIANT_TYPE_UINT32)) {
+        return g_variant_get_uint32(scheme) == 1;
+      }
+    }
+  }
+  g_autofree gchar* theme = nullptr;
+  g_object_get(gtk_settings_get_default(), "gtk-theme-name", &theme, nullptr);
+  return theme != nullptr && g_str_has_suffix(theme, "-dark");
+}
+
+// El canal moss/window: `setDark(bool)` pone la barra de GTK con el tema de la
+// app. Con decoraciones del compositor no hace nada: esa barra es suya.
+static void window_method_cb(FlMethodChannel* channel, FlMethodCall* call,
+                             gpointer user_data) {
+  FlValue* args = fl_method_call_get_args(call);
+  g_autoptr(FlMethodResponse) response = nullptr;
+  if (g_strcmp0(fl_method_call_get_name(call), "setDark") == 0 &&
+      fl_value_get_type(args) == FL_VALUE_TYPE_BOOL) {
+    g_object_set(gtk_settings_get_default(),
+                 "gtk-application-prefer-dark-theme", fl_value_get_bool(args),
+                 nullptr);
+    response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
+  } else {
+    response = FL_METHOD_RESPONSE(fl_method_not_implemented_response_new());
+  }
+  g_autoptr(GError) error = nullptr;
+  if (!fl_method_call_respond(call, response, &error)) {
+    g_warning("moss/window: %s", error->message);
+  }
+}
 
 // Called when first Flutter frame received.
 static void first_frame_cb(MyApplication* self, FlView* view) {
@@ -42,6 +99,18 @@ static void my_application_activate(GApplication* application) {
     }
   }
 #endif
+#ifdef GDK_WINDOWING_WAYLAND
+  // Un compositor que pide no dibujar decoraciones (Niri con prefer-no-csd): sin
+  // barra propia, GTK le deja la decisión a él.
+  GdkDisplay* display = gtk_widget_get_display(GTK_WIDGET(window));
+  if (GDK_IS_WAYLAND_DISPLAY(display) &&
+      gdk_wayland_display_prefers_ssd(display)) {
+    use_header_bar = FALSE;
+  }
+#endif
+  const gboolean dark = system_prefers_dark();
+  g_object_set(gtk_settings_get_default(), "gtk-application-prefer-dark-theme",
+               dark, nullptr);
   if (use_header_bar) {
     GtkHeaderBar* header_bar = GTK_HEADER_BAR(gtk_header_bar_new());
     gtk_widget_show(GTK_WIDGET(header_bar));
@@ -64,9 +133,7 @@ static void my_application_activate(GApplication* application) {
 
   FlView* view = fl_view_new(project);
   GdkRGBA background_color;
-  // Background defaults to black, override it here if necessary, e.g. #00000000
-  // for transparent.
-  gdk_rgba_parse(&background_color, "#000000");
+  gdk_rgba_parse(&background_color, dark ? kBackgroundDark : kBackgroundLight);
   fl_view_set_background_color(view, &background_color);
   gtk_widget_show(GTK_WIDGET(view));
   gtk_container_add(GTK_CONTAINER(window), GTK_WIDGET(view));
@@ -78,6 +145,13 @@ static void my_application_activate(GApplication* application) {
   gtk_widget_realize(GTK_WIDGET(view));
 
   fl_register_plugins(FL_PLUGIN_REGISTRY(view));
+
+  g_autoptr(FlStandardMethodCodec) codec = fl_standard_method_codec_new();
+  self->window_channel = fl_method_channel_new(
+      fl_engine_get_binary_messenger(fl_view_get_engine(view)), "moss/window",
+      FL_METHOD_CODEC(codec));
+  fl_method_channel_set_method_call_handler(self->window_channel,
+                                            window_method_cb, nullptr, nullptr);
 
   gtk_widget_grab_focus(GTK_WIDGET(view));
 }
@@ -125,6 +199,7 @@ static void my_application_shutdown(GApplication* application) {
 static void my_application_dispose(GObject* object) {
   MyApplication* self = MY_APPLICATION(object);
   g_clear_pointer(&self->dart_entrypoint_arguments, g_strfreev);
+  g_clear_object(&self->window_channel);
   G_OBJECT_CLASS(my_application_parent_class)->dispose(object);
 }
 

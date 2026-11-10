@@ -104,8 +104,10 @@ class RpcClient {
     }
     // Si moss-rpc muere, escribir en el pipe falla; lo avisa `done`.
     proc.stdin.done.ignore();
+    // Tolerante: una biblioteca o Windows pueden escribir aquí en otra página
+    // de códigos, y solo se muestra en la pantalla de error.
     proc.stderr
-        .transform(utf8.decoder)
+        .transform(const Utf8Decoder(allowMalformed: true))
         .transform(const LineSplitter())
         .listen(stderr.add);
     final out = StreamController<String>();
