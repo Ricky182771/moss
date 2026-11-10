@@ -18,6 +18,10 @@ if(WIN32)
     set(CURL_USE_SCHANNEL ON)
     set(CURL_USE_OPENSSL OFF)
     set(USE_NGHTTP2 OFF)
+    # CURL_ZLIB, CURL_BROTLI y CURL_ZSTD son set(... CACHE STRING "AUTO") en curl,
+    # que pide CMake 3.18: sin CMP0126 en NEW, ese set borra estos OFF y curl
+    # enlaza las DLL de MSYS2 que encuentre.
+    set(CMAKE_POLICY_DEFAULT_CMP0126 NEW)
     set(CURL_ZLIB OFF)
     set(CURL_BROTLI OFF)
     set(CURL_ZSTD OFF)
