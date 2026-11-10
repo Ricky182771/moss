@@ -708,6 +708,12 @@ Solo se firmarían los binarios que se construyen desde este repositorio, en Git
 
 **Privacidad:** Moss no manda información a ningún otro sistema salvo lo que el usuario pide: los mensajes van al proveedor de IA que él configura, y la búsqueda web y el bot de Telegram solo si los activa. No hay telemetría.
 
+Tres detalles:
+
+- Al abrir F2 en la terminal o Configuración en la ventana, si ya pusiste la URL y la key, Moss le pide al mismo proveedor la lista de sus modelos. No manda ningún mensaje tuyo.
+- Mientras el bot de Telegram está activo, le pregunta a Telegram todo el tiempo si llegaron mensajes nuevos. Si lo apagas, deja de hacerlo.
+- La búsqueda web no tiene un interruptor aparte: se usa solo cuando escribes `/buscar` y tienes una key de búsqueda guardada. Sin key, no se manda nada.
+
 ## Licencia
 
 Moss se distribuye bajo la GPL v3 o, a tu elección, cualquier versión posterior; ver LICENSE.
