@@ -1,12 +1,12 @@
-# Release de Linux (guias/17-empaquetado.md, "Sacar un release").
+# Release de Linux y Windows (guias/17-empaquetado.md, "Sacar un release").
 #
 # - Con una etiqueta v*: revisa que la etiqueta sea la de VERSION y que
-#   CHANGELOG.md tenga su sección, arma y prueba los paquetes
-#   (package-linux.yml) y crea un GitHub Release en BORRADOR con los cuatro
-#   archivos. Publicarlo es a mano.
-# - Con workflow_dispatch: lo mismo, pero solo deja los artefactos (sin
-#   etiqueta ni release): así se prueba.
-# Windows (el ZIP) entra en G5b.
+#   CHANGELOG.md tenga su sección, arma y prueba los paquetes de Linux
+#   (package-linux.yml) y el ZIP de Windows (package-windows.yml), junta un
+#   solo SHA256SUMS y crea un GitHub Release en BORRADOR con los cinco
+#   archivos y SHA256SUMS. Publicarlo es a mano.
+# - Con workflow_dispatch: lo mismo, pero sin etiqueta ni release: deja los
+#   seis archivos en el artefacto moss-release. Así se prueba.
 name: Release
 
 on:
@@ -41,16 +41,65 @@ jobs:
           fi
           tools/release-notes.sh "$version" > /dev/null
 
-  package:
+  linux:
+    name: Linux
     needs: version
     uses: ./.github/workflows/package-linux.yml
     with:
       retention-days: 14
 
+  windows:
+    name: Windows
+    needs: version
+    uses: ./.github/workflows/package-windows.yml
+    with:
+      retention-days: 14
+
+  # Los cinco archivos y un solo SHA256SUMS, ya probados en linux y windows.
+  files:
+    name: juntar los archivos
+    needs: [linux, windows]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Bajar los paquetes de Linux
+        uses: actions/download-artifact@v8
+        with:
+          name: moss-linux-x86_64
+          path: dist/linux
+
+      - name: Bajar el ZIP de Windows
+        uses: actions/download-artifact@v8
+        with:
+          name: moss-windows-x64
+          path: dist/windows
+
+      - name: Juntar
+        run: |
+          version=$(< VERSION)
+          (cd dist/linux && sha256sum -c SHA256SUMS)
+          mkdir release
+          cp "dist/linux/moss-$version-linux-x86_64.tar.gz" "dist/linux/moss-$version-1.x86_64.rpm" \
+            "dist/linux/moss_$version-1_amd64.deb" "dist/windows/moss-$version-windows-x64.zip" release/
+          cd release
+          sha256sum -- * > SHA256SUMS
+          cat SHA256SUMS
+          test "$(ls | wc -l)" -eq 6
+
+      - name: Subir
+        uses: actions/upload-artifact@v7
+        with:
+          name: moss-release
+          path: release/
+          retention-days: 14
+          if-no-files-found: error
+
   release:
     name: release en borrador
     if: github.ref_type == 'tag'
-    needs: package
+    needs: files
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -58,11 +107,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Bajar los paquetes
+      - name: Bajar los archivos
         uses: actions/download-artifact@v8
         with:
-          name: moss-linux-x86_64
-          path: dist
+          name: moss-release
+          path: release
 
       - name: Crear el borrador
         env:
@@ -70,9 +119,10 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           version=$(< VERSION)
-          (cd dist && sha256sum -c SHA256SUMS)
+          (cd release && sha256sum -c SHA256SUMS)
           tools/release-notes.sh "$version" > notas.md
           gh release create "$TAG" --draft --verify-tag --title "Moss $version" \
             --notes-file notas.md \
-            "dist/moss-$version-linux-x86_64.tar.gz" "dist/moss-$version-1.x86_64.rpm" \
-            "dist/moss_$version-1_amd64.deb" dist/SHA256SUMS
+            "release/moss-$version-linux-x86_64.tar.gz" "release/moss-$version-1.x86_64.rpm" \
+            "release/moss_$version-1_amd64.deb" "release/moss-$version-windows-x64.zip" \
+            release/SHA256SUMS
