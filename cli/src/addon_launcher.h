@@ -10,7 +10,8 @@
 #include <string_view>
 #include <vector>
 
-/// La línea de comandos de moss: sin argumentos, la interfaz; --help; y
+/// La línea de comandos de moss: sin argumentos, la interfaz; --help;
+/// --version; y
 /// moss <addon> [argumentos], que busca el programa del addon (como git
 /// con sus subcomandos) y se reemplaza por él con exec. Sin FTXUI.
 namespace chatbot::cli {
@@ -23,6 +24,7 @@ struct CommandLine {
     enum class Kind {
         Interface, ///< Sin argumentos: la interfaz de siempre.
         Help,      ///< --help o -h.
+        Version,   ///< --version: "moss X.Y.Z", sin leer configuración.
         Addon,     ///< moss <addon> [argumentos].
         Usage,     ///< Otra cosa: problem dice qué.
     };

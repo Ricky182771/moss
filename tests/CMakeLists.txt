@@ -151,10 +151,15 @@ add_test(NAME chatbot_addon_launcher
         -DWORK=${CMAKE_CURRENT_BINARY_DIR}/addon_launcher
         -P ${CMAKE_CURRENT_SOURCE_DIR}/addon_launcher.cmake)
 
-# La versión: VERSION es la única fuente y gui/pubspec.yaml dice la misma
-# (version.cmake).
+# La versión: VERSION es la única fuente, gui/pubspec.yaml dice la misma y
+# cada ejecutable la da con --version (version.cmake).
+set(chatbot_version_executables "$<TARGET_FILE:moss>|$<TARGET_FILE:moss-rpc>")
+if(CHATBOT_BUILD_TELEGRAM)
+    string(APPEND chatbot_version_executables "|$<TARGET_FILE:moss-telegram>")
+endif()
 add_test(NAME chatbot_version
     COMMAND ${CMAKE_COMMAND} -DSOURCE_DIR=${PROJECT_SOURCE_DIR}
+        "-DEXECUTABLES=${chatbot_version_executables}"
         -P ${CMAKE_CURRENT_SOURCE_DIR}/version.cmake)
 
 # Dirección de las dependencias en los #include: nada fuera de addons/

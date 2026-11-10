@@ -77,6 +77,8 @@ add_library(chatbot_cli_lib STATIC
 target_compile_features(chatbot_cli_lib PUBLIC cxx_std_20)
 target_include_directories(chatbot_cli_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 find_package(nlohmann_json 3.9 REQUIRED)
+# moss --version (addon_launcher.cpp).
+target_compile_definitions(chatbot_cli_lib PRIVATE CHATBOT_VERSION="${PROJECT_VERSION}")
 target_link_libraries(chatbot_cli_lib
     PUBLIC chatbot::core chatbot::markdown chatbot::addon_settings Threads::Threads
     PRIVATE nlohmann_json::nlohmann_json)

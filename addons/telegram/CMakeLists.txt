@@ -29,6 +29,7 @@ chatbot_set_warnings(chatbot_telegram)
 # El bot: "moss telegram" lo arranca (README, "Bot de Telegram").
 add_executable(moss-telegram src/main.cpp)
 target_link_libraries(moss-telegram PRIVATE chatbot::telegram)
+target_compile_definitions(moss-telegram PRIVATE CHATBOT_VERSION="${PROJECT_VERSION}")
 chatbot_set_warnings(moss-telegram)
 
 # Sonda manual (como tools/smoke): manda mensajes de prueba a un chat para

@@ -88,6 +88,7 @@ Versión del protocolo: **1**.
 - stdin y stdout en modo binario: cada mensaje termina en `\n`, sin `\r`, y es UTF-8 (sin páginas de códigos de por medio). Una entrada con `\r\n` también se acepta.
 - No se lanza desde `cmd /c` ni con `runInShell: true`: la shell de por medio cambia el manejo de comillas y de la consola, y al matarla queda vivo el servidor.
 - Si stdin es una consola (doble clic en el `.exe`, o abierto desde CMD sin pipes), escribe en stderr, una sola vez, que es para otras interfaces y que para platicar se abre `moss`, y sigue funcionando igual. En Linux, lo mismo cuando stdin es una terminal.
+- `moss-rpc --version` imprime `moss-rpc X.Y.Z` (la de `server.version`) y sale con 0, sin leer la configuración ni avisar de stdin. Otros argumentos se ignoran, como hasta ahora.
 
 ---
 

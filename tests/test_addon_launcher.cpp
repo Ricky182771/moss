@@ -22,7 +22,7 @@ const chatbot::addon_settings::AddonInfo& telegram() {
 
 } // namespace
 
-TEST_CASE("línea de comandos: interfaz, ayuda, addon y error de uso", "[addons][lanzador]") {
+TEST_CASE("línea de comandos: interfaz, ayuda, versión, addon y error de uso", "[addons][lanzador]") {
     CHECK(parse_command_line({}).kind == CommandLine::Kind::Interface);
     CHECK(parse_command_line({"--help"}).kind == CommandLine::Kind::Help);
     CHECK(parse_command_line({"-h"}).kind == CommandLine::Kind::Help);
@@ -36,7 +36,8 @@ TEST_CASE("línea de comandos: interfaz, ayuda, addon y error de uso", "[addons]
     const CommandLine unknown = parse_command_line({"Telegram"});
     CHECK(unknown.kind == CommandLine::Kind::Usage);
     CHECK(unknown.problem == "argumento desconocido: Telegram");
-    CHECK(parse_command_line({"--version"}).kind == CommandLine::Kind::Usage);
+    CHECK(parse_command_line({"--version"}).kind == CommandLine::Kind::Version);
+    CHECK(parse_command_line({"--version", "telegram"}).kind == CommandLine::Kind::Usage);
 }
 
 TEST_CASE("línea de comandos: el addon junto a moss, luego PATH; portable sin PATH",

@@ -1,11 +1,15 @@
 # La versión de la app (cmake -P, sin red): VERSION es la única fuente.
 #
 #   -DSOURCE_DIR=<raíz del repositorio>
+#   -DEXECUTABLES=<ejecutable>|<ejecutable>... (opcional)
 #
 # - VERSION tiene una sola línea X.Y.Z.
 # - gui/pubspec.yaml dice la misma (sin el +N de compilación de Flutter); la
 #   GUI la manda en initialize (kClientVersion, que gui/test/apply_test.dart
 #   compara con pubspec.yaml).
+# - Cada ejecutable, con --version, sale con 0 e imprime "<nombre> X.Y.Z" y
+#   nada más (ni en stderr: moss-rpc no avisa de stdin). Corre con HOME y
+#   XDG_CONFIG_HOME en una carpeta con config.json roto: no la lee.
 
 if(NOT DEFINED SOURCE_DIR)
     message(FATAL_ERROR "Falta -DSOURCE_DIR=...")
@@ -27,3 +31,24 @@ if(NOT CMAKE_MATCH_1 STREQUAL version)
         "(y kClientVersion de gui/lib/rpc/client.dart)")
 endif()
 message(STATUS "versión ${version}: VERSION y gui/pubspec.yaml coinciden")
+
+if(DEFINED EXECUTABLES AND NOT EXECUTABLES STREQUAL "")
+    get_filename_component(work "${CMAKE_CURRENT_BINARY_DIR}/version_home" ABSOLUTE)
+    file(REMOVE_RECURSE "${work}")
+    file(WRITE "${work}/moss/config.json" "{ roto")
+    string(REPLACE "|" ";" executables "${EXECUTABLES}")
+    foreach(executable IN LISTS executables)
+        get_filename_component(name "${executable}" NAME_WE)
+        execute_process(
+            COMMAND ${CMAKE_COMMAND} -E env HOME=${work} XDG_CONFIG_HOME=${work}
+                APPDATA=${work} "${executable}" --version
+            INPUT_FILE "${work}/moss/config.json"
+            RESULT_VARIABLE code OUTPUT_VARIABLE out ERROR_VARIABLE err)
+        string(REPLACE "\r" "" out "${out}")
+        if(NOT code EQUAL 0 OR NOT out STREQUAL "${name} ${version}\n" OR NOT err STREQUAL "")
+            message(FATAL_ERROR "${name} --version: código ${code}, salida '${out}', "
+                                "errores '${err}'; se esperaba '${name} ${version}'")
+        endif()
+        message(STATUS "${name} --version: ${name} ${version}")
+    endforeach()
+endif()

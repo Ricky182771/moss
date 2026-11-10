@@ -45,6 +45,7 @@ constexpr std::string_view kUsage =
     "Uso: moss telegram                    arranca el bot\n"
     "     moss telegram --config-version   la versión de la configuración que entiende\n"
     "     moss telegram --help             esta ayuda\n"
+    "     moss telegram --version          la versión\n"
     "\n"
     "Lee la configuración de la app (config.json y credentials.json): se edita\n"
     "en Configuración (F2) → Addons. Ver la sección \"Bot de Telegram\" del README.\n";
@@ -188,6 +189,10 @@ int main(int argc, char** argv) {
             return 0;
         }
         // Sin leer nada ni tocar la red: F2 lo usa para ver si es compatible.
+        if (argument == "--version") {
+            std::cout << "moss-telegram " << CHATBOT_VERSION << '\n';
+            return 0;
+        }
         if (argument == "--config-version") {
             std::cout << addon_settings::kTelegramConfigVersion << '\n';
             return 0;

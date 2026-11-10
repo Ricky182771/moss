@@ -100,7 +100,7 @@ moss/
 ├── cli/
 │   ├── CMakeLists.txt       # FTXUI, chatbot_cli_lib, chatbot_cli_ui y ejecutable moss
 │   └── src/
-│       ├── addon_launcher.h/.cpp      # línea de comandos: --help, moss <addon> con exec (sin FTXUI)
+│       ├── addon_launcher.h/.cpp      # línea de comandos: --help, --version, moss <addon> con exec (sin FTXUI)
 │       ├── child_process.h            # programas externos: run_process (salida, tope, cancelación), find_in_path
 │       ├── child_process_posix.cpp    # posix_spawnp, sin shell; solo POSIX
 │       ├── child_process_windows.cpp  # lo mínimo para compilar (no lanza nada); solo Windows
