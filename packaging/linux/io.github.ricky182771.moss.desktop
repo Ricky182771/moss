@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Moss
+GenericName=Asistente de chat
+GenericName[en]=Chat assistant
+Comment=Platica con modelos de lenguaje, con búsqueda web
+Comment[en]=Chat with language models, with web search
+Exec=moss-gui
+Icon=io.github.ricky182771.moss
+Terminal=false
+Categories=Utility;Development;
+Keywords=chat;asistente;inteligencia artificial;IA;modelo de lenguaje;terminal;telegram;assistant;artificial intelligence;AI;LLM;language model;
+StartupNotify=true
+StartupWMClass=io.github.ricky182771.moss

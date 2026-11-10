@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Logo de Moss (gui/diseno/DISENO.md, Identidad): la "m" con el cursor,
+       en el acento oscuro sobre el fondo oscuro, en un cuadro redondeado. -->
+  <rect width="64" height="64" rx="14" fill="#0F1411"/>
+  <g transform="translate(32 32) scale(0.72) translate(-31.75 -34)" fill="none"
+     stroke="#8DBF5F" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8 48V30a9 9 0 0 1 18 0v18M26 30a9 9 0 0 1 18 0v18"/>
+    <rect x="49" y="39" width="10" height="10" rx="1.5" fill="#8DBF5F" stroke="none"/>
+  </g>
+</svg>

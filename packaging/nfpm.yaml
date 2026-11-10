@@ -1,0 +1,86 @@
+# El .rpm y el .deb de Moss (tools/package-linux.sh, guias/17-empaquetado.md).
+# nfpm corre desde build/package/: las rutas src son relativas a esa carpeta,
+# que el script arma (root/ es el árbol que se instala). La versión sale de
+# VERSION por MOSS_VERSION.
+#
+# Dependencias: solo las bibliotecas que los ejecutables enlazan y no van
+# adentro (objdump -p, NEEDED). El script falla si aparece una que no esté en
+# su lista (known_sonames): agrégala aquí y allá. GTK 3 ya trae pango, cairo,
+# atk, harfbuzz, gdk-pixbuf y glib. EGL y GLES no salen en NEEDED: Flutter
+# las abre con dlopen y, sin ellas, moss-gui aborta al arrancar
+# ("Couldn't open libEGL.so.1"; lo atrapa la prueba de instalación).
+name: moss
+arch: amd64
+platform: linux
+version: ${MOSS_VERSION}
+release: 1
+section: utils
+priority: optional
+maintainer: Ricky182771 <Ricky182771@users.noreply.github.com>
+description: |
+  Asistente de chat para modelos de lenguaje.
+  Interfaz gráfica (moss-gui), de terminal (moss) y bot de Telegram,
+  para modelos compatibles con la API de OpenAI, con búsqueda web.
+vendor: Moss
+homepage: https://github.com/Ricky182771/moss
+license: GPL-3.0-only
+
+contents:
+  - src: ./root/usr/lib/moss/
+    dst: /usr/lib/moss/
+    type: tree
+  # Archivo por archivo: un tree de /usr/share haría al paquete dueño de
+  # carpetas del sistema (icons/hicolor, applications...).
+  - src: ./root/usr/share/applications/io.github.ricky182771.moss.desktop
+    dst: /usr/share/applications/io.github.ricky182771.moss.desktop
+  - src: ./root/usr/share/metainfo/io.github.ricky182771.moss.metainfo.xml
+    dst: /usr/share/metainfo/io.github.ricky182771.moss.metainfo.xml
+  - src: ./root/usr/share/icons/hicolor/scalable/apps/io.github.ricky182771.moss.svg
+    dst: /usr/share/icons/hicolor/scalable/apps/io.github.ricky182771.moss.svg
+  - src: ./root/usr/share/icons/hicolor/48x48/apps/io.github.ricky182771.moss.png
+    dst: /usr/share/icons/hicolor/48x48/apps/io.github.ricky182771.moss.png
+  - src: ./root/usr/share/icons/hicolor/128x128/apps/io.github.ricky182771.moss.png
+    dst: /usr/share/icons/hicolor/128x128/apps/io.github.ricky182771.moss.png
+  - src: ./root/usr/share/icons/hicolor/256x256/apps/io.github.ricky182771.moss.png
+    dst: /usr/share/icons/hicolor/256x256/apps/io.github.ricky182771.moss.png
+  - src: /usr/lib/moss/moss
+    dst: /usr/bin/moss
+    type: symlink
+  - src: /usr/lib/moss/moss-gui
+    dst: /usr/bin/moss-gui
+    type: symlink
+  - src: /usr/lib/moss/moss-rpc
+    dst: /usr/bin/moss-rpc
+    type: symlink
+
+overrides:
+  rpm:
+    depends:
+      - glibc >= ${MOSS_GLIBC}
+      - libstdc++
+      - libgcc
+      - zlib
+      - libcurl
+      - gtk3
+      - libepoxy
+      - fontconfig
+      - libglvnd-egl
+      - libglvnd-gles
+  deb:
+    depends:
+      - libc6 (>= ${MOSS_GLIBC})
+      - libstdc++6
+      - libgcc-s1
+      - zlib1g
+      - libcurl4 | libcurl4t64
+      - libgtk-3-0 | libgtk-3-0t64
+      - libepoxy0
+      - libfontconfig1
+      - libegl1
+      - libgles2
+
+rpm:
+  group: Applications/Productivity
+  compression: zstd
+deb:
+  compression: xz

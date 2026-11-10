@@ -73,6 +73,14 @@ set_target_properties(${BINARY_NAME}
 # Generated plugin build rules, which manage building the plugins and adding
 # them to the application.
 include(flutter/generated_plugins.cmake)
+# Moss (G5a): los plugins se copian al bundle con install(FILES), que no les
+# cambia el RUNPATH; se compilan ya con el de instalación, $ORIGIN (están en
+# lib/ junto a libflutter_linux_gtk.so), y no con la ruta absoluta de la
+# carpeta de build.
+foreach(plugin ${FLUTTER_PLUGIN_LIST})
+  set_target_properties(${plugin}_plugin PROPERTIES
+    BUILD_WITH_INSTALL_RPATH TRUE INSTALL_RPATH "$ORIGIN")
+endforeach(plugin)
 
 
 # === Installation ===
