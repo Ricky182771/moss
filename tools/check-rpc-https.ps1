@@ -90,14 +90,14 @@ try {
     }
 
     $stdin.WriteLine('{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocol_version":1,"client":{"name":"ci","version":"0"}}}')
-    $init = (Read-Until '"id":1,' 20)[-1]
+    $init = @(Read-Until '"id":1,' 20)[-1]
     if ($init -notmatch '"ready":true') { throw "initialize sin ready:true: $init" }
     if ($init -notmatch '"conversation":"([^"]+)"') { throw "initialize sin conversation: $init" }
     $conversation = $Matches[1]
 
     $stdin.WriteLine('{"jsonrpc":"2.0","id":2,"method":"chat.send","params":{"conversation":"' +
         $conversation + '","text":"hola"}}')
-    $events = Read-Until '"method":"chat.finished"' 60
+    $events = @(Read-Until '"method":"chat.finished"' 60)
     $finished = $events[-1]
     Write-Output $finished
     if ($finished -notmatch '"outcome":"ok"') { throw "chat.finished no fue ok: $finished" }
