@@ -432,3 +432,9 @@ jobs:
           path: ${{ runner.temp }}/prueba-Profile
           retention-days: 7
           if-no-files-found: error
+
+  # Los paquetes de Linux (.tar.gz, .rpm y .deb) y su prueba de instalación,
+  # como en un release pero sin publicar nada (package-linux.yml).
+  package-linux:
+    name: paquetes de Linux
+    uses: ./.github/workflows/package-linux.yml
