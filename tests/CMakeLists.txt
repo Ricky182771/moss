@@ -151,6 +151,12 @@ add_test(NAME chatbot_addon_launcher
         -DWORK=${CMAKE_CURRENT_BINARY_DIR}/addon_launcher
         -P ${CMAKE_CURRENT_SOURCE_DIR}/addon_launcher.cmake)
 
+# La versión: VERSION es la única fuente y gui/pubspec.yaml dice la misma
+# (version.cmake).
+add_test(NAME chatbot_version
+    COMMAND ${CMAKE_COMMAND} -DSOURCE_DIR=${PROJECT_SOURCE_DIR}
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/version.cmake)
+
 # Dirección de las dependencias en los #include: nada fuera de addons/
 # incluye chatbot/bot/ ni chatbot/telegram/ (cli/ solo chatbot/addon_settings/),
 # y markdown/ y addons/ no incluyen cli/ ni FTXUI. Corre siempre, también con

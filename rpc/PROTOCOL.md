@@ -122,7 +122,7 @@ cliente                                  servidor
 // ←
 {"jsonrpc":"2.0","id":1,"result":{
   "protocol_version":1,
-  "server":{"name":"moss-rpc","version":"0.x"},
+  "server":{"name":"moss-rpc","version":"0.1.0"},
   "platform":"linux",                 // "linux" | "windows"
   "portable":false,
   "conversation":"c1",                // handle de la conversación abierta (siempre hay una)
