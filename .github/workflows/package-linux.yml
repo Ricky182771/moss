@@ -1,0 +1,115 @@
+# Los paquetes de Linux (tools/package-linux.sh, guias/17-empaquetado.md):
+# el .tar.gz, el .rpm y el .deb, armados en Ubuntu 22.04 (glibc 2.35) para que
+# corran en Debian 12, Ubuntu 22.04+ y Fedora, y probados instalándolos en
+# contenedores. Solo sube artefactos; lo llaman ci.yml (cada PR) y release.yml.
+# Sin keys ni API real.
+name: Paquetes de Linux
+
+on:
+  workflow_call:
+    inputs:
+      retention-days:
+        description: Días que se guardan los artefactos.
+        type: number
+        default: 7
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: armar (Ubuntu 22.04)
+    runs-on: ubuntu-24.04
+    container: ubuntu:22.04
+    env:
+      DEBIAN_FRONTEND: noninteractive
+    steps:
+      # Lo de compilar C++ y la GUI (gui/README.md), lo que pide el script y lo
+      # de las acciones en un contenedor pelón (git, curl, xz, unzip, jq).
+      # CMake de pip: los presets (versión 6) piden 3.25 y 22.04 trae 3.22.
+      - name: Dependencias
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            git ca-certificates curl xz-utils unzip zip jq file \
+            g++ ninja-build python3 python3-pip libcurl4-openssl-dev nlohmann-json3-dev tzdata \
+            clang pkg-config libgtk-3-dev liblzma-dev libstdc++-12-dev \
+            binutils desktop-file-utils appstream librsvg2-bin
+          pip3 install --no-cache-dir cmake==3.31.6
+          cmake --version
+          g++ --version
+
+      # nfpm no está en apt: el binario del release, con su sha256.
+      - name: nfpm
+        run: |
+          curl -fsSLo /tmp/nfpm.tar.gz \
+            https://github.com/goreleaser/nfpm/releases/download/v2.48.0/nfpm_2.48.0_Linux_x86_64.tar.gz
+          echo "6d7f9a28b2f397934403950fcbba83f598b08d02edbe79a0815b3b4897341750  /tmp/nfpm.tar.gz" |
+            sha256sum -c -
+          tar -xzf /tmp/nfpm.tar.gz -C /usr/local/bin nfpm
+          nfpm --version
+
+      # Toda la historia: la fecha del release sale del último commit de VERSION.
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.9
+
+      # En el contenedor, el repo y el SDK de Flutter son de otro usuario y git
+      # los rechaza ("dubious ownership"); el contenedor es desechable.
+      - name: Empaquetar
+        run: |
+          git config --global --add safe.directory '*'
+          (cd gui && flutter pub get)
+          MOSS_MAX_GLIBC=2.35 tools/package-linux.sh --out=dist
+
+      - name: Subir los paquetes
+        uses: actions/upload-artifact@v7
+        with:
+          name: moss-linux-x86_64
+          path: dist/
+          retention-days: ${{ inputs.retention-days }}
+          if-no-files-found: error
+
+  install:
+    name: instalar (${{ matrix.format }} en ${{ matrix.image }})
+    needs: build
+    runs-on: ubuntu-24.04
+    container: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { image: "fedora:latest", format: rpm }
+          - { image: "debian:12", format: deb }
+          - { image: "ubuntu:22.04", format: deb }
+          - { image: "debian:12", format: tar }
+    steps:
+      # La imagen de Fedora no trae tar (lo usa checkout sin git) ni findutils.
+      - name: Herramientas de Fedora
+        if: matrix.format == 'rpm'
+        run: dnf install -y tar gzip findutils
+
+      # Sin git en el contenedor, la acción baja el código por la API.
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: |
+            VERSION
+            tools/check-linux-package.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Bajar los paquetes
+        uses: actions/download-artifact@v8
+        with:
+          name: moss-linux-x86_64
+          path: dist
+
+      - name: Probar
+        run: bash tools/check-linux-package.sh ${{ matrix.format }} dist

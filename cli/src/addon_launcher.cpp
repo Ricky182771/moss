@@ -16,9 +16,9 @@ CommandLine parse_command_line(const std::vector<std::string>& args) {
         return line;
     }
     const std::string& first = args.front();
-    if (first == "--help" || first == "-h") {
+    if (first == "--help" || first == "-h" || first == "--version") {
         if (args.size() == 1) {
-            line.kind = CommandLine::Kind::Help;
+            line.kind = first == "--version" ? CommandLine::Kind::Version : CommandLine::Kind::Help;
         } else {
             line.kind = CommandLine::Kind::Usage;
             line.problem = first + " no lleva más argumentos.";
@@ -73,6 +73,7 @@ std::string usage_text(Os os, bool portable, const AddonLocator& locate) {
         "  moss                       abre el chat\n"
         "  moss <addon> [argumentos]  arranca un addon\n"
         "  moss --help                esta ayuda\n"
+        "  moss --version             la versión\n"
         "\n"
         "Addons:\n";
     if (os == Os::Windows) {
@@ -92,10 +93,16 @@ std::string usage_text(Os os, bool portable, const AddonLocator& locate) {
 
 std::optional<int> run_command_line(const std::vector<std::string>& args) {
     const CommandLine line = parse_command_line(args);
+    // Antes de buscar moss.portable: --version no lee nada.
+    if (line.kind == CommandLine::Kind::Version) {
+        std::cout << "moss " << CHATBOT_VERSION << '\n';
+        return 0;
+    }
     const bool portable = process_portable_data_dir().has_value();
     switch (line.kind) {
     case CommandLine::Kind::Interface:
         return std::nullopt;
+    case CommandLine::Kind::Version: // Ya atendido arriba.
     case CommandLine::Kind::Help:
         std::cout << usage_text(current_os(), portable, locate_addon);
         return 0;

@@ -2,6 +2,7 @@
 // Linux y en Windows; las de permisos POSIX, solo en POSIX.
 
 #include "chatbot/platform.h"
+#include "platform_internal.h"
 #include "temp_dir.hpp"
 
 #include <catch2/catch_test_macros.hpp>
@@ -13,6 +14,7 @@
 #include <iterator>
 #include <optional>
 #include <random>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -266,6 +268,28 @@ TEST_CASE("windows_build: el build real en Windows; nada en POSIX", "[plataforma
     } else {
         CHECK_FALSE(build.has_value());
     }
+}
+
+TEST_CASE("executable_path: sin \" (deleted)\" si el binario se reemplazó",
+          "[plataforma]") {
+    std::set<std::string> files;
+    const auto exists = [&](const std::string& path) { return files.count(path) > 0; };
+
+    // dnf upgrade con moss abierto: el binario nuevo quedó en el mismo lugar.
+    files = {"/usr/lib/moss/moss"};
+    CHECK(chatbot::without_deleted_suffix("/usr/lib/moss/moss (deleted)", exists) ==
+          "/usr/lib/moss/moss");
+    // Desinstalado: no hay a dónde ir, queda como lo dio el kernel.
+    files.clear();
+    CHECK(chatbot::without_deleted_suffix("/usr/lib/moss/moss (deleted)", exists) ==
+          "/usr/lib/moss/moss (deleted)");
+    // Un archivo que de verdad se llama así y existe: se respeta.
+    files = {"/opt/moss (deleted)", "/opt/moss"};
+    CHECK(chatbot::without_deleted_suffix("/opt/moss (deleted)", exists) == "/opt/moss (deleted)");
+    // Sin el sufijo, o solo el sufijo: tal cual.
+    files = {"/usr/lib/moss/moss"};
+    CHECK(chatbot::without_deleted_suffix("/usr/lib/moss/moss", exists) == "/usr/lib/moss/moss");
+    CHECK(chatbot::without_deleted_suffix(" (deleted)", exists) == " (deleted)");
 }
 
 TEST_CASE("executable_path: la ruta completa del ejecutable de las pruebas", "[plataforma]") {

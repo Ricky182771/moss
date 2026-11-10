@@ -1,0 +1,70 @@
+# Guía: 17. Empaquetado de Linux y releases
+> Las reglas resumidas están en [AGENTS.md](../AGENTS.md).
+
+## 17. Empaquetado de Linux y releases
+
+Moss se distribuye en Linux x86_64 en tres formatos, con lo mismo adentro: `moss-<versión>-linux-x86_64.tar.gz`, `moss-<versión>-1.x86_64.rpm` y `moss_<versión>-1_amd64.deb`, más `SHA256SUMS`. Los arma `tools/package-linux.sh`, igual en una máquina de desarrollo y en la CI. Windows (el ZIP) es G5b. Fuera de alcance: AppImage, Flatpak y Snap (el `ExecStart` de la unidad del bot necesita una ruta fija de `moss` y el sandbox no llega al systemd del usuario), COPR, PPA, AUR, firmas GPG y ARM.
+
+### La versión
+
+- **Una sola fuente: `VERSION`** en la raíz (una línea `X.Y.Z`). CMake la lee para `project()`, y de ahí sale `CHATBOT_VERSION` para `moss`, `moss-rpc` (`initialize` → `server.version`) y `moss-telegram`.
+- La GUI la manda en `initialize` (`client.version`) desde `kClientVersion` (`gui/lib/rpc/client.dart`), que `gui/test/apply_test.dart` compara con `gui/pubspec.yaml`. La prueba `chatbot_version` (`tests/version.cmake`) compara `pubspec.yaml` (sin el `+N`) con `VERSION` y corre `--version` de cada ejecutable: `<ejecutable> X.Y.Z` y código 0, sin leer configuración. `tools/package-linux.sh` revisa las tres antes de armar nada, y `release.yml` que la etiqueta sea `v<VERSION>`.
+- Subir la versión: `VERSION`, `gui/pubspec.yaml`, `kClientVersion` y una sección `## X.Y.Z` en `CHANGELOG.md`, en el mismo commit.
+
+### Qué va adentro
+
+Una sola carpeta, para que la GUI encuentre `moss-rpc` junto a su ejecutable y `moss telegram` encuentre `moss-telegram` junto a `moss`:
+
+```text
+moss-gui                 el bundle de flutter build linux --release
+lib/                     libflutter_linux_gtk.so, libapp.so y los plugins
+data/                    flutter_assets (con las fuentes Geist), icudtl.dat
+moss  moss-rpc  moss-telegram  moss-telegram-probe
+AVISOS-TERCEROS.txt      generado por el script
+LICENSE                  GPL v3 o posterior (GPL-3.0-or-later)
+```
+
+- **`.rpm` y `.deb`:** esa carpeta en `/usr/lib/moss/`, con enlaces en `/usr/bin/` para `moss`, `moss-gui` y `moss-rpc`; además `/usr/share/applications/io.github.ricky182771.moss.desktop`, el ícono en `/usr/share/icons/hicolor/{scalable,48x48,128x128,256x256}/apps/` y `/usr/share/metainfo/io.github.ricky182771.moss.metainfo.xml`. Dueño root; ejecutables y carpetas 755, lo demás 644. `/usr/share` va archivo por archivo (`packaging/nfpm.yaml`), para no hacer al paquete dueño de carpetas del sistema.
+- **`.tar.gz`:** la carpeta como `moss-<versión>/`, con `LEEME.md` (cómo correrlo, qué instalar del sistema, qué hacer si se mueve con el bot activo) y `share/` con lo de escritorio, para quien lo quiera copiar a `~/.local/share`.
+- **Enlaces simbólicos:** la GUI busca `moss-rpc` con `Platform.resolvedExecutable` y `moss` su propia ruta con `/proc/self/exe` (`executable_path`); los dos dan el archivo real. Abrir `/usr/bin/moss-gui` busca `/usr/lib/moss/moss-rpc`, `lib/` sale de la RPATH `$ORIGIN/lib` y `data/` de `/proc/self/exe`; el `ExecStart` de la unidad del bot queda en `/usr/lib/moss/moss`, nunca en `/usr/bin/moss`. La prueba de instalación lo comprueba arrancando `moss-gui` en Xvfb con `CHAT_DEBUG_RPC`.
+- **" (deleted)":** si el binario se reemplaza con el proceso abierto (un `dnf upgrade` con `moss` abierto), Linux le agrega " (deleted)" al destino de `/proc/self/exe`. `executable_path()` lo quita si la ruta sin el sufijo existe (`without_deleted_suffix`): el binario nuevo quedó en el mismo lugar, y F2 escribe un `ExecStart` válido.
+- **Sin modo portable:** el paquete no lleva `moss.portable` (con `/usr/lib/moss` de solo lectura, `moss` saldría con el error `Config`). Nada se escribe junto al ejecutable: configuración y chats van a `~/.config/moss` y `~/.local/share/moss`, y desinstalar no los toca.
+- **Símbolos:** `strip --strip-unneeded` en `moss-gui`, los cuatro ejecutables de C++ y los plugins; `libflutter_linux_gtk.so` y `libapp.so` ya vienen sin símbolos. Las pruebas, `.dart_tool` y los `build/` no entran.
+- **Rutas de la máquina que compila:** `gui/linux/CMakeLists.txt` compila los plugins con su RUNPATH de instalación, `$ORIGIN` (`BUILD_WITH_INSTALL_RPATH`): se copian con `install(FILES)`, que no lo cambia, y se quedaban con la ruta absoluta de `gui/linux/flutter/ephemeral`. El script falla si algún ELF trae un RUNPATH que no empiece con `$ORIGIN` (`moss-gui` lleva `$ORIGIN/lib` y `libflutter_linux_gtk.so` `$ORIGIN`). Lo único que queda es una cadena dentro de `lib/libapp.so` (el AOT de Dart guarda la URI de `.dart_tool/flutter_build/dart_plugin_registrant.dart`): no se usa al correr y no se puede quitar sin ofuscar; en los releases es la ruta de la CI (`/__w/moss/moss/gui/…`), no la de nadie.
+- **`moss-telegram-probe`** va en la carpeta, como pide G5a: es la sonda manual del bot (README, "Probar cómo se ven los mensajes") y no corre sola.
+
+### Escritorio
+
+- El `.desktop` se llama como el `APPLICATION_ID` de la GUI (`gui/linux/CMakeLists.txt`), `io.github.ricky182771.moss`: en Wayland el compositor une la ventana con su `.desktop` por ese nombre, y sin eso sale sin ícono. `Exec=moss-gui`, `Categories=Utility;Development;` (dos categorías principales: `desktop-file-validate` da una pista, no un error).
+- El ícono (`packaging/linux/io.github.ricky182771.moss.svg`) es el logo de `gui/diseno/DISENO.md`, la "m" con el cursor, en el acento oscuro (`#8DBF5F`) sobre el fondo oscuro (`#0F1411`), en un cuadro redondeado: se lee igual en paneles claros y oscuros. Los PNG de 48, 128 y 256 los genera el script con `rsvg-convert`.
+- El metainfo (`packaging/linux/….metainfo.xml.in`) lleva la versión de `VERSION` y la fecha del último commit que la cambió. El script valida los dos con `desktop-file-validate` y `appstreamcli validate --no-net`.
+
+### AVISOS-TERCEROS.txt
+
+Lo genera el script en cada corrida, para que no se quede viejo: FTXUI y md4c de las fuentes de FetchContent (`build/release/_deps`), nlohmann/json del paquete del sistema dueño de `/usr/include/nlohmann/json.hpp` (`rpm -qL` o `/usr/share/doc/<paquete>/copyright`), el OFL de Geist (`gui/assets/fonts/OFL.txt`) y el `NOTICES` que genera `flutter build` (motor, framework y paquetes de Dart, con su licencia cada uno). Antes revisa que cada paquete de Dart que va en la app (`flutter pub deps`, sin los de desarrollo ni los del SDK) esté en ese `NOTICES`; si falta un texto, falla. libcurl, GTK, glibc y libstdc++ no van adentro (son del sistema): no entran.
+
+### Dependencias del paquete
+
+Solo las bibliotecas que los ejecutables enlazan (`NEEDED` de `objdump -p`) y no van en `lib/`, con nombres de Fedora y de Debian en `packaging/nfpm.yaml`: glibc, libstdc++, libgcc, zlib, libcurl, GTK 3 (que trae pango, cairo, atk, harfbuzz, gdk-pixbuf y glib), libepoxy y fontconfig; además EGL y GLES (`libglvnd-egl`/`libglvnd-gles` y `libegl1`/`libgles2`), que Flutter abre con `dlopen` y por eso no salen en `NEEDED` ni en `ldd`: sin ellas `moss-gui` aborta al arrancar, y solo lo atrapa la prueba que arranca la GUI. En Debian, `libcurl4 | libcurl4t64` y `libgtk-3-0 | libgtk-3-0t64` (los nombres después de la transición a `time_t` de 64 bits). La versión mínima de glibc la calcula el script (la más alta de `GLIBC_x.y` en los símbolos) y la pasa a nfpm. Si aparece una biblioteca nueva, el script falla hasta que se agregue a su lista (`known_sonames`) y a `nfpm.yaml`.
+
+### Compatibilidad
+
+Un binario hecho con una glibc nueva no corre con una más vieja. La CI arma en un contenedor `ubuntu:22.04` (glibc 2.35), así los paquetes corren en Debian 12, Ubuntu 22.04 o más nuevos y Fedora reciente. Ahí se usa el GCC del sistema, CMake de `pip` (los presets piden 3.25 y 22.04 trae 3.22) y Flutter 3.47.9.
+
+### El script
+
+`tools/package-linux.sh [--skip-build] [--formats=tar,rpm,deb] [--out=<carpeta>]`: revisa la versión, compila (`cmake --preset release` y `flutter build linux --release`), arma `build/package/root/` (lo que se instala), genera los avisos y lo de escritorio, revisa con `ldd` cada ejecutable y cada `.so` (falla con `not found`) y las dependencias, y saca los paquetes y `SHA256SUMS` en `build/package/out/`. Fuera de `build/` solo escribe en `--out`. Si falta una herramienta, dice cómo instalarla en Fedora y en Ubuntu (`nfpm` no está en sus repositorios: es un binario de sus releases).
+
+### CI
+
+- **`package-linux.yml`** (reutilizable): arma en `ubuntu:22.04` con `MOSS_MAX_GLIBC=2.35` (el script falla si algo pide una glibc más nueva) y sube `moss-linux-x86_64` (7 días); después, `tools/check-linux-package.sh` instala y prueba en contenedores: el `.rpm` en `fedora:latest`, el `.deb` en `debian:12` y `ubuntu:22.04`, y el `.tar.gz` en `debian:12` con solo lo que dice su `LEEME.md` (en Fedora, antes del checkout, `tar`, `gzip` y `findutils`, que la imagen no trae). En cada uno: `--version`, `ldd` sin `not found`, permisos, enlaces, `.desktop`, ícono y metainfo, una sesión de `moss-rpc` sin red ni configuración (`initialize`, `shutdown`, `exit`), `moss-gui` en Xvfb hasta que manda `initialize` a `moss-rpc`, y desinstalar sin dejar nada en `/usr/lib/moss`.
+- **`ci.yml`** lo llama en cada PR (trabajo `paquetes de Linux`).
+- **`release.yml`**: con una etiqueta `v*`, revisa que sea `v<VERSION>` y que `CHANGELOG.md` tenga la sección, arma y prueba (`package-linux.yml`, 14 días) y crea un GitHub Release **en borrador** con los cuatro archivos y las notas de `CHANGELOG.md` (`tools/release-notes.sh`). Con `workflow_dispatch`, lo mismo pero solo deja los artefactos.
+
+### Sacar un release
+
+1. En una rama: subir `VERSION`, `gui/pubspec.yaml` y `kClientVersion`, y escribir la sección `## X.Y.Z` de `CHANGELOG.md`. PR y merge a `main` con la CI en verde.
+2. (Opcional) Actions → Release → Run workflow sobre `main`: deja los artefactos para probarlos (`gh run download <id>`).
+3. Etiqueta sobre ese commit de `main`: `git tag vX.Y.Z && git push origin vX.Y.Z`.
+4. `release.yml` crea el borrador: revisar en GitHub → Releases los cuatro archivos y las notas.
+5. Publicarlo a mano.

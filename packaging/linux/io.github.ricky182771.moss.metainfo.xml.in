@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- tools/package-linux.sh cambia @VERSION@ y @DATE@ (de VERSION y de su último commit). -->
+<component type="desktop-application">
+  <id>io.github.ricky182771.moss</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>Moss</name>
+  <summary>Asistente de chat para modelos de lenguaje</summary>
+  <description>
+    <p>
+      Moss es un asistente de chat para modelos de lenguaje compatibles con la API de
+      OpenAI (por ejemplo, NVIDIA NIM), hecho por estudiantes de CECyTE como servicio social.
+    </p>
+    <p>Incluye:</p>
+    <ul>
+      <li>una interfaz gráfica y otra de terminal, con las mismas conversaciones;</li>
+      <li>búsqueda web con fuentes;</li>
+      <li>un bot de Telegram que corre como servicio del usuario.</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">io.github.ricky182771.moss.desktop</launchable>
+  <url type="homepage">https://github.com/Ricky182771/moss</url>
+  <url type="bugtracker">https://github.com/Ricky182771/moss/issues</url>
+  <developer id="io.github.ricky182771">
+    <name>Ricky182771</name>
+  </developer>
+  <provides>
+    <binary>moss</binary>
+    <binary>moss-gui</binary>
+    <binary>moss-rpc</binary>
+  </provides>
+  <categories>
+    <category>Utility</category>
+    <category>Development</category>
+  </categories>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="@VERSION@" date="@DATE@"/>
+  </releases>
+</component>

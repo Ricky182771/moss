@@ -4,7 +4,23 @@
 
 #include "chatbot/platform.h"
 
+#include "platform_internal.h"
+
+#include <string_view>
+
 namespace chatbot {
+
+std::string without_deleted_suffix(std::string target,
+                                   const std::function<bool(const std::string& path)>& exists) {
+    constexpr std::string_view suffix = " (deleted)";
+    if (target.size() > suffix.size() && target.ends_with(suffix) && !exists(target)) {
+        std::string original = target.substr(0, target.size() - suffix.size());
+        if (exists(original)) {
+            return original;
+        }
+    }
+    return target;
+}
 
 unsigned interactive_console_input_mode(unsigned previous) {
     return previous & ~kConsoleProcessedInput;

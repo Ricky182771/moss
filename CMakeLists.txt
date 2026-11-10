@@ -1,7 +1,12 @@
 cmake_minimum_required(VERSION 3.21)
 
+# La versión de la app sale solo de VERSION (guias/17-empaquetado.md); la
+# prueba chatbot_version revisa que gui/pubspec.yaml diga la misma.
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" MOSS_VERSION LIMIT_COUNT 1)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS VERSION)
+
 project(moss
-    VERSION 0.1.0
+    VERSION ${MOSS_VERSION}
     DESCRIPTION "Moss: asistente de terminal con núcleo C++"
     LANGUAGES CXX)
 

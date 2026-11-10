@@ -4,6 +4,31 @@
 
 Repositorio para almacenar el código de Moss hecho por estudiantes de CECyTE como servicio social.
 
+## Instalar en Linux
+
+Cada [release](https://github.com/Ricky182771/moss/releases) trae tres formatos para Linux x86_64, con la interfaz gráfica (`moss-gui`), la de terminal (`moss`) y el bot de Telegram, más `SHA256SUMS` para revisarlos (`sha256sum -c SHA256SUMS --ignore-missing`):
+
+- **Fedora** (`.rpm`):
+
+  ```bash
+  sudo dnf install ./moss-0.1.0-1.x86_64.rpm
+  ```
+
+- **Debian 12, Ubuntu 22.04 o más nuevos** (`.deb`):
+
+  ```bash
+  sudo apt install ./moss_0.1.0-1_amd64.deb
+  ```
+
+- **Cualquier lugar** (`.tar.gz`): se descomprime donde sea y se corre desde ahí; su `LEEME.md` dice qué instalar del sistema (GTK 3, libcurl, EGL y GLES).
+
+  ```bash
+  tar -xzf moss-0.1.0-linux-x86_64.tar.gz
+  ./moss-0.1.0/moss-gui
+  ```
+
+Los paquetes instalan todo en `/usr/lib/moss/`, con `moss`, `moss-gui` y `moss-rpc` en `/usr/bin/`, y Moss aparece en el menú de aplicaciones. Desinstalar (`sudo dnf remove moss` o `sudo apt remove moss`) no borra tu configuración ni tus chats (`~/.config/moss` y `~/.local/share/moss`). Si el bot de Telegram está activo y cambias de formato o mueves la carpeta del `.tar.gz`, abre F2 → Addons → Telegram y guarda, para que el servicio apunte al `moss` nuevo.
+
 ## Compilar y ejecutar
 
 ### Dependencias
@@ -125,9 +150,24 @@ tools/package-windows.sh   # deja build/moss-windows-x64.zip
 
 El script toma las DLL que reporta `ldd`, busca con `pacman -Qo` el paquete de cada una y copia su licencia de `/ucrt64/share/licenses/`. Algunos paquetes de MSYS2 no instalan su licencia (libidn2, que trae libcurl): para esos, los textos van en el repositorio, en `tools/windows-dist/licenses/<paquete>/`, copiados del tarball oficial, con un `README.md` que dice de qué versión son; si MSYS2 instala otra versión, el script avisa (sin fallar) para revisarlos. Si falta el texto de alguna licencia, lo dice y no arma el ZIP (`--allow-missing-licenses` lo arma igual y `AVISOS-TERCEROS.txt` dice cuál falta). Al final revisa que el ZIP traiga exactamente esos archivos.
 
+### Empaquetar para Linux
+
+```bash
+tools/package-linux.sh                       # compila release y la GUI, y arma los tres
+tools/package-linux.sh --skip-build          # con lo ya compilado
+tools/package-linux.sh --formats=tar,rpm --out=dist
+```
+
+Deja en `build/package/out/` (o en `--out`) el `.tar.gz`, el `.rpm`, el `.deb` y `SHA256SUMS`. Revisa que la versión sea la misma en todos lados, quita los símbolos de depuración, genera `AVISOS-TERCEROS.txt`, valida el `.desktop` y el metainfo, y falla si `ldd` no encuentra alguna biblioteca. Necesita, además de lo de compilar y [Flutter](gui/README.md), `nfpm` (un solo binario: bájalo de sus [releases](https://github.com/goreleaser/nfpm/releases) y ponlo en `~/.local/bin`), `desktop-file-validate`, `appstreamcli` y `rsvg-convert`:
+
+- Fedora: `sudo dnf install desktop-file-utils appstream librsvg2-tools`
+- Ubuntu: `sudo apt install desktop-file-utils appstream librsvg2-bin`
+
+La versión vive solo en `VERSION`; cómo sacar un release está en [guias/17-empaquetado.md](guias/17-empaquetado.md).
+
 ### Integración continua
 
-En cada pull request y en cada push a `main`, GitHub Actions (`.github/workflows/ci.yml`) compila el proyecto en Ubuntu 24.04 y corre las pruebas. Usa GCC con los presets `dev`, `asan`, `tsan` y `release`, y Clang con `dev` y `release`; todos con el bot de Telegram, y revisan que `moss telegram` desactivado salga con 0 y sin token con 78; aparte, compila y prueba `dev` con GCC sin addons (`-DCHATBOT_BUILD_TELEGRAM=OFF`) y revisa que `moss telegram` salga con 69. En Windows (MSYS2 UCRT64 con GCC) compila y prueba `dev` y `release`, sin `CHATBOT_STRICT_PERF` (los tiempos de esas máquinas varían mucho), y en `release` arma el ZIP con `tools/package-windows.sh`, lo descomprime y arranca `moss.exe` desde ahí sin MSYS2 en el `PATH` (también con `moss.portable`), y lo sube como `moss-windows-x64`. En todos, los warnings cuentan como errores. Además, comprueba que el programa, sin `CHAT_API_KEY` y sin terminal, salga con código 1 y el mensaje de error de configuración. La CI nunca usa una API key ni se conecta a ninguna API real: las pruebas usan un transporte falso.
+En cada pull request y en cada push a `main`, GitHub Actions (`.github/workflows/ci.yml`) compila el proyecto en Ubuntu 24.04 y corre las pruebas. Usa GCC con los presets `dev`, `asan`, `tsan` y `release`, y Clang con `dev` y `release`; todos con el bot de Telegram, y revisan que `moss telegram` desactivado salga con 0 y sin token con 78; aparte, compila y prueba `dev` con GCC sin addons (`-DCHATBOT_BUILD_TELEGRAM=OFF`) y revisa que `moss telegram` salga con 69. En Windows (MSYS2 UCRT64 con GCC) compila y prueba `dev` y `release`, sin `CHATBOT_STRICT_PERF` (los tiempos de esas máquinas varían mucho), y en `release` arma el ZIP con `tools/package-windows.sh`, lo descomprime y arranca `moss.exe` desde ahí sin MSYS2 en el `PATH` (también con `moss.portable`), y lo sube como `moss-windows-x64`. El trabajo `paquetes de Linux` (`package-linux.yml`) arma los paquetes de Linux en Ubuntu 22.04, los instala en contenedores de Fedora, Debian 12 y Ubuntu 22.04 (y el `.tar.gz` en Debian 12) y los sube como `moss-linux-x86_64`. En todos, los warnings cuentan como errores. Además, comprueba que el programa, sin `CHAT_API_KEY` y sin terminal, salga con código 1 y el mensaje de error de configuración. La CI nunca usa una API key ni se conecta a ninguna API real: las pruebas usan un transporte falso.
 
 ### Addons
 
@@ -644,3 +684,7 @@ CHAT_TELEGRAM_TOKEN=123456789:AA... ./build/release/cli/moss-telegram-probe --ch
 ```
 
 Los mensajes con formato llegaron a Telegram en junio de 2026 (Bot API 10.1); en una app desactualizada podrían no verse bien. Falta probarlo con un celular real.
+
+## Licencia
+
+Moss se distribuye bajo la GPL v3 o, a tu elección, cualquier versión posterior; ver LICENSE.

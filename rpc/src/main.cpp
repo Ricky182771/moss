@@ -144,7 +144,12 @@ std::vector<std::string> env_locks() {
 
 } // namespace
 
-int main() {
+int main(int argc, char** argv) {
+    // Antes de tocar stdout o leer la configuración, y sin el aviso de stdin.
+    if (argc == 2 && std::string_view{argv[1]} == "--version") {
+        std::cout << "moss-rpc " << CHATBOT_VERSION << '\n';
+        return 0;
+    }
     const int protocol = chatbot::rpc::take_protocol_stdout();
     if (protocol < 0) {
         std::cerr << "moss-rpc: no se pudo preparar stdout para el protocolo\n";

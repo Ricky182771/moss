@@ -125,7 +125,9 @@ private:
 /// Ruta completa del ejecutable de este proceso en UTF-8 (para ExecStart
 /// del servicio de systemd). POSIX: el destino de /proc/self/exe, que es la
 /// ruta real del archivo: si se abrió desde un enlace simbólico, da el
-/// archivo al que apunta, no el enlace. Windows: GetModuleFileNameW.
+/// archivo al que apunta, no el enlace; si el archivo se reemplazó con el
+/// proceso abierto (una actualización del paquete), la ruta del nuevo, sin el
+/// " (deleted)" de Linux. Windows: GetModuleFileNameW.
 /// Nullopt si no se puede saber.
 [[nodiscard]] std::optional<std::string> executable_path();
 

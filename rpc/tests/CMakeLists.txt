@@ -6,7 +6,7 @@ if(NOT WIN32)
     target_sources(chatbot_rpc_tests PRIVATE test_rpc_process.cpp)
     add_dependencies(chatbot_rpc_tests moss-rpc)
     target_compile_definitions(chatbot_rpc_tests PRIVATE
-        CHATBOT_RPC_EXECUTABLE="$<TARGET_FILE:moss-rpc>")
+        CHATBOT_RPC_EXECUTABLE="$<TARGET_FILE:moss-rpc>" CHATBOT_VERSION="${PROJECT_VERSION}")
 endif()
 target_compile_features(chatbot_rpc_tests PRIVATE cxx_std_20)
 target_include_directories(chatbot_rpc_tests PRIVATE ${PROJECT_SOURCE_DIR}/tests)
