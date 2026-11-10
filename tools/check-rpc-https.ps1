@@ -43,7 +43,7 @@ $server = Start-Process -FilePath python -PassThru -NoNewWindow `
     -ArgumentList '-I', (Join-Path $repo 'tools/fake-llm.py'), '--port', $port, '--tls', $certPem, $keyPem `
     -RedirectStandardError (Join-Path $work 'fake-llm.txt')
 
-$rpc = $null
+$process = $null
 try {
     $limit = (Get-Date).AddSeconds(20)
     while (-not (Test-NetConnection 127.0.0.1 -Port $port -InformationLevel Quiet -WarningAction Ignore)) {
@@ -68,9 +68,9 @@ try {
     $info.RedirectStandardOutput = $true
     $info.RedirectStandardError = $true
     $info.StandardOutputEncoding = [Text.UTF8Encoding]::new($false)
-    $rpc = [Diagnostics.Process]::Start($info)
-    $errors = $rpc.StandardError.ReadToEndAsync()
-    $stdin = $rpc.StandardInput
+    $process = [Diagnostics.Process]::Start($info)
+    $errors = $process.StandardError.ReadToEndAsync()
+    $stdin = $process.StandardInput
     $stdin.AutoFlush = $true
 
     # Lee líneas hasta una que cumpla $Pattern; las devuelve todas.
@@ -79,7 +79,7 @@ try {
         $limit = (Get-Date).AddSeconds($Seconds)
         while ($true) {
             $left = [int]($limit - (Get-Date)).TotalMilliseconds
-            $next = $rpc.StandardOutput.ReadLineAsync()
+            $next = $process.StandardOutput.ReadLineAsync()
             if ($left -le 0 -or -not $next.Wait($left) -or $null -eq $next.Result) {
                 $lines | ForEach-Object { $_.Substring(0, [math]::Min(300, $_.Length)) }
                 throw "moss-rpc.exe no mandó $Pattern"
@@ -108,10 +108,10 @@ try {
 
     $stdin.WriteLine('{"jsonrpc":"2.0","id":3,"method":"shutdown","params":{}}')
     $stdin.WriteLine('{"jsonrpc":"2.0","method":"exit"}')
-    if (-not $rpc.WaitForExit(10000)) { throw 'moss-rpc.exe no salió después de exit' }
-    if ($rpc.ExitCode -ne 0) { throw "moss-rpc.exe salió con $($rpc.ExitCode)" }
+    if (-not $process.WaitForExit(10000)) { throw 'moss-rpc.exe no salió después de exit' }
+    if ($process.ExitCode -ne 0) { throw "moss-rpc.exe salió con $($process.ExitCode)" }
 } catch {
-    if ($rpc) { $rpc.Kill(); $errors.Result }
+    if ($process) { $process.Kill(); $errors.Result }
     Get-Content (Join-Path $work 'fake-llm.txt') -ErrorAction Ignore
     throw
 } finally {
