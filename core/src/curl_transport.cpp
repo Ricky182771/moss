@@ -235,9 +235,13 @@ HttpResponse CurlTransport::perform(const HttpRequest& request, const StreamCall
     set(CURLOPT_CONNECTTIMEOUT_MS, 10000L);
     // Windows: los certificados del almacén del sistema, sin repartir un
     // cacert.pem. La verificación TLS sigue siempre activa (sección 8); en
-    // Linux no cambia nada.
+    // Linux no cambia nada. REVOKE_BEST_EFFORT: Schannel revisa si el
+    // certificado fue revocado y, sin esto, falla toda petición en redes que
+    // bloquean los servidores de revocación (CRL/OCSP), como algunas escolares;
+    // así lo revisa cuando puede y la cadena se sigue verificando siempre.
     if (current_os() == Os::Windows) {
-        set(CURLOPT_SSL_OPTIONS, static_cast<long>(CURLSSLOPT_NATIVE_CA));
+        set(CURLOPT_SSL_OPTIONS,
+            static_cast<long>(CURLSSLOPT_NATIVE_CA | CURLSSLOPT_REVOKE_BEST_EFFORT));
     }
     set(CURLOPT_ERRORBUFFER, error_buffer);
     set(CURLOPT_NOSIGNAL, 1L);
