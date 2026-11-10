@@ -28,11 +28,8 @@
 # AVISOS-TERCEROS.txt: las licencias de lo que va adentro, de los paquetes de
 # MSYS2 (pacman -Qo dice de qué paquete es cada biblioteca), de las fuentes
 # que bajó FetchContent (FTXUI, md4c y curl), el OFL de Geist y el NOTICES que
-# genera flutter build. Si un paquete de MSYS2 no instala su licencia, los
-# textos salen de tools/windows-dist/licenses/<paquete sin prefijo>/ (del
-# tarball oficial); si la versión instalada no es la de su README.md, avisa sin
-# fallar. Si no encuentra el texto de alguna licencia, lo dice y falla sin
-# armar el ZIP; con --allow-missing-licenses lo arma igual y
+# genera flutter build. Si no encuentra el texto de alguna licencia, lo dice y
+# falla sin armar el ZIP; con --allow-missing-licenses lo arma igual y
 # AVISOS-TERCEROS.txt dice qué falta. Los .txt van con CRLF, para el Bloc de
 # notas.
 set -euo pipefail
@@ -157,39 +154,16 @@ missing=()
 notices=$stage/AVISOS-TERCEROS.txt
 rule='================================================================================'
 
-# Textos guardados en el repositorio para los paquetes de MSYS2 que no
-# instalan su licencia: tools/windows-dist/licenses/<paquete sin prefijo>/,
-# con un README.md que dice de qué versión son ("- Versión: X").
-repo_licenses=$root/tools/windows-dist/licenses
-warnings=()
-
-# Deja en $license_files los archivos de licencia de un paquete instalado
-# (uno por línea; no se usa $(...) para que $warnings llegue): los que tiene bajo
-# share/licenses/; si no tiene, los COPYING* / LICENSE* / LICENCE* que haya
-# instalado en otro lado (por ejemplo, share/doc/); si tampoco, los de
-# $repo_licenses (todos menos el README.md). Si la versión instalada no es la
-# del README.md, avisa en $warnings (sin fallar), para revisar los textos.
+# Deja en $license_files los archivos de licencia de un paquete instalado (uno
+# por línea): los que tiene bajo share/licenses/; si no tiene, los COPYING* /
+# LICENSE* / LICENCE* que haya instalado en otro lado (por ejemplo, share/doc/).
 package_license_files() {
-    local package=$1 files name dir saved installed
+    local package=$1 files
     license_files=
     files=$(pacman -Qlq "$package" | grep -E "^$prefix/share/licenses/.+[^/]$" || true)
     if [[ -z $files ]]; then
         files=$(pacman -Qlq "$package" | grep -Ei '/(copying|licen[cs]e)[^/]*$' |
             grep -v '/$' || true)
-    fi
-    name=${package#"${MINGW_PACKAGE_PREFIX:-mingw-w64-ucrt-x86_64}"-}
-    dir=$repo_licenses/$name
-    if [[ -z $files && -d $dir ]]; then
-        files=$(find "$dir" -maxdepth 1 -type f ! -name README.md | sort)
-        saved=$(sed -n 's/^- Versión: *//p' "$dir/README.md" 2> /dev/null | head -n 1)
-        installed=$(package_version "$package")
-        installed=${installed#*:} # Sin la época (1:2.3.8-4).
-        installed=${installed%-*} # Sin el número de compilación de MSYS2.
-        if [[ $saved != "$installed" ]]; then
-            local text="$package $installed: los textos de tools/windows-dist/licenses/$name"
-            text+=" son de la versión ${saved:-(sin \"- Versión\" en su README.md)};"
-            warnings+=("$text revísalos con el tarball de la $installed")
-        fi
     fi
     license_files=$files
 }
@@ -213,9 +187,6 @@ section() {
         {
             local shown=${file#"$prefix"/}
             shown=${shown#"$build"/}
-            if [[ $file == "$repo_licenses"/* ]]; then
-                shown="${file#"$root"/} (de las fuentes oficiales; el paquete no lo instala)"
-            fi
             printf '\n--- %s ---\n\n' "$shown"
             cat "$file"
         } >> "$notices"
@@ -351,13 +322,6 @@ Son de Microsoft, firmadas por Microsoft, y van junto a la app como
 "código distribuible" de Visual Studio, según sus términos de licencia:
 https://learn.microsoft.com/visualstudio/releases/2022/redistribution
 NOTICE
-
-for warning in "${warnings[@]}"; do
-    echo "AVISO: $warning" >&2
-    if [[ -n ${GITHUB_ACTIONS:-} ]]; then
-        echo "::warning title=Licencia por revisar::$warning"
-    fi
-done
 
 if [[ ${#missing[@]} -gt 0 ]]; then
     {

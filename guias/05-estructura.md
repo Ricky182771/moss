@@ -37,10 +37,7 @@ moss/
 │                            # (--theme, --background, --symbols)
 │                            # check_glyphs.ps1: qué símbolos tienen Consolas y Lucida Console
 │                            # package-windows.sh: arma moss-<versión>-windows-x64.zip (MSYS2 UCRT64)
-│   └── windows-dist/        # LEEME.txt y moss.portable.ejemplo, que van en el ZIP;
-│                            # licenses/<paquete>/: textos de licencia de los paquetes de
-│                            # MSYS2 que no los instalan (libidn2), del tarball oficial,
-│                            # con README.md (versión, URL, sha256)
+│   └── windows-dist/        # LEEME.txt y moss.portable.ejemplo, que van en el ZIP
 ├── markdown/                # chatbot::markdown (namespace chatbot::md), sin FTXUI
 │   ├── CMakeLists.txt       # md4c por FetchContent y chatbot_markdown
 │   ├── include/moss/markdown/
