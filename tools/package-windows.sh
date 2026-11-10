@@ -8,12 +8,12 @@
 #   zip    ZIP de salida (por defecto, <build>/../moss-windows-x64.zip)
 #
 # El ZIP lleva, sin carpeta de por medio:
-#   moss.exe, moss-rpc.exe (para la interfaz gráfica) y las DLL de
-#     /ucrt64/bin que reporta ldd para cada uno;
+#   moss.exe y moss-rpc.exe (para la interfaz gráfica), sin DLL: falla si
+#     objdump -p reporta alguna que no sea de Windows;
 #   LICENSE.txt (el LICENSE del proyecto);
 #   AVISOS-TERCEROS.txt: las licencias de lo que va adentro, sacadas de los
-#     paquetes de MSYS2 (pacman -Qo dice de qué paquete es cada DLL) y de las
-#     fuentes que bajó FetchContent (FTXUI y md4c, enlazadas estáticas);
+#     paquetes de MSYS2 (pacman -Qo dice de qué paquete es cada biblioteca) y
+#     de las fuentes que bajó FetchContent (FTXUI, md4c y curl);
 #   LEEME.txt y moss.portable.ejemplo (tools/windows-dist/).
 # Si un paquete de MSYS2 no instala su licencia, los textos salen de
 # tools/windows-dist/licenses/<paquete sin prefijo>/ (del tarball oficial);
@@ -43,7 +43,7 @@ zip=${2:-$(dirname "$build")/moss-windows-x64.zip}
 
 [[ ${MSYSTEM:-} == UCRT64 ]] || die "corre esto en la terminal MSYS2 UCRT64 (MSYSTEM=${MSYSTEM:-})"
 prefix=${MINGW_PREFIX:-/ucrt64}
-for tool in ldd pacman cmake gcc; do
+for tool in objdump pacman cmake gcc; do
     command -v "$tool" > /dev/null || die "falta $tool"
 done
 
@@ -62,32 +62,22 @@ stage=$build/package
 rm -rf "$stage"
 mkdir -p "$stage"
 
-# --- Los ejecutables y sus DLL ------------------------------------------------
+# --- Los ejecutables, sin DLL de terceros --------------------------------------
 
-# dll_users[<DLL>]: los ejecutables que la usan, para AVISOS-TERCEROS.txt.
-declare -A dll_users=()
+# Con curl estática y -static (CMakeLists.txt, core/CMakeLists.txt), los .exe
+# solo piden DLL de Windows. Cualquier otra (de MSYS2, de Visual C++) falla:
+# no va en el ZIP y en una PC sin ella no arrancaría.
+system_dlls='^(api-ms-win-.*|kernel32|user32|advapi32|shell32|ole32|ws2_32|crypt32|secur32|bcrypt|iphlpapi)\.dll$'
 for exe in "${exes[@]}"; do
     name=${exe##*/}
     cp "$exe" "$stage/"
-    deps=$(ldd "$exe")
-    if grep -qi "not found" <<< "$deps"; then
-        die "ldd no encontró alguna DLL de $name:"$'\n'"$deps"
-    fi
-    # Las de Windows (/c/Windows/...) vienen con el sistema; cualquier otra que
-    # no sea de $prefix/bin (por ejemplo, de /usr/bin, de MSYS) no debería estar.
-    others=$(awk -v p="$prefix/bin/" '$3 != "" && index($3, p) != 1 &&
-                                      tolower($3) !~ /^\/[a-z]\/windows\// { print $3 }' <<< "$deps")
-    [[ -z $others ]] || die "$name usa DLL fuera de $prefix/bin y de Windows:"$'\n'"$others"
-    mapfile -t exe_dlls < <(awk -v p="$prefix/bin/" 'index($3, p) == 1 { print $3 }' <<< "$deps" |
-        sort -u)
-    [[ ${#exe_dlls[@]} -gt 0 ]] || die "ldd no reportó ninguna DLL de $prefix/bin para $name"
-    for dll in "${exe_dlls[@]}"; do
-        dll_users[$dll]+="$name "
+    mapfile -t deps < <(objdump -p "$exe" | sed -n 's/^\s*DLL Name: //p' | tr 'A-Z' 'a-z' | sort -u)
+    [[ ${#deps[@]} -gt 0 ]] || die "objdump no reportó ninguna DLL para $name"
+    echo "$name usa: ${deps[*]}"
+    for dll in "${deps[@]}"; do
+        [[ $dll =~ $system_dlls ]] || die "$name pide $dll, que no es de Windows"
     done
-    echo "$name usa: ${exe_dlls[*]##*/}"
 done
-mapfile -t dlls < <(printf '%s\n' "${!dll_users[@]}" | sort)
-cp "${dlls[@]}" "$stage/"
 
 # --- Licencias -----------------------------------------------------------------
 
@@ -177,12 +167,11 @@ cat > "$notices" << EOF
 AVISOS DE TERCEROS - Moss para Windows (x64)
 
 moss.exe y moss-rpc.exe son software libre bajo la Licencia Pública
-General de GNU, versión 3 (ver LICENSE.txt). Los dos llevan enlazados de
-forma estática md4c, nlohmann/json y partes del runtime de GCC y de
-mingw-w64; moss.exe, además, FTXUI. Se distribuyen con las DLL de MSYS2
-(UCRT64) que necesitan. Abajo está la licencia de cada uno, en qué
-ejecutables va, y su texto tal como lo instala su paquete o como viene en
-sus fuentes.
+General de GNU, versión 3 o posterior (ver LICENSE.txt). Los dos llevan
+enlazados de forma estática curl, md4c, nlohmann/json, winpthread y partes
+del runtime de GCC y de mingw-w64; moss.exe, además, FTXUI. No llevan DLL
+de terceros. Abajo está la licencia de cada uno, en qué ejecutables va, y
+su texto tal como lo instala su paquete o como viene en sus fuentes.
 
 Generado por tools/package-windows.sh.
 EOF
@@ -245,17 +234,18 @@ crt_package=$(pacman -Qqo "$prefix/lib/crt2.o") || die "no se encontró el paque
 package_section "$crt_package" \
     "partes enlazadas estáticas en moss.exe y moss-rpc.exe (arranque y CRT de"$'\n'"mingw-w64)"
 
-# Las DLL, agrupadas por paquete, cada una con los ejecutables que la usan.
-declare -A package_dlls=()
-for dll in "${dlls[@]}"; do
-    package=$(pacman -Qqo "$dll") || die "pacman no sabe de qué paquete es $dll"
-    users=${dll_users[$dll]% }
-    package_dlls[$package]+="${dll##*/} (en ${users// / y }), "
-done
-mapfile -t packages < <(printf '%s\n' "${!package_dlls[@]}" | sort)
-for package in "${packages[@]}"; do
-    package_section "$package" "${package_dlls[$package]%, }"
-done
+# winpthread (los hilos de C++ de MinGW), enlazada estática con -static.
+pthread_package=$(pacman -Qqo "$prefix/lib/libwinpthread.a") ||
+    die "no se encontró el paquete de libwinpthread.a"
+package_section "$pthread_package" "enlazado estático en moss.exe y moss-rpc.exe"
+
+# curl, estática desde las fuentes de FetchContent (core/CMakeLists.txt).
+curl_src=$build/_deps/curl-src
+curl_version=$(sed -n 's/^#define LIBCURL_VERSION "\(.*\)"$/\1/p' \
+    "$curl_src/include/curl/curlver.h" 2> /dev/null || true)
+section "curl ${curl_version:-(versión desconocida)}" \
+    "Incluido como: enlazado estático en moss.exe y moss-rpc.exe (fuentes de"$'\n'"FetchContent; solo HTTP y HTTPS, con el TLS de Windows)" \
+    "$(ls "$curl_src"/COPYING 2> /dev/null || true)"
 
 for warning in "${warnings[@]}"; do
     echo "AVISO: $warning" >&2
@@ -285,7 +275,7 @@ for text in LICENSE.txt LEEME.txt AVISOS-TERCEROS.txt moss.portable.ejemplo; do
     sed -i 's/\r*$/\r/' "$stage/$text"
 done
 
-expected=(moss.exe moss-rpc.exe "${dlls[@]##*/}" LICENSE.txt AVISOS-TERCEROS.txt LEEME.txt
+expected=(moss.exe moss-rpc.exe LICENSE.txt AVISOS-TERCEROS.txt LEEME.txt
           moss.portable.ejemplo)
 (cd "$stage" && cmake -E tar cf "$zip" --format=zip -- "${expected[@]}")
 

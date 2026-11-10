@@ -181,7 +181,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      # FTXUI y md4c se descargan solos por FetchContent al configurar.
+      # FTXUI, md4c y curl (estática, con Schannel) se descargan solos por
+      # FetchContent al configurar.
       - name: Instalar MSYS2 (UCRT64) y dependencias
         uses: msys2/setup-msys2@v2
         with:
@@ -192,14 +193,8 @@ jobs:
             mingw-w64-ucrt-x86_64-gcc
             mingw-w64-ucrt-x86_64-cmake
             mingw-w64-ucrt-x86_64-ninja
-            mingw-w64-ucrt-x86_64-curl
             mingw-w64-ucrt-x86_64-nlohmann-json
             mingw-w64-ucrt-x86_64-catch
-
-      # Versión de libcurl y su backend TLS (curl_version_info), para el
-      # informe: CURLSSLOPT_NATIVE_CA necesita OpenSSL o Schannel.
-      - name: Versión de curl
-        run: curl -V
 
       - name: Configurar
         run: cmake --preset ${{ matrix.preset }}
@@ -222,6 +217,13 @@ jobs:
           touch rpc-prueba/moss.portable
           tools/check-rpc-pipes.sh rpc-prueba/moss-rpc.exe windows
 
+      # Una conversación por HTTPS con la curl estática (Schannel, hasta TLS
+      # 1.2 como en Windows 10) contra tools/fake-llm.py --tls, con un
+      # certificado de localhost en las raíces de la máquina. Sin red ni keys.
+      - name: moss-rpc por HTTPS
+        shell: pwsh
+        run: tools/check-rpc-https.ps1 -Rpc build/${{ matrix.preset }}/cli/moss-rpc.exe
+
       # Sin CHAT_API_KEY debe salir con código 1 y el error de configuración.
       # stdin es NUL: GetConsoleMode falla y no se abre la interfaz. El
       # timeout evita que la CI se cuelgue si algún día no fuera así.
@@ -239,7 +241,7 @@ jobs:
           grep -q "CHAT_API_KEY" errores.txt
 
       # El ZIP de distribución (tools/package-windows.sh): moss.exe y
-      # moss-rpc.exe con las DLL de /ucrt64/bin que reporta ldd, LICENSE.txt,
+      # moss-rpc.exe (falla si piden alguna DLL que no sea de Windows), LICENSE.txt,
       # AVISOS-TERCEROS.txt, LEEME.txt y moss.portable.ejemplo. El script
       # falla si falta el texto de alguna licencia o si el ZIP no trae
       # exactamente esos archivos.
