@@ -71,7 +71,8 @@ std::optional<Json> read_model_params(const Json& params, ModelParams& out,
     const Result<ParsedModelParams> parsed = model_params_from_json(object.dump());
     std::vector<std::string> fields;
     if (parsed.is_error()) {
-        return Json{{"fields", Json::array({"params"})}};
+        // make_optional: GCC 11 marca con -Wconversion el Json → optional implícito.
+        return std::make_optional<Json>(Json{{"fields", Json::array({"params"})}});
     }
     {
         for (const auto* list : {&parsed.value().invalid_fields, &parsed.value().unknown_fields}) {
@@ -86,7 +87,7 @@ std::optional<Json> read_model_params(const Json& params, ModelParams& out,
         fields.emplace_back("params.extra"); // extra va aparte, como texto.
     }
     if (!fields.empty()) {
-        return Json{{"fields", fields}};
+        return std::make_optional<Json>(Json{{"fields", fields}});
     }
     const auto extra = params.find("extra");
     out.extra = extra != params.end() && extra->is_string() ? extra->get<std::string>() : "";
@@ -201,7 +202,7 @@ std::optional<Json> parse_form(const Json& json, std::optional<cli::AddonForm>& 
         for (const Json& field : bad->at("fields")) {
             fields.push_back(prefix + field.get<std::string>());
         }
-        return Json{{"fields", std::move(fields)}};
+        return std::make_optional<Json>(Json{{"fields", std::move(fields)}});
     }
     cli::AddonForm parsed;
     parsed.enabled = json.at("enabled").get<bool>();
@@ -1419,7 +1420,7 @@ std::optional<Json> Dispatcher::untrack(std::uint64_t key) {
     }
     Json id = std::move(found->id);
     pending_.erase(found);
-    return id;
+    return std::make_optional<Json>(std::move(id));
 }
 
 void Dispatcher::finish_long(std::uint64_t key, bool service_changed,

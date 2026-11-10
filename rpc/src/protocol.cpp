@@ -169,7 +169,8 @@ std::optional<Json> check_params(const Json* params,
         params = &empty;
     }
     if (!params->is_object()) {
-        return Json{{"fields", Json::array()}};
+        // make_optional: GCC 11 marca con -Wconversion el Json → optional implícito.
+        return std::make_optional<Json>(Json{{"fields", Json::array()}});
     }
     std::vector<std::string> fields;
     for (const auto& [key, value] : params->items()) {
@@ -214,7 +215,7 @@ std::optional<Json> check_params(const Json* params,
     if (fields.empty()) {
         return std::nullopt;
     }
-    return Json{{"fields", fields}};
+    return std::make_optional<Json>(Json{{"fields", fields}});
 }
 
 } // namespace chatbot::rpc
