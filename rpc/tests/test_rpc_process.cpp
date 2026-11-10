@@ -86,7 +86,7 @@ TEST_CASE("moss-rpc sin configuración: initialize, chat.send, shutdown y exit",
     REQUIRE(messages.size() == 4);
     CHECK(messages[0]["id"] == 1);
     CHECK(messages[0]["result"]["ready"] == false);
-    CHECK(messages[0]["result"]["server"]["version"] == "0.1.0");
+    CHECK(messages[0]["result"]["server"]["version"] == CHATBOT_VERSION);
     CHECK(messages[1]["id"] == 2);
     CHECK(messages[1]["error"]["code"] == -32004);
     CHECK(messages[2]["method"] == "conversation.closed");

@@ -16,7 +16,7 @@ if(NOT DEFINED SOURCE_DIR)
 endif()
 
 file(READ "${SOURCE_DIR}/VERSION" version_file)
-if(NOT version_file MATCHES "^([0-9]+\\.[0-9]+\\.[0-9]+)\n?$")
+if(NOT version_file MATCHES "^([0-9]+\\.[0-9]+\\.[0-9]+)\r?\n?$")
     message(FATAL_ERROR "VERSION debe ser una línea X.Y.Z; dice: '${version_file}'")
 endif()
 set(version "${CMAKE_MATCH_1}")
