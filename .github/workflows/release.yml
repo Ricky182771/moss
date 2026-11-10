@@ -1,0 +1,78 @@
+# Release de Linux (guias/17-empaquetado.md, "Sacar un release").
+#
+# - Con una etiqueta v*: revisa que la etiqueta sea la de VERSION y que
+#   CHANGELOG.md tenga su sección, arma y prueba los paquetes
+#   (package-linux.yml) y crea un GitHub Release en BORRADOR con los cuatro
+#   archivos. Publicarlo es a mano.
+# - Con workflow_dispatch: lo mismo, pero solo deja los artefactos (sin
+#   etiqueta ni release): así se prueba.
+# Windows (el ZIP) entra en G5b.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  version:
+    name: versión y notas
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Revisar
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          version=$(< VERSION)
+          if [ "$REF_TYPE" = tag ] && [ "$REF_NAME" != "v$version" ]; then
+            echo "::error::la etiqueta $REF_NAME no es la de VERSION (v$version)"
+            exit 1
+          fi
+          tools/release-notes.sh "$version" > /dev/null
+
+  package:
+    needs: version
+    uses: ./.github/workflows/package-linux.yml
+    with:
+      retention-days: 14
+
+  release:
+    name: release en borrador
+    if: github.ref_type == 'tag'
+    needs: package
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Bajar los paquetes
+        uses: actions/download-artifact@v8
+        with:
+          name: moss-linux-x86_64
+          path: dist
+
+      - name: Crear el borrador
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          version=$(< VERSION)
+          (cd dist && sha256sum -c SHA256SUMS)
+          tools/release-notes.sh "$version" > notas.md
+          gh release create "$TAG" --draft --verify-tag --title "Moss $version" \
+            --notes-file notas.md \
+            "dist/moss-$version-linux-x86_64.tar.gz" "dist/moss-$version-1.x86_64.rpm" \
+            "dist/moss_$version-1_amd64.deb" dist/SHA256SUMS
