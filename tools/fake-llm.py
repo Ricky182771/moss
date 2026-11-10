@@ -65,6 +65,17 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):  # Sin la conversación en el registro.
         sys.stderr.write("fake-llm: %s %s\n" % (self.command, self.path))
 
+    def finish(self):
+        super().finish()
+        # Con --tls, el aviso de cierre de TLS (close_notify): el SSE termina al
+        # cerrar la conexión, y sin él curl toma la respuesta como cortada.
+        if isinstance(self.connection, ssl.SSLSocket):
+            self.connection.settimeout(2)
+            try:
+                self.connection.unwrap()
+            except OSError:
+                pass
+
     def send_json(self, status, body, headers=()):
         data = json.dumps(body).encode()
         self.send_response(status)
