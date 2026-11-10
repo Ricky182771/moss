@@ -684,3 +684,7 @@ CHAT_TELEGRAM_TOKEN=123456789:AA... ./build/release/cli/moss-telegram-probe --ch
 ```
 
 Los mensajes con formato llegaron a Telegram en junio de 2026 (Bot API 10.1); en una app desactualizada podrían no verse bien. Falta probarlo con un celular real.
+
+## Licencia
+
+Moss se distribuye bajo la GPL v3 o, a tu elección, cualquier versión posterior; ver LICENSE.

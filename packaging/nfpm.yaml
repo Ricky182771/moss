@@ -23,7 +23,7 @@ description: |
   para modelos compatibles con la API de OpenAI, con búsqueda web.
 vendor: Moss
 homepage: https://github.com/Ricky182771/moss
-license: GPL-3.0-only
+license: GPL-3.0-or-later
 
 contents:
   - src: ./root/usr/lib/moss/

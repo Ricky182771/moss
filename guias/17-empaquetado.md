@@ -21,7 +21,7 @@ lib/                     libflutter_linux_gtk.so, libapp.so y los plugins
 data/                    flutter_assets (con las fuentes Geist), icudtl.dat
 moss  moss-rpc  moss-telegram  moss-telegram-probe
 AVISOS-TERCEROS.txt      generado por el script
-LICENSE                  GPL v3
+LICENSE                  GPL v3 o posterior (GPL-3.0-or-later)
 ```
 
 - **`.rpm` y `.deb`:** esa carpeta en `/usr/lib/moss/`, con enlaces en `/usr/bin/` para `moss`, `moss-gui` y `moss-rpc`; además `/usr/share/applications/io.github.ricky182771.moss.desktop`, el ícono en `/usr/share/icons/hicolor/{scalable,48x48,128x128,256x256}/apps/` y `/usr/share/metainfo/io.github.ricky182771.moss.metainfo.xml`. Dueño root; ejecutables y carpetas 755, lo demás 644. `/usr/share` va archivo por archivo (`packaging/nfpm.yaml`), para no hacer al paquete dueño de carpetas del sistema.

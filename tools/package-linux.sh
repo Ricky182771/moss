@@ -217,7 +217,8 @@ EOF
 AVISOS DE TERCEROS - Moss $version para Linux (x86_64)
 
 moss, moss-rpc, moss-telegram y moss-gui son software libre bajo la
-Licencia Pública General de GNU, versión 3 (ver LICENSE). Llevan dentro:
+Licencia Pública General de GNU, versión 3 o, a tu elección, cualquier
+versión posterior (ver LICENSE). Llevan dentro:
 
 - enlazados estáticos: md4c y nlohmann/json (en moss, moss-rpc y
   moss-telegram) y FTXUI (en moss);

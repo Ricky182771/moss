@@ -46,4 +46,4 @@ Configuración → Telegram → Guardar.
 
 ## Licencias
 
-`LICENSE` (Moss, GPL v3) y `AVISOS-TERCEROS.txt` (lo de terceros que va adentro).
+`LICENSE` (Moss, GPL v3 o, a tu elección, cualquier versión posterior) y `AVISOS-TERCEROS.txt` (lo de terceros que va adentro).
