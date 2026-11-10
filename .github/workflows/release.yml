@@ -17,9 +17,9 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: release-${{ github.ref }}
-  cancel-in-progress: false
+# Sin concurrency a propósito: con cancel-in-progress: false GitHub igual
+# cancela una corrida en espera si llega otra al mismo grupo, y un release
+# nunca se cancela solo.
 
 jobs:
   version:

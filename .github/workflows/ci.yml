@@ -13,9 +13,13 @@ on:
 permissions:
   contents: read
 
+# Un PR se agrupa por su número, no por github.ref: una corrida de PR que
+# GitHub crea después del merge trae github.ref = refs/heads/main y cancelaba
+# la CI de main. Solo un PR cancela su corrida anterior; cada push a main va
+# en su propio grupo (run_id) y ni se cancela ni espera.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
