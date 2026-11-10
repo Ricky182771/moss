@@ -55,6 +55,17 @@ Un binario hecho con una glibc nueva no corre con una más vieja. La CI arma en 
 
 `tools/package-linux.sh [--skip-build] [--formats=tar,rpm,deb] [--out=<carpeta>]`: revisa la versión, compila (`cmake --preset release` y `flutter build linux --release`), arma `build/package/root/` (lo que se instala), genera los avisos y lo de escritorio, revisa con `ldd` cada ejecutable y cada `.so` (falla con `not found`) y las dependencias, y saca los paquetes y `SHA256SUMS` en `build/package/out/`. Fuera de `build/` solo escribe en `--out`. Si falta una herramienta, dice cómo instalarla en Fedora y en Ubuntu (`nfpm` no está en sus repositorios: es un binario de sus releases).
 
+```bash
+tools/package-linux.sh                       # compila release y la GUI, y arma los tres
+tools/package-linux.sh --skip-build          # con lo ya compilado
+tools/package-linux.sh --formats=tar,rpm --out=dist
+```
+
+Necesita, además de lo de compilar ([11-compilacion.md](11-compilacion.md)) y [Flutter](../gui/README.md), `nfpm` (un solo binario: bájalo de sus [releases](https://github.com/goreleaser/nfpm/releases) y ponlo en `~/.local/bin`), `desktop-file-validate`, `appstreamcli` y `rsvg-convert`:
+
+- Fedora: `sudo dnf install desktop-file-utils appstream librsvg2-tools`
+- Ubuntu: `sudo apt install desktop-file-utils appstream librsvg2-bin`
+
 ### CI
 
 - **`package-linux.yml`** (reutilizable): arma en `ubuntu:22.04` con `MOSS_MAX_GLIBC=2.35` (el script falla si algo pide una glibc más nueva) y sube `moss-linux-x86_64` (7 días); después, `tools/check-linux-package.sh` instala y prueba en contenedores: el `.rpm` en `fedora:latest`, el `.deb` en `debian:12` y `ubuntu:22.04`, y el `.tar.gz` en `debian:12` con solo lo que dice su `LEEME.md` (en Fedora, antes del checkout, `tar`, `gzip` y `findutils`, que la imagen no trae). En cada uno: `--version`, `ldd` sin `not found`, permisos, enlaces, `.desktop`, ícono y metainfo, una sesión de `moss-rpc` sin red ni configuración (`initialize`, `shutdown`, `exit`), `moss-gui` en Xvfb hasta que manda `initialize` a `moss-rpc`, y desinstalar sin dejar nada en `/usr/lib/moss`.
@@ -70,6 +81,14 @@ Un binario hecho con una glibc nueva no corre con una más vieja. La CI arma en 
 5. Publicarlo a mano.
 
 ### Windows
+
+En la terminal **MSYS2 UCRT64**, con Visual Studio y Flutter instalados ([gui/README.md](../gui/README.md)):
+
+```bash
+cmake --preset release && cmake --build --preset release
+(cd gui && cmd //c flutter build windows --release)
+tools/package-windows.sh   # deja build/package-windows/out/moss-<versión>-windows-x64.zip
+```
 
 `tools/package-windows.sh [--allow-missing-licenses] [--out=<carpeta>]` corre en la terminal MSYS2 UCRT64 de Windows con Visual Studio, después de `cmake --build --preset release` y `flutter build windows --release` (no compila: el C++ sale de MSYS2 y la GUI de MSVC). Revisa la versión como el de Linux (más el `--version` de `moss.exe` y `moss-rpc.exe`) y deja `moss-<versión>-windows-x64.zip` en `build/package-windows/out/` (o en `--out`), con todo dentro de la carpeta `moss-<versión>\`:
 
