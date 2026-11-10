@@ -3,6 +3,8 @@
 
 #include "chatbot/platform.h"
 
+#include "platform_internal.h"
+
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -12,6 +14,7 @@
 #include <cstring>
 #include <filesystem>
 #include <system_error>
+#include <utility>
 
 namespace chatbot {
 
@@ -98,7 +101,10 @@ std::optional<std::string> executable_path() {
         }
         if (static_cast<std::size_t>(length) < target.size()) {
             target.resize(static_cast<std::size_t>(length));
-            return target;
+            return without_deleted_suffix(std::move(target), [](const std::string& path) {
+                std::error_code error;
+                return std::filesystem::exists(path, error);
+            });
         }
         target.resize(target.size() * 2);
     }
