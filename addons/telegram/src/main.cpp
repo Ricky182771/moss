@@ -48,7 +48,8 @@ constexpr std::string_view kUsage =
     "     moss telegram --version          la versión\n"
     "\n"
     "Lee la configuración de la app (config.json y credentials.json): se edita\n"
-    "en Configuración (F2) → Addons. Ver la sección \"Bot de Telegram\" del README.\n";
+    "en Configuración (F2) → Addons. Ver\n"
+    "https://github.com/Ricky182771/moss/blob/main/guias/telegram.md\n";
 
 constexpr std::string_view kDisabled =
     "El addon de Telegram está desactivado (Configuración → Addons).";

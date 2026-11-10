@@ -7,7 +7,8 @@ namespace chatbot::cli {
 
 namespace {
 
-// Los que faltan en Consolas o en Lucida Console (ver el README, "Símbolos").
+// Los que faltan en Consolas o en Lucida Console (ver guias/configurar.md,
+// "Colores y accesibilidad").
 // Un respaldo de otro ancho lo dice; donde se usa, el layout mide el texto.
 // Comprobado con el cmap de consola.ttf y lucon.ttf (tools/check_glyphs.ps1).
 constexpr std::array<GlyphInfo, 20> kGlyphs{{

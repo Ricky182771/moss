@@ -31,7 +31,7 @@ LICENSE                  GPL v3 o posterior (GPL-3.0-or-later)
 - **Sin modo portable:** el paquete no lleva `moss.portable` (con `/usr/lib/moss` de solo lectura, `moss` saldría con el error `Config`). Nada se escribe junto al ejecutable: configuración y chats van a `~/.config/moss` y `~/.local/share/moss`, y desinstalar no los toca.
 - **Símbolos:** `strip --strip-unneeded` en `moss-gui`, los cuatro ejecutables de C++ y los plugins; `libflutter_linux_gtk.so` y `libapp.so` ya vienen sin símbolos. Las pruebas, `.dart_tool` y los `build/` no entran.
 - **Rutas de la máquina que compila:** `gui/linux/CMakeLists.txt` compila los plugins con su RUNPATH de instalación, `$ORIGIN` (`BUILD_WITH_INSTALL_RPATH`): se copian con `install(FILES)`, que no lo cambia, y se quedaban con la ruta absoluta de `gui/linux/flutter/ephemeral`. El script falla si algún ELF trae un RUNPATH que no empiece con `$ORIGIN` (`moss-gui` lleva `$ORIGIN/lib` y `libflutter_linux_gtk.so` `$ORIGIN`). Lo único que queda es una cadena dentro de `lib/libapp.so` (el AOT de Dart guarda la URI de `.dart_tool/flutter_build/dart_plugin_registrant.dart`): no se usa al correr y no se puede quitar sin ofuscar; en los releases es la ruta de la CI (`/__w/moss/moss/gui/…`), no la de nadie.
-- **`moss-telegram-probe`** va en la carpeta, como pide G5a: es la sonda manual del bot (README, "Probar cómo se ven los mensajes") y no corre sola.
+- **`moss-telegram-probe`** va en la carpeta, como pide G5a: es la sonda manual del bot ([telegram.md](telegram.md#probar-cómo-se-ven-los-mensajes)) y no corre sola.
 
 ### Escritorio
 
