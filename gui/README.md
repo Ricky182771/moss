@@ -30,9 +30,8 @@ La GUI se compila con MSVC (el runner de Flutter), no con MSYS2:
 
 - Flutter 3.47.9 y Visual Studio 2022 o más nuevo con la carga de trabajo
   "Desarrollo para el escritorio con C++". `flutter doctor` dice qué falta.
-- `moss-rpc.exe` sale del build de C++ con MSYS2 (`guias/11-compilacion.md`) y
-  necesita sus DLL: pon `C:\msys64\ucrt64\bin` en el `PATH` de esa terminal o
-  usa el `moss-rpc.exe` de un ZIP, que las trae a su lado.
+- `moss-rpc.exe` sale del build de C++ con MSYS2 (`guias/11-compilacion.md`); no
+  necesita DLL de MSYS2 (curl va estática).
 
 ```bat
 cd gui
@@ -41,14 +40,12 @@ flutter run -d windows --dart-entrypoint-args=--rpc=C:\ruta\a\moss-rpc.exe
 
 `--frame-stats` solo hace algo en debug o profile.
 
-**ZIP de prueba.** La CI (trabajo `gui-windows`) sube dos artefactos por 7 días:
-`moss-gui-windows-prueba-release` y `moss-gui-windows-prueba-profile` (para
-medir con `--frame-stats`). No son el ZIP oficial: no llevan `LEEME.txt` ni
-`AVISOS-TERCEROS.txt`. Traen `moss-gui.exe` con sus archivos, `moss.exe`,
-`moss-rpc.exe`, las DLL de MSYS2 y las de Visual C++.
+**ZIP.** El ZIP oficial (`moss-<versión>-windows-x64.zip`) lo arma
+`tools/package-windows.sh` (`guias/17-empaquetado.md`); la CI (trabajo `ZIP de
+Windows`) lo sube como artefacto `moss-windows-x64` por 7 días:
 
 ```bash
-gh run download <id de la corrida> -n moss-gui-windows-prueba-release -D "Prueba Moss"
+gh run download <id de la corrida> -n moss-windows-x64 -D "Prueba Moss"
 ```
 
 ## Servidor falso (sin gastar)

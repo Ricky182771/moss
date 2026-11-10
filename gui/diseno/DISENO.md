@@ -138,7 +138,7 @@ Todos pasan 7:1 (lo vigila `test/colors_test.dart`). El borde queda en 4.2:1 (os
 - **Markdown en Dart:** `flutter_markdown_plus` o `gpt_markdown` (el que nombra `PROTOCOL.md`); G1 elige con una comparación corta en su reporte. Lo que tiene que permitir: un widget propio para el bloque de código (Copiar), texto seleccionable y animar las palabras que llegan (G2). Copiar toma el texto del bloque tal como se ve.
 - Textos de la GUI en español, juntos en un archivo. Tokens de color en un `ThemeExtension` (los dos temas), duraciones en `motion.dart`, fuentes en `gui/assets/fonts/` con su `OFL.txt`.
 - **Pruebas:** `flutter analyze` y `flutter test` con un canal falso (sin `moss-rpc`); trabajos `gui` (Linux) y `gui-windows` en la CI.
-- **Empaquetado (G5):** en Linux, el bundle de `flutter build linux` con `moss`, `moss-rpc` y `moss-telegram` adentro; en Windows, `moss-gui.exe` y sus archivos dentro de `moss-windows-x64.zip`, junto a `moss.exe` y `moss-rpc.exe`. La licencia de Geist va en `AVISOS-TERCEROS.txt`.
+- **Empaquetado (G5):** en Linux, el bundle de `flutter build linux` con `moss`, `moss-rpc` y `moss-telegram` adentro; en Windows, `moss-gui.exe` y sus archivos dentro de `moss-<versión>-windows-x64.zip` (G5b), junto a `moss.exe` y `moss-rpc.exe`. La licencia de Geist va en `AVISOS-TERCEROS.txt`.
 
 ## Ninguna regla del núcleo en Dart
 
@@ -155,7 +155,7 @@ La GUI no decide nada que ya decida el núcleo: conteos, validaciones, lectura d
 | 5 | Revisar la key de búsqueda al escribir | Resuelta en R6 (PR #56): `settings.search.check` |
 | 6 | Volver a Predeterminadas | Resuelta en R6 (PR #56), sin cambios: guardar exactamente `default_text` ya borra la llave; se probó y se documentó |
 | 7 | Que `/model` valide contra `models.list` | **Descartada:** se queda como decidió M5. No todos los proveedores tienen `/models`, y validar costaría una petición de red en cada `/model` |
-| 8 | Volver a parsear la respuesta entera en cada trozo | **Pendiente:** solo si se nota en las PCs de la escuela; se mide en Windows |
+| 8 | Volver a parsear la respuesta entera en cada trozo | **Descartada** (G5b): los ZIP de prueba de G6 (release y profile) en un Mac mini de 2009 con Core 2 Duo y Windows 10 21H2 LTSC IoT, el mismo Windows de las PCs de la escuela y un procesador igual de viejo, respondieron sin lentitud, igual que en Windows 11 Pro, Home y LTSC y en Fedora |
 | 9 | Preguntas de `-32008` con ` (s/n)` | Resuelta en R6 (PR #56): el núcleo las da sin él y lo agrega la TUI |
 | 10 | El aviso de linger | Resuelta en R6 (PR #56): `linger_notice` y `linger_command` en `service.status` |
 | 11 | Opciones de Modelo y Zona horaria del bot | Resuelta en R6 (PR #56): `models.list` con el proveedor de la app y `time_zones` en `addons.telegram.get` |
