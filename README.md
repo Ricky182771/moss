@@ -1,719 +1,104 @@
+<p align="center"><img src="packaging/linux/io.github.ricky182771.moss.svg" width="96" alt="Logo de Moss"></p>
+
 # Moss
 
 [![CI](https://github.com/Ricky182771/moss/actions/workflows/ci.yml/badge.svg)](https://github.com/Ricky182771/moss/actions/workflows/ci.yml)
 
-Repositorio para almacenar el código de Moss hecho por estudiantes de CECyTE como servicio social.
+Moss es un asistente con el que platicas por escrito, como en un chat, en una ventana o en la terminal. Lo hacen estudiantes de CECyTE como servicio social.
+
+## Qué hace
+
+Moss se conecta al proveedor de inteligencia artificial que tú elijas, con cualquier API compatible con OpenAI, y guarda tus chats en tu computadora. **Necesitas tu propia API key** (por ejemplo, la del plan gratuito de NVIDIA NIM) o un servidor local como Ollama: Moss no trae ninguna.
+
+- Proveedores: NVIDIA NIM, Google Gemini, OpenRouter, OpenAI y otros de una lista, servidores locales (Ollama, llama.cpp) y endpoints propios.
+- Interfaz gráfica (`moss-gui`) y de terminal (`moss`), con los mismos chats y la misma configuración.
+- Pensamiento visible: el razonamiento del modelo, plegable, aparte de la respuesta.
+- Búsqueda web con `/buscar`, que responde citando sus fuentes (con una key de [Tavily](https://tavily.com)).
+- Bot de Telegram para la escuela (solo Linux).
+
+<p align="center">
+  <img src="guias/img/chat-oscuro.png" width="49%" alt="Moss: una conversación con código y el pensamiento del modelo plegado">
+  <img src="guias/img/configuracion-oscuro.png" width="49%" alt="Moss: Configuración, eligiendo el proveedor de IA">
+</p>
 
 ## Descargas
-
-Moss es un asistente con el que platicas por escrito, como en un chat: usa el proveedor de inteligencia artificial que tú elijas (por ejemplo, NVIDIA NIM, con su plan gratuito) con tu propia API key, guarda tus chats en tu computadora, puede buscar en la web y responder con las fuentes, y tiene interfaz gráfica y de terminal.
 
 Bájalo de la página de [releases](https://github.com/Ricky182771/moss/releases):
 
 | Sistema | Archivo |
 |---|---|
-| Windows 10 u 11 (64 bits) | `moss-<versión>-windows-x64.zip` ([instalar](#instalar-en-windows)) |
-| Fedora | `moss-<versión>-1.x86_64.rpm` ([instalar](#instalar-en-linux)) |
-| Debian 12, Ubuntu 22.04 o más nuevos | `moss_<versión>-1_amd64.deb` ([instalar](#instalar-en-linux)) |
-| Otro Linux x86_64 | `moss-<versión>-linux-x86_64.tar.gz` ([instalar](#instalar-en-linux)) |
+| Windows 10 u 11 (64 bits) | `moss-<versión>-windows-x64.zip` |
+| Fedora | `moss-<versión>-1.x86_64.rpm` |
+| Debian 12, Ubuntu 22.04 o más nuevos | `moss_<versión>-1_amd64.deb` |
+| Otro Linux x86_64 | `moss-<versión>-linux-x86_64.tar.gz` |
 
-`SHA256SUMS` trae la suma de cada archivo. Los binarios de Windows todavía no están firmados: ver [Code signing policy](#code-signing-policy).
+- **Windows:** descomprime el ZIP y abre `moss-gui.exe`.
+- **Fedora:** `sudo dnf install ./moss-<versión>-1.x86_64.rpm`
+- **Debian o Ubuntu:** `sudo apt install ./moss_<versión>-1_amd64.deb`
+- **Otro Linux:** `tar -xzf moss-<versión>-linux-x86_64.tar.gz && ./moss-<versión>/moss-gui`
 
-## Instalar en Windows
+`SHA256SUMS` trae la suma de cada archivo. Los binarios de Windows todavía no están firmados: ver [Code signing policy](#code-signing-policy). Qué hacer con SmartScreen y el Control Inteligente de Aplicaciones, el modo portable (escuelas, memoria USB) y cómo desinstalar: [guias/instalar.md](guias/instalar.md).
 
-1. Baja `moss-<versión>-windows-x64.zip` y descomprímelo (clic derecho → "Extraer todo..."). No lo abras desde adentro del ZIP.
-2. Abre `moss-gui.exe` con doble clic. `moss.exe` es la versión de terminal; `moss-rpc.exe` lo usa la GUI por detrás y no se abre a mano.
+## Compilar
 
-No hace falta instalar nada más: las DLL que necesita van en la carpeta. El `LEEME.txt` del ZIP lo explica para quien nunca ha usado algo así.
-
-- **SmartScreen** ("Windows protegió su PC"): sale porque los binarios todavía no están firmados. "Más información" → "Ejecutar de todas formas"; o, antes de descomprimir, clic derecho en el ZIP → Propiedades → Desbloquear.
-- **Control Inteligente de Aplicaciones** (Windows 11): bloquea los programas sin firma que no conoce y no tiene excepción por programa; solo se puede apagar para toda la computadora, y no lo recomendamos. Estamos tramitando la firma (ver [Code signing policy](#code-signing-policy)).
-- **Modo portable** (escuelas, memoria USB): renombra `moss.portable.ejemplo` a `moss.portable` y todo (configuración, key y chats) queda en `datos\`, dentro de la carpeta; ver [Modo portable](#modo-portable). La key queda ahí sin cifrar: al terminar en una computadora ajena, borra la carpeta.
-- **Desinstalar:** borra la carpeta y, si no usaste el modo portable, `%APPDATA%\moss` y `%LOCALAPPDATA%\moss`.
-
-## Instalar en Linux
-
-Cada [release](https://github.com/Ricky182771/moss/releases) trae tres formatos para Linux x86_64, con la interfaz gráfica (`moss-gui`), la de terminal (`moss`) y el bot de Telegram, más `SHA256SUMS` para revisarlos (`sha256sum -c SHA256SUMS --ignore-missing`):
-
-- **Fedora** (`.rpm`):
-
-  ```bash
-  sudo dnf install ./moss-0.1.0-1.x86_64.rpm
-  ```
-
-- **Debian 12, Ubuntu 22.04 o más nuevos** (`.deb`):
-
-  ```bash
-  sudo apt install ./moss_0.1.0-1_amd64.deb
-  ```
-
-- **Cualquier lugar** (`.tar.gz`): se descomprime donde sea y se corre desde ahí; su `LEEME.md` dice qué instalar del sistema (GTK 3, libcurl, EGL y GLES).
-
-  ```bash
-  tar -xzf moss-0.1.0-linux-x86_64.tar.gz
-  ./moss-0.1.0/moss-gui
-  ```
-
-Los paquetes instalan todo en `/usr/lib/moss/`, con `moss`, `moss-gui` y `moss-rpc` en `/usr/bin/`, y Moss aparece en el menú de aplicaciones. Desinstalar (`sudo dnf remove moss` o `sudo apt remove moss`) no borra tu configuración ni tus chats (`~/.config/moss` y `~/.local/share/moss`). Si el bot de Telegram está activo y cambias de formato o mueves la carpeta del `.tar.gz`, abre F2 → Addons → Telegram y guarda, para que el servicio apunte al `moss` nuevo.
-
-## Compilar y ejecutar
-
-### Dependencias
-
-Fedora:
+Necesitas CMake 3.21 o posterior, Ninja, GCC o Clang con C++20, libcurl, nlohmann/json y `git` (la primera vez CMake descarga FTXUI y md4c); para la interfaz gráfica, además, [Flutter](https://docs.flutter.dev/get-started/install/linux) 3.47.9 y GTK 3. En Fedora:
 
 ```bash
-sudo dnf install gcc-c++ cmake ninja-build libcurl-devel json-devel libasan libubsan libtsan
+sudo dnf install gcc-c++ cmake ninja-build libcurl-devel json-devel git
+sudo dnf install clang pkgconf-pkg-config gtk3-devel xz-devel   # solo para la GUI
 ```
 
-Ubuntu/Debian:
+Terminal (`moss`) y RPC (`moss-rpc`), en `build/release/cli/`:
 
 ```bash
-sudo apt install g++ cmake ninja-build libcurl4-openssl-dev nlohmann-json3-dev catch2
-```
-
-La interfaz usa [FTXUI](https://github.com/ArthurSonzogni/FTXUI) v7.0.3, que CMake siempre descarga al configurar y le aplica un arreglo de upstream que todavía no sale en ninguna versión publicada ([#1351](https://github.com/ArthurSonzogni/FTXUI/pull/1351), en `cmake/patches/`): sin él, un pegado de 200 KB tarda 26 s en entrar. Por eso no usa la FTXUI que tenga instalada el sistema. Para el markdown usa [md4c](https://github.com/mity/md4c) v0.6.0, que CMake siempre descarga (los paquetes de las distribuciones son versiones anteriores, sin notas al pie). Por eso la primera vez necesitas conexión a internet y `git`, con el que CMake descarga las dos y aplica el parche.
-
-Las pruebas necesitan Catch2 v3:
-
-- Ubuntu 24.04 (trae la 3.4.0) y Debian 13 "trixie" (trae la 3.7.1): el paquete `catch2` de `apt` basta.
-- Debian 12 "bookworm": su paquete `catch2` es la v2 (2.13.10), así que CMake descarga la v3 por FetchContent al configurar. Otra opción es instalar la 3.7.1 desde `bookworm-backports`.
-
-### Compilar para usar Moss
-
-```bash
+git clone https://github.com/Ricky182771/moss.git
+cd moss
 cmake --preset release && cmake --build --preset release
-```
-
-El programa queda en `./build/release/cli/moss`. Es la build optimizada: con conversaciones largas o al cambiar el tamaño de la terminal responde varias veces más rápido que la de desarrollo.
-
-### Compilar para desarrollar
-
-```bash
-cmake --preset dev  && cmake --build --preset dev  && ctest --preset dev  --output-on-failure
-```
-
-Otros presets:
-
-- `asan`: AddressSanitizer + UndefinedBehaviorSanitizer.
-- `tsan`: ThreadSanitizer.
-- `release`: la build optimizada; sus pruebas también deben pasar.
-Se usan igual, cambiando `dev` por el nombre del preset. Cada preset compila en `build/<preset>/`. En Linux todos compilan también el bot de Telegram (ver [Addons](#addons)); para compilar sin él: `cmake --preset dev -DCHATBOT_BUILD_TELEGRAM=OFF`.
-
-> **Si ya tenías `build/<preset>/` de antes:** CMake guarda las opciones en su caché, y una carpeta configurada cuando el bot venía apagado lo sigue compilando apagado. Borra la carpeta (`rm -rf build/<preset>`) o pasa `-DCHATBOT_BUILD_TELEGRAM=ON` una vez. Los presets `dev-telegram` y `release-telegram` ya no existen: puedes borrar `build/dev-telegram/` y `build/release-telegram/`.
-
-Las pruebas de tiempo siempre miden y reportan con `WARN`. Sus límites solo hacen fallar la prueba con `CHATBOT_STRICT_PERF=1` (por ejemplo, `CHATBOT_STRICT_PERF=1 ctest --preset release --verbose`). La CI activa esa variable solo en release, con GCC y Clang. Esto incluye parseo, reparto de tablas, dibujo del historial y latencia de cancelación/destrucción. Las esperas máximas entre hilos y la comprobación de que una espera no termine antes de tiempo siguen siendo verificaciones funcionales obligatorias.
-
-### Windows
-
-Funciona en Windows 10 (versión 1903 o posterior; se prueba en Windows 10 IoT LTSC 21H2) y en Windows 11. Se compila con [MSYS2](https://www.msys2.org) y GCC (entorno UCRT64), no con Visual Studio.
-
-1. Instala MSYS2 desde [msys2.org](https://www.msys2.org) (queda en `C:\msys64`).
-2. Abre la terminal **MSYS2 UCRT64** (desde el menú Inicio) e instala los paquetes:
-
-   ```bash
-   pacman -S --needed git mingw-w64-ucrt-x86_64-{gcc,cmake,ninja,nlohmann-json,catch}
-   ```
-
-3. En esa misma terminal, clona el repositorio y compila con los mismos presets que en Linux (`asan` y `tsan` son solo de Linux):
-
-   ```bash
-   git clone https://github.com/Ricky182771/moss.git
-   cd moss
-   cmake --preset release && cmake --build --preset release
-   ctest --preset release --output-on-failure   # opcional: las pruebas
-   ```
-
-   También puedes clonar con Git for Windows: `.gitattributes` fija los saltos de línea, así que no hace falta cambiar `core.autocrlf`.
-
-   curl no sale de MSYS2: CMake la baja y la compila estática, solo con HTTP y HTTPS y el TLS de Windows (Schannel), y `moss.exe` y `moss-rpc.exe` se enlazan con `-static`. Por eso no piden ninguna DLL de MSYS2 ([guias/04-stack.md](guias/04-stack.md)).
-
-**Ejecutar.** El programa es una aplicación de consola: córrelo desde **Windows Terminal** (recomendado), **CMD** o **PowerShell**. En la terminal de MSYS2 (mintty) no corre, porque no es una consola de Windows. No necesita nada en el `PATH`:
-
-```bat
-build\release\cli\moss.exe
-```
-
-La interfaz gráfica se compila aparte, con Visual Studio ([gui/README.md](gui/README.md)). Para armar el ZIP, ver [Empaquetar para Windows](#empaquetar-para-windows).
-
-**Qué cambia en Windows:**
-
-- La configuración y la key van en `%APPDATA%\moss\` (`config.json` y `credentials.json`), las conversaciones en `%LOCALAPPDATA%\moss\conversations` y `/guardar` y `/exportar` en tu carpeta Descargas, dentro de `moss\`. Las variables `CHAT_*` siguen teniendo prioridad; `HOME` y `XDG_*` no se usan (MSYS2 define `HOME`). Con el [modo portable](#modo-portable), todo menos las descargas va a `datos\`, junto a `moss.exe`.
-- Con doble clic en `moss.exe` se abre en conhost, y esa ventana se cierra en cuanto el programa termina. Por eso, si Moss no puede arrancar (por ejemplo, en modo portable con `datos\` sin permiso de escritura), muestra el error y `Presiona Enter para cerrar esta ventana.`. Desde CMD, PowerShell o Windows Terminal (con una shell abierta) no espera nada.
-- `credentials.json` no necesita `chmod`: lo protege la carpeta de tu perfil de Windows, que solo tu usuario puede leer. Todavía no va cifrado.
-- `/copiar` y `[Copiar]` usan el portapapeles de Windows (con acentos y saltos de línea que el Bloc de notas respeta); por SSH, OSC 52 primero.
-- Para pegar, usa Ctrl+V, Ctrl+Shift+V o Shift+Insert: Moss lee el portapapeles de Windows y pega en la caja o en el campo de la configuración que tenga el foco (con el foco en la barra de conversaciones no pega nada; en una lista o un botón avisa `Aquí no se puede pegar.`, y si el portapapeles no tiene texto, `El portapapeles no tiene texto.`). En Windows Terminal esos atajos los atiende la propia terminal, con el mismo resultado. En conhost (CMD o PowerShell sin Windows Terminal) está comprobado con `CHAT_DEBUG_KEYS`: Ctrl+V y Ctrl+Shift+V llegan como el byte `16` y Shift+Insert como `1b 5b 32 3b 32 7e` (`ESC [ 2 ; 2 ~`), y los tres pegan. Shift + clic derecho es el pegado propio de conhost: no pasa por el portapapeles de Moss. Si los atajos no hacen nada, revisa que el `moss.exe` que abres sea del preset que acabas de compilar (`build\release` no se actualiza al compilar `dev`).
-- HTTPS usa el TLS de Windows (Schannel) y los certificados de su almacén: no hace falta instalar nada más. En Windows 10 llega hasta TLS 1.2, que es lo que piden NVIDIA NIM, Tavily y Telegram. Si la red bloquea los servidores de revocación de certificados (como algunas escolares), la conexión sigue: la revocación se revisa cuando se puede y la cadena del certificado, siempre.
-- Al arrancar, la consola se pone en UTF-8 para que los acentos se vean bien, y al salir vuelve a la página de códigos que tenía (`chcp` muestra lo mismo que antes).
-- Ctrl+C sale limpio, también a mitad de una respuesta. Ctrl+Break y cerrar la ventana terminan el programa de golpe: lo que ya estaba guardado sigue ahí, pero la respuesta en curso se pierde y, con Ctrl+Break, `chcp` puede quedar en 65001.
-- En CMD y PowerShell sin Windows Terminal (conhost) de Windows 10, la fuente de la consola no tiene algunos símbolos: por eso **Símbolos** en `Automático` usa `Sencillos` ahí (ver [Colores y accesibilidad](#colores-y-accesibilidad)). En Windows 11 conhost busca el símbolo en otra fuente y se usa `Unicode`; en Windows Terminal, siempre `Unicode`.
-- El ratón en conhost funciona como en las demás terminales: clics, rueda, arrastrar el borde de la barra y pasar el puntero sobre el menú y los botones. Conhost se queda con Shift + clic para su propia selección (*QuickEdit*): **Shift + arrastrar** selecciona texto de la pantalla y **Enter** lo copia (Esc cancela); Shift + clic derecho pega. La selección toma líneas completas de la pantalla, así que con la barra lateral abierta también copia su borde y sus filas: ciérrala con Ctrl+B antes de seleccionar, o usa `[Copiar]` en los bloques de código. Mientras hay una selección, conhost detiene la salida de Moss (la respuesta deja de avanzar en pantalla) hasta que copias o cancelas; después aparece de golpe lo que llegó mientras tanto. Es así en todas las apps de consola, no es una falla de Moss.
-
-### Empaquetar para Windows
-
-En la terminal **MSYS2 UCRT64**, con Visual Studio y Flutter instalados ([gui/README.md](gui/README.md)), después de compilar `release` y la GUI:
-
-```bash
-cmake --preset release && cmake --build --preset release
-(cd gui && cmd //c flutter build windows --release)
-tools/package-windows.sh   # deja build/package-windows/out/moss-<versión>-windows-x64.zip
-```
-
-El ZIP trae la carpeta `moss-<versión>\` con `moss-gui.exe` y lo de Flutter (`flutter_windows.dll`, `url_launcher_windows_plugin.dll` y `data\`), `moss.exe`, `moss-rpc.exe`, las DLL de Visual C++ (`msvcp140.dll`, `vcruntime140.dll` y `vcruntime140_1.dll`), `LEEME.txt` (para alumnos), `AVISOS-TERCEROS.txt`, `LICENSE` y `moss.portable.ejemplo`. El script revisa la versión, las DLL que pide cada binario (`moss.exe` y `moss-rpc.exe`, solo de Windows) y que el ZIP traiga exactamente eso; los detalles están en [guias/17-empaquetado.md](guias/17-empaquetado.md). La CI lo arma en cada pull request (artefacto `moss-windows-x64`) y lo prueba en otra máquina sin MSYS2.
-
-### Empaquetar para Linux
-
-```bash
-tools/package-linux.sh                       # compila release y la GUI, y arma los tres
-tools/package-linux.sh --skip-build          # con lo ya compilado
-tools/package-linux.sh --formats=tar,rpm --out=dist
-```
-
-Deja en `build/package/out/` (o en `--out`) el `.tar.gz`, el `.rpm`, el `.deb` y `SHA256SUMS`. Revisa que la versión sea la misma en todos lados, quita los símbolos de depuración, genera `AVISOS-TERCEROS.txt`, valida el `.desktop` y el metainfo, y falla si `ldd` no encuentra alguna biblioteca. Necesita, además de lo de compilar y [Flutter](gui/README.md), `nfpm` (un solo binario: bájalo de sus [releases](https://github.com/goreleaser/nfpm/releases) y ponlo en `~/.local/bin`), `desktop-file-validate`, `appstreamcli` y `rsvg-convert`:
-
-- Fedora: `sudo dnf install desktop-file-utils appstream librsvg2-tools`
-- Ubuntu: `sudo apt install desktop-file-utils appstream librsvg2-bin`
-
-La versión vive solo en `VERSION`; cómo sacar un release está en [guias/17-empaquetado.md](guias/17-empaquetado.md).
-
-### Integración continua
-
-En cada pull request y en cada push a `main`, GitHub Actions (`.github/workflows/ci.yml`) compila el proyecto en Ubuntu 24.04 y corre las pruebas. Usa GCC con los presets `dev`, `asan`, `tsan` y `release`, y Clang con `dev` y `release`; todos con el bot de Telegram, y revisan que `moss telegram` desactivado salga con 0 y sin token con 78; aparte, compila y prueba `dev` con GCC sin addons (`-DCHATBOT_BUILD_TELEGRAM=OFF`) y revisa que `moss telegram` salga con 69. En Windows (MSYS2 UCRT64 con GCC) compila y prueba `dev` y `release`, sin `CHATBOT_STRICT_PERF` (los tiempos de esas máquinas varían mucho), además prueba `moss-rpc.exe` con pipes de verdad y una conversación por HTTPS (Schannel, TLS 1.2) contra el servidor falso. El trabajo `ZIP de Windows` (`package-windows.yml`) arma el ZIP oficial y lo prueba en otra máquina sin MSYS2 (recursos de versión, `--version`, `moss-rpc.exe`, la GUI y el modo portable), y lo sube como `moss-windows-x64`. El trabajo `paquetes de Linux` (`package-linux.yml`) arma los paquetes de Linux en Ubuntu 22.04, los instala en contenedores de Fedora, Debian 12 y Ubuntu 22.04 (y el `.tar.gz` en Debian 12) y los sube como `moss-linux-x86_64`. En todos, los warnings cuentan como errores. Además, comprueba que el programa, sin `CHAT_API_KEY` y sin terminal, salga con código 1 y el mensaje de error de configuración. La CI nunca usa una API key ni se conecta a ninguna API real: las pruebas usan un transporte falso.
-
-### Addons
-
-Los addons son programas aparte, como un bot de Telegram, que usan el mismo núcleo que Moss de la terminal: el alumno le escribe al bot y responde el modelo configurado. Viven en `addons/`. En Linux, cualquier preset compila el de Telegram (`moss-telegram`, junto a `moss` en `build/<preset>/cli/`); en Windows y en Termux va apagado (`CHATBOT_BUILD_TELEGRAM`).
-
-Hay una capa común de los bots (`addons/common/`: acceso solo para usuarios autorizados, conversaciones solo en memoria que se borran solas, límites por usuario, respuestas con vista previa mientras se generan y respuestas largas partidas) y el bot de Telegram (`addons/telegram/`, ver [Bot de Telegram](#bot-de-telegram)). Solo se prueban en Linux. No hay bot de WhatsApp: sus términos no permiten un asistente de IA de propósito general (los detalles están en `AGENTS.md`, sección 14).
-
-### Configurar
-
-La forma más fácil es la pantalla de configuración: ábrela con **F2** o con la fila `⚙ Configuración` de la barra. Si al arrancar falta la key o el modelo, Moss la abre solo con el aviso `Configura un proveedor para empezar.` (mientras tanto, la caja de entrada no envía nada). Ahí eliges el proveedor, escribes la API key (se ve como `•••`) y eliges el modelo de la lista que devuelve el servidor (`GET {URL base}/models`). Con el filtro, ↑/↓ mueven el resaltado y Enter elige; si la lista falla (por ejemplo, Anthropic no documenta ese endpoint), el error aparece en la lista y puedes escribir el modelo a mano. Tab y Shift+Tab cambian de campo; Guardar aplica los cambios sin reiniciar y Esc o Cancelar cierran sin guardar (si hay cambios, pregunta `¿Descartar los cambios? (s/n)`: solo **s** o **n** la contestan y **Esc** la cancela). No se abre mientras hay una respuesta en curso.
-
-El modelo y el proveedor también se pueden cambiar desde la caja con `/model` (ver [Cambiar de modelo con /model](#cambiar-de-modelo-con-model)), entre los proveedores que ya tienen key guardada.
-
-| Proveedor | URL base | Lista de modelos |
-|---|---|---|
-| NVIDIA NIM | `https://integrate.api.nvidia.com/v1` | sí |
-| OpenAI | `https://api.openai.com/v1` | sí |
-| Google Gemini | `https://generativelanguage.googleapis.com/v1beta/openai` | sí |
-| Anthropic (Claude) | `https://api.anthropic.com/v1` | no documentada: escribe el modelo |
-| Groq | `https://api.groq.com/openai/v1` | no confirmada |
-| OpenRouter | `https://openrouter.ai/api/v1` | sí |
-| Mistral | `https://api.mistral.ai/v1` | sí |
-| DeepSeek | `https://api.deepseek.com` | sí |
-| Together AI | `https://api.together.ai/v1` | sí |
-| xAI (Grok) | `https://api.x.ai/v1` | no confirmada |
-| Cerebras | `https://api.cerebras.ai/v1` | no confirmada |
-| Ollama (local) | `http://localhost:11434/v1` | sí (sin key) |
-
-Después de la tabla vienen tus [endpoints personalizados](#endpoints-personalizados) y, al final, `Agregar endpoint…`.
-
-"No confirmada" no quiere decir que falle: Moss la pide igual y, si falla, te deja escribir el modelo.
-
-#### Endpoints personalizados
-
-Para un servidor que no está en la tabla (un gateway como OmniRoute, LiteLLM, vLLM, llama.cpp…), da de alta un endpoint en **F2 → Proveedor de IA**:
-
-1. En **Proveedor**, elige `Agregar endpoint…` (la última fila). El foco pasa a **Nombre**.
-2. Escribe un **Nombre** (hasta 40 caracteres, sin repetir), la **URL base** y, si el servidor la pide, la **API key**.
-3. Pulsa **Actualizar** para pedir la lista de modelos (o escribe el modelo a mano) y **Guardar**. El endpoint queda en uso.
-
-Puedes tener hasta 20, guardados todos a la vez en `config.json` (`"endpoints"`), y cambiar entre ellos igual que entre los de la tabla, en F2 o con [`/model`](#cambiar-de-modelo-con-model). Cada uno tiene un **id** que Moss saca del nombre al crearlo (`Servidor del lab` → `servidor-del-lab`; si choca, `-2`, `-3`…) y que no cambia nunca: en la lista se ve atenuado junto al nombre, y es lo que escribes en `/model`. Su key se guarda en `credentials.json` como `custom:<id>`, así que cambiar el nombre o la URL no la pierde.
-
-Con un endpoint elegido, el botón **[Borrar endpoint]** lo quita junto con su key, después de preguntar `¿Borrar el endpoint <nombre>? (s/n)`. El que está en uso no se puede borrar (el botón se ve atenuado): cámbiate antes a otro proveedor.
-
-```json
-{
-    "provider": "custom:omniroute",
-    "model": "qwen3",
-    "endpoints": [
-        {"id": "omniroute", "name": "OmniRoute", "base_url": "https://mi-gateway.example/v1"},
-        {"id": "lab", "name": "Servidor del lab", "base_url": "http://localhost:8000/v1"}
-    ]
-}
-```
-
-Si editas `"endpoints"` a mano y una entrada no sirve (le falta algo, el id no es válido o se repite…), Moss la ignora con un aviso al arrancar y usa las demás; al guardar desde F2 se quita. Si `"provider"` nombra un endpoint que no existe, o un proveedor que no está en la tabla, Moss abre F2 con el error para que elijas otro.
-
-**URL base de un endpoint:** normalmente termina en `/v1` (`https://mi-servidor/v1`, no `https://mi-servidor`). Moss no sigue redirecciones: si el servidor responde con una (301, 302…), el error dice a dónde redirige y, si puede, qué URL base usar.
-
-**Dónde se guarda la key:** en `~/.config/moss/credentials.json` (o `$XDG_CONFIG_HOME/moss/credentials.json`; en Windows, `%APPDATA%\moss\credentials.json`; en [modo portable](#modo-portable), `datos/credentials.json` junto al ejecutable), una por proveedor (la de un endpoint, como `custom:<id>`). El archivo se escribe con permisos 0600 y su carpeta con 0700. Si alguien le abre los permisos (grupo u otros), Moss no lo lee y te pide correr `chmod 600` sobre él (en Windows no: ahí lo protege la carpeta de tu perfil). Al guardar, una key que empieza con `$`, trae espacios o saltos de línea, o mide menos de 20 caracteres no se guarda: suele ser el nombre de una variable (`$NIMKEY`) o una key cortada al copiarla. La key nunca va en `config.json`, en los volcados de depuración ni en las conversaciones guardadas. No copies `credentials.json` al repositorio (está en `.gitignore`).
-
-**Servidor local (Ollama, llama.cpp…):** elige `Ollama (local)` o agrega un endpoint con una URL como `http://localhost:8080/v1`. Solo se acepta `http://` para `localhost`, `127.0.0.1` o `[::1]` (cualquier puerto), y ahí la key es opcional; cualquier otro servidor necesita `https://`, para que la key y la conversación no viajen sin cifrar.
-
-**Variables de entorno:** también puedes configurar todo sin la pantalla:
-
-```bash
-export CHAT_API_KEY="tu-key-de-nvidia"
-export CHAT_MODEL="nvidia/nemotron-3-super-120b-a12b"   # solo es un ejemplo
-```
-
-No hay modelo por defecto: los modelos se retiran con el tiempo. El del ejemplo fue el más rápido y constante en las pruebas del equipo contra NIM, pero no es un valor por defecto.
-
-Lo que guarda la pantalla va a `~/.config/moss/config.json` (o `$XDG_CONFIG_HOME/moss/config.json`; en Windows, `%APPDATA%\moss\config.json`; en modo portable, `datos/config.json`), que también puedes editar a mano. Al guardar se conservan las demás llaves del archivo. Nunca lleva la key:
-
-```json
-{
-    "provider": "nvidia",
-    "base_url": "https://integrate.api.nvidia.com/v1",
-    "model": "nvidia/nemotron-3-super-120b-a12b",
-    "timeout_seconds": 120,
-    "history_limit": 32000,
-    "appearance": { "theme": "catppuccin-mocha", "background": "theme" },
-    "system_prompt": "Eres un asistente útil. Responde en español, de forma clara y concisa."
-}
-```
-
-Las variables de entorno (`CHAT_API_KEY`, `CHAT_BASE_URL`, `CHAT_MODEL`, `CHAT_TIMEOUT`, `CHAT_HISTORY_LIMIT`) tienen prioridad sobre lo guardado. En la pantalla, un campo definido por una de ellas muestra su valor con `(definido por CHAT_…)` y no se puede editar (la key, siempre enmascarada: solo sus últimos 4 caracteres).
-
-`CHAT_HISTORY_LIMIT` (o `history_limit` en el archivo) limita cuánto historial se envía en cada mensaje. Se mide en bytes del texto, más o menos un carácter por byte (los acentos y la ñ cuentan doble). El valor por defecto es 32000; `0` significa sin límite. Si la conversación pasa del límite, se omiten los mensajes más antiguos y la línea de estado lo avisa. Si el servidor rechaza la petición por demasiado larga, Moss recorta el historial a la mitad (del límite o del tamaño real, lo que sea menor) y reintenta una vez.
-
-#### Colores y accesibilidad
-
-En la configuración, la categoría **Colores y Accesibilidad** elige el tema, el fondo y los símbolos; se aplican al guardar, sin reiniciar, y se guardan en `config.json` como `"appearance"`.
-
-- **Tema:** `Catppuccin Mocha` (por defecto) usa sus propios colores RGB, iguales en cualquier terminal. `De la terminal` usa la paleta de 16 colores de tu terminal, como antes de los temas.
-- **Fondo:** `Del tema` pinta el fondo del tema en toda la pantalla; `Transparente` deja el fondo y el color de texto de tu terminal y solo colorea los acentos (encabezados, código, enlaces…). Con `De la terminal` no aplica.
-- **Símbolos:** `Unicode` usa los símbolos de siempre (`⚙`, `✓`, `⚠`, `☑`, esquinas redondeadas…). `Sencillos` cambia los que no tienen las fuentes de la consola de Windows 10 (Consolas y Lucida Console), que ahí saldrían como cuadritos, por otros del mismo ancho: `⚙` → `*`, `✓` → `√`, `⚠` → `!`, `☑`/`☐` → `[x]`/`[ ]`, `▴`/`▾` → `^`/`v`, `▍` → `▌`, `●` (lo elegido) → `•`, las viñetas `◦`/`▪` de los niveles 2 y 3 → `o`/`-`, esquinas redondeadas → rectas y la barra de desplazamiento con bloques (`█`, `▀`, `▄`). La lista sale del `cmap` de `consola.ttf` y `lucon.ttf`; para revisarla otra vez: `powershell -ExecutionPolicy Bypass -File tools\check_glyphs.ps1`. Los acentos, la ñ y el texto de las respuestas no cambian. `Automático` (por defecto) usa `Sencillos` solo en la consola de Windows 10 (CMD o PowerShell sin Windows Terminal; ni `WT_SESSION` ni `TERM_PROGRAM` definidas) y `Unicode` en todo lo demás, también en mintty o la terminal de VS Code. En `config.json`: `"symbols": "auto"`, `"unicode"` o `"simple"`.
-
-Si `config.json` nombra un tema, un fondo o unos símbolos que no existen, se usa el valor por defecto y la línea de estado lo avisa.
-
-En todas las listas, la fila del cursor se marca con el color de selección (o invertida con `De la terminal`) solo mientras la lista tiene el foco, y `●` (`•` con símbolos sencillos) marca lo elegido. El campo o botón con el foco lleva su etiqueta con el color de selección.
-
-Si tu terminal no muestra colores de 24 bits, se aproximan a 256 o 16. Con `NO_COLOR` definida y no vacía se usa automáticamente `De la terminal`, con fondo transparente y cursor invertido. Tema y fondo aparecen deshabilitados con la nota `Desactivado por NO_COLOR`; la configuración guardada se conserva. Los símbolos se eligen igual con `NO_COLOR`.
-
-#### Configuración del modelo
-
-La categoría **Configuración del modelo** de F2 tiene tres pestañas arriba, con el modelo en uso en el título (`Configuración del modelo — <modelo> (<proveedor>)`). Con el foco en la barra de pestañas, ← y → cambian de pestaña (también con un clic); Tab y Shift+Tab siguen moviendo el foco entre campos, como en el resto de F2.
-
-- **Instrucciones:** el mensaje de sistema, para todos los modelos (abajo).
-- **Parámetros:** los ajustes del modelo en uso, guardados **por proveedor y modelo**: Razonamiento (Predeterminado · Apagado · Bajo · Medio · Alto), Temperatura, Top P, Top K, Máx. tokens, Penalización por frecuencia y por presencia, y Semilla. Cada campo empieza vacío, en **Predeterminado**: lo que no tocas no se manda, y el modelo usa su valor de siempre. Junto a cada campo está su rango, o el error si lo que escribiste no sirve. La ayuda del razonamiento dice qué hace cada nivel con tu proveedor (en NIM, Bajo, Medio y Alto solo lo encienden). **Restaurar todo** regresa todo a Predeterminado.
-- **Avanzado:** un objeto JSON que se mezcla al final del cuerpo de la petición (JSON Merge Patch): sus llaves ganan sobre el formulario, los objetos se mezclan por dentro y `null` quita una llave. Sirve para lo que el formulario no cubre, como `{"chat_template_kwargs": {"thinking": true}}` en algunos modelos de NIM. `model`, `messages`, `stream`, `stream_options`, `tools` y `tool_choice` los pone Moss y no se pueden cambiar. Abajo, la **vista previa** muestra el JSON exacto que se mandaría (sin la conversación ni la key), y se actualiza al escribir.
-
-Los ajustes se guardan en `config.json` bajo `"models"` y valen desde el siguiente mensaje. Al cambiar de modelo (F2 o `/model`) se usan los del modelo nuevo; con `CHAT_MODEL`, los de ese modelo. Si el servidor rechaza la petición con un 400 y llevaba ajustes, el error dice `Puede ser un ajuste de <modelo>: revísalo en Configuración del modelo.` Sin modelo elegido, Parámetros y Avanzado piden elegir uno.
-
-```json
-{
-    "models": {
-        "nvidia": {
-            "z-ai/glm5": {"reasoning": "high", "temperature": 0.6,
-                          "extra": {"chat_template_kwargs": {"clear_thinking": false}}}
-        }
-    }
-}
-```
-
-#### Instrucciones del sistema
-
-En la configuración, **Configuración del modelo → Instrucciones** edita el mensaje de sistema que se manda al principio de cada conversación (también de las que abres desde la barra), igual para todos los modelos. El campo ajusta el texto al ancho como la caja de la conversación y usa el alto que deja la sección (con barra y rueda si no cabe); PgUp y PgDn mueven el cursor y la vista una altura del campo. Enter agrega un salto de línea; Tab y Shift+Tab cambian de campo. **Restaurar predeterminado** vuelve a poner las instrucciones de fábrica. Al guardar se aplican sin reiniciar y sin perder la conversación abierta: valen desde el siguiente mensaje.
-
-Se guardan en `config.json` como `"system_prompt"`:
-
-```json
-{
-    "model": "nvidia/nemotron-3-super-120b-a12b",
-    "system_prompt": "Eres un tutor de matemáticas.\nExplica paso a paso y en español."
-}
-```
-
-- **Sin la llave** (o tras «Restaurar predeterminado» y Guardar, que la borra): se usan las predeterminadas, `Eres un asistente útil. Responde en español, de forma clara y concisa.`
-- **Cadena vacía (`""`)**: no se manda ningún mensaje de sistema. Sirve con modelos locales que rechazan el rol `system`.
-- Si la llave no es una cadena, se usan las predeterminadas y la línea de estado lo avisa.
-
-Al guardar, las instrucciones pueden medir como máximo 8000 bytes (el contador `N / 8000 bytes` está bajo el campo), deben ser UTF-8 válido y no pueden tener caracteres de control salvo saltos de línea y tabuladores (un tabulador escrito a mano en `config.json` se ve en el campo como 4 espacios y se guarda tal cual); si no cumplen, no se guardan y la pantalla dice por qué. El recorte del historial nunca quita las instrucciones: si miden lo mismo que `history_limit` o más, se guardan igual, pero la pantalla avisa que dejarían poco o nada de espacio para la conversación. No hay variable de entorno para las instrucciones. Las conversaciones guardadas no las incluyen.
-
-Nuestro recorte cuenta bytes, no tokens, así que una petición todavía puede pasar de la ventana del modelo, y lo que haga entonces el servidor no depende de nosotros (revisado en octubre de 2026). **NVIDIA NIM**: su [referencia de la API](https://docs.nvidia.com/nim/large-language-models/latest/reference/api-reference.html) no documenta ningún recorte y remite a vLLM, donde recortar es opcional (`truncate_prompt_tokens`, que no mandamos) y [se queda con los últimos tokens](https://docs.vllm.ai/en/stable/api/vllm/renderers/params/), así que puede perder las instrucciones; si el servidor rechaza la petición con un 400, la app reintenta una vez con la mitad del historial. **OpenRouter**: la compresión que antes se llamaba «middle-out» (hoy el plugin `context-compression`) [quita o recorta mensajes de en medio](https://openrouter.ai/docs/guides/features/message-transforms) y viene activada en los modelos de 8192 tokens o menos; la documentación no dice si conserva el mensaje de sistema. **Ollama**: su [página de contexto](https://docs.ollama.com/context-length) no dice qué pasa; en el [código](https://github.com/ollama/ollama/blob/main/server/prompt.go) quita mensajes desde el principio hasta caber en `num_ctx`, conserva los de sistema y el último, y lo hace por defecto, sin avisar. **llama.cpp server**: el [README](https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md) no lo dice; sus [pruebas](https://github.com/ggml-org/llama.cpp/blob/master/tools/server/tests/unit/test_ctx_shift.py) muestran que rechaza el prompt con el error «exceeds the available context size» (el desplazamiento de contexto, apagado por defecto, solo actúa al generar).
-
-#### Búsqueda web
-
-Escribe `/buscar` seguido de tu pregunta (por ejemplo, `/buscar quién ganó el último partido del América`). Moss consulta [Tavily](https://tavily.com), le pasa al modelo los resultados como datos y el modelo responde citando cada dato con `[n]`. Debajo de la respuesta aparece el bloque **Fuentes** con `[n] título (URL)`; ese bloque sale de la búsqueda, no del texto del modelo (que podría inventar direcciones), y Shift+clic sobre un enlace lo abre. Funciona con cualquier modelo.
-
-- Solo `/buscar` en minúsculas, seguido de un espacio y una consulta. `/buscar` solo muestra cómo se usa; cualquier otro texto que empiece con `/` se envía como un mensaje normal.
-- Mientras busca, la línea de estado dice `Buscando en la web…`. Esc cancela igual durante la búsqueda que durante la respuesta.
-- Si la búsqueda falla o no trae resultados, no se pregunta al modelo: aparece el error (o el aviso `La búsqueda no encontró resultados.`) y el texto regresa a la caja.
-- Se buscan 5 resultados en español de México con búsqueda segura (`safe_search`) siempre activa; no se puede desactivar.
-- Las conversaciones guardadas conservan los resultados: al abrirlas de nuevo, las fuentes siguen ahí y el modelo vuelve a recibir los mismos datos.
-
-**Cómo sacar la key:** entra a [app.tavily.com](https://app.tavily.com), crea una cuenta (no pide tarjeta) y copia la API key de tu panel. Pégala en la configuración (F2), categoría **Búsqueda web**, y guarda. Se guarda en `credentials.json` con la llave `"search:tavily"`, junto a las demás keys y con los mismos permisos; nunca en `config.json`. También puedes usar la variable `CHAT_SEARCH_API_KEY`, que tiene prioridad y bloquea el campo. Sin key, `/buscar` no se envía y la línea de estado dice `Configura la key de búsqueda en Configuración (F2) → Búsqueda web`.
-
-**Límites del plan gratuito:** 1,000 créditos al mes; cada `/buscar` gasta 1 (búsqueda básica). Al agotarlos aparece `Se agotaron las búsquedas del plan de Tavily`. No hay reintentos automáticos: vuelve a enviar con Enter cuando quieras.
-
-**Privacidad:** a Tavily solo se envía la consulta que escribes después de `/buscar`, nunca la conversación. Lo que llega de las páginas se le pasa al modelo marcado como datos, con la instrucción de ignorar cualquier orden que venga dentro.
-
-#### Conversaciones guardadas
-
-Cada conversación se guarda sola después de cada respuesta completa, en un archivo `.json` por conversación dentro de:
-
-- `CHAT_DATA_DIR`, si la defines;
-- si no, en [modo portable](#modo-portable), `datos/conversations` junto al ejecutable;
-- si no, `$XDG_DATA_HOME/moss/conversations` (solo si `XDG_DATA_HOME` es una ruta absoluta);
-- si no, `~/.local/share/moss/conversations`;
-- en Windows, si no defines `CHAT_DATA_DIR`, `%LOCALAPPDATA%\moss\conversations`.
-
-Los archivos contienen **el texto completo de tus conversaciones**. Por eso la carpeta se crea con permisos 0700 y los archivos con 0600 (solo tu usuario puede leerlos). Para borrar una conversación, usa Supr (o el clic derecho → Borrar) en la barra de conversaciones (Ctrl+O); para borrarlas todas, borra la carpeta. Si un archivo está dañado o es de una versión más nueva del programa, aparece en la barra como ilegible y el programa nunca lo modifica.
-
-#### Modo portable
-
-Si junto al ejecutable hay un archivo llamado `moss.portable` (puede estar vacío; el ZIP de Windows trae `moss.portable.ejemplo` para renombrarlo), la configuración (`config.json`), la key (`credentials.json`) y las conversaciones (`conversations/`) van a la carpeta `datos/`, también junto al ejecutable, en lugar de la carpeta de tu usuario. Sirve para las PC que se restauran al reiniciar (Deep Freeze y similares), donde se perdería lo de `%APPDATA%`, y para llevar Moss en una memoria USB. Funciona en Windows y en Linux.
-
-- Las descargas de `/guardar` y `/exportar` no cambian: siguen en Descargas (o en `CHAT_DOWNLOAD_DIR`).
-- Las variables `CHAT_*` siguen ganando: `CHAT_API_KEY` sobre la key de `datos/credentials.json`, `CHAT_DATA_DIR` sobre `datos/conversations`, etc. `XDG_*`, `HOME`, `APPDATA` y `LOCALAPPDATA` ya no cuentan.
-- En la configuración (F2), al pie de **Proveedor de IA**, una línea atenuada dice `Modo portable: datos en <ruta>`. Sin modo portable no aparece.
-- Al arrancar, Moss crea `datos/` si falta y prueba que se pueda escribir ahí. Si no se puede (la carpeta del programa es de solo lectura, como `Archivos de programa`, o un disco protegido), sale con un error que dice la ruta y la causa, antes de abrir la pantalla; nunca usa en silencio la carpeta de tu usuario, que confundiría a quien cree estar en modo portable.
-- El archivo se revisa una vez, al arrancar: crearlo o borrarlo con Moss abierto no cambia nada hasta la siguiente vez.
-
-**La key queda en texto plano junto al ejecutable.** En modo portable, `datos/credentials.json` no está protegido por la carpeta de tu perfil: cualquiera que pueda abrir la carpeta del programa (otra cuenta de la PC, quien tome la memoria USB) puede leer la key y usarla. En Linux el archivo sigue en 0600 y `datos/` en 0700 (y la regla del `chmod 600` sigue valiendo); por eso en una memoria USB con FAT32 o exFAT, donde esos permisos no existen, en Linux Moss no lee `credentials.json`: ahí usa `CHAT_API_KEY` o una partición ext4. La defensa real no es esconder el archivo sino limitar el daño: **una key por PC con tope de gasto diario**. En OpenRouter, por ejemplo, cada key puede tener un límite de crédito (`limit`) que se reinicia cada día (`limit_reset: daily`); así una key copiada gasta, como mucho, el tope de un día y se revoca sin tocar las de las demás PC.
-
-#### Depuración
-
-`CHAT_DEBUG_SSE=/ruta/archivo` (solo por variable de entorno) guarda en ese archivo, por cada intento de petición (tanto las respuestas por fragmentos, que usa la interfaz, como las completas, que usa `tools/smoke` sin `--stream`), la fecha, el modelo, el número de intento, el estado HTTP y el cuerpo crudo de la respuesta. Nunca guarda la key, las cabeceras ni lo que tú envías, pero **sí contiene las respuestas del modelo, es decir, la conversación**. Úsalo solo para diagnosticar un problema y borra el archivo después. Si no se puede escribir, Moss sigue funcionando sin avisar.
-
-```bash
-CHAT_DEBUG_SSE=/tmp/chat-debug.txt ./build/release/cli/moss
-```
-
-`CHAT_DEBUG_KEYS=/ruta/archivo` (solo por variable de entorno) agrega al archivo una línea por cada tecla, clic o evento que recibe la interfaz: la hora con milisegundos; el tipo (`special` con los bytes en hex, `character` con **solo la longitud en bytes**, `mouse` con botón, movimiento y posición, o `custom`); si la configuración está abierta, si la barra de conversaciones tiene el foco, a dónde iría un pegado (`target`) y si hay un pegado entre corchetes abierto. Con la configuración abierta, también qué campo tiene el foco. Tras Ctrl+V, Ctrl+Shift+V o Shift+Insert, una línea `paste-shortcut` con cuántos bytes tenía el portapapeles y si se pegó. Nunca escribe el texto que tecleas o pegas (por ahí pasa la API key). Sirve para ver qué secuencia manda tu terminal. Si no se puede escribir, Moss sigue sin avisar.
-
-```bat
-:: CMD
-set CHAT_DEBUG_KEYS=%TEMP%\chat-keys.txt
-build\release\cli\moss.exe
-```
-
-### Ejecutar
-
-```bash
 ./build/release/cli/moss
 ```
 
-Teclas:
-
-| Tecla | Acción |
-|---|---|
-| Enter | Envía el mensaje (no hace nada mientras hay una respuesta en curso) o ejecuta un comando (`/buscar`, `/copiar`, `/guardar`, `/exportar`); con el menú de comandos abierto, elige el comando |
-| `/` | Al principio de la caja, abre el menú de comandos (ver [Comandos](#comandos)) |
-| `\` + Enter | Nueva línea en la caja (el `\` justo antes del cursor se cambia por el salto) |
-| Alt+Enter | Nueva línea en la caja, en las terminales que lo mandan (en Windows no: es pantalla completa) |
-| ↑ / ↓ | Mueven el cursor una fila en pantalla de la caja (también dentro de un párrafo que se partió en varias filas), conservando la columna; en la primera fila ↑ va al principio del texto y en la última ↓ al final |
-| ← / → | Mueven el cursor un carácter (un emoji o una letra con acento combinado cuentan como uno); Ctrl+← / Ctrl+→, una palabra |
-| Retroceso / Supr | Borran el carácter antes o después del cursor |
-| Insert | Cambia entre insertar y sobrescribir (el cursor se vuelve un bloque) |
-| Esc | Cierra el menú de comandos si está abierto; si no, cancela la respuesta en curso (el texto regresa a la caja) |
-| PgUp / PgDn | Sube o baja una pantalla del historial |
-| Rueda del ratón | Sube o baja unas 3 líneas (del historial, de la barra si el puntero está sobre ella, o de la caja si el puntero está sobre ella y su texto no cabe) |
-| Clic en la caja | Pone el cursor en ese carácter (después del final de una fila, al final de esa fila) |
-| Home / End | Con la caja vacía, va al inicio o al final del historial; con texto, lleva el cursor al inicio o al final de la fila en pantalla en que está |
-| F2 | Abre o cierra la configuración |
-| Ctrl+N | Empieza una conversación nueva |
-| Ctrl+B | Muestra u oculta la barra de conversaciones |
-| Ctrl+O | Pasa a la barra de conversaciones (y la muestra si estaba oculta) |
-| Ctrl+T | Abre el pensamiento de todas las respuestas (si ya están todos abiertos, los cierra); ver [Pensamiento](#pensamiento-del-modelo) |
-| Ctrl+C | Sale |
-
-#### Barra de conversaciones
-
-A la izquierda está la lista de conversaciones guardadas, agrupadas por fecha: **Hoy**, **Ayer**, **Últimos 7 días** y después un grupo por día (`2 oct`, o `15 dic 2025` si es de otro año). La primera fila, `+ Nueva`, empieza una conversación nueva, y la segunda, `⚙ Configuración` (`* Configuración` con símbolos sencillos), abre la configuración. `●` (`•` con símbolos sencillos) marca la conversación abierta, `⌕` (`@` con símbolos sencillos) al final del título marca las que usaron `/buscar` (en una barra angosta se quita antes de recortar mucho el título), y las ilegibles aparecen tenues, con `(ilegible)`, en el grupo **Sin fecha** al final.
-
-- Se ve al arrancar si la terminal mide 100 columnas o más. Si la terminal se angosta a menos de 100, se oculta sola, y reaparece al volver a ensancharla (salvo que la hayas ocultado tú con Ctrl+B).
-- Para cambiar su ancho, arrastra con el ratón su borde derecho (de 18 a 60 columnas, o hasta la mitad de la terminal). El ancho no se guarda al salir.
-- Con Ctrl+O la barra toma el foco: ↑/↓, PgUp/PgDn y Home/End para moverte (los encabezados de grupo se saltan); Enter abre; **r** renombra; **e** exporta; Supr borra (pide confirmación en la línea de estado: **s** borra, **n** o **Esc** no; las demás teclas y el ratón no la contestan); Esc vuelve a la caja de entrada. La fila seleccionada solo se resalta mientras la barra tiene el foco.
-- **Renombrar** (**r**): el título se vuelve un campo con el cursor al final; Enter guarda y Esc cancela. Los espacios y saltos de más se quitan; hasta 60 caracteres (uno más largo da un error en la línea de estado y el campo sigue abierto, no se recorta). Renombrar no cuenta como actividad: la conversación no sube en la lista. Se puede también con una respuesta en curso.
-- **Exportar** (**e**): igual que `/exportar`, pero de la conversación seleccionada, esté abierta o no; exporta lo que está guardado. El aviso sale en la línea de estado.
-- Con el ratón: un clic en una conversación la abre, en `+ Nueva` empieza una nueva y en `⚙ Configuración` abre la configuración. Un **clic derecho** en una conversación abre debajo de ella un menú con **Renombrar**, **Exportar** y **Borrar**: se elige con clic, o con ↑/↓ y Enter; Esc o cualquier otra tecla lo cierra, y también se cierra si la barra pierde el foco.
-- Mientras hay una respuesta en curso, abrir, borrar o crear una conversación (desde la barra o con Ctrl+N) no hace nada: espera la respuesta o cancélala con Esc. Moverte por la lista, renombrar y exportar sí se puede.
-
-#### Caja de entrada y pegar
-
-La caja acepta varias líneas y ajusta el texto al ancho: una línea más larga que la caja se parte en varias filas por palabras (después de un espacio; una palabra más ancha que la caja se parte donde ya no cabe). Ninguna fila empieza con el espacio del corte: si la palabra llena justo la fila, ese espacio se queda al final de la fila, en la columna del cursor. El ajuste es solo de pantalla: lo que se envía es exactamente lo que escribiste, sin saltos ni espacios de más. La última columna queda libre para el cursor. La caja crece con sus filas en pantalla hasta 8 (o un tercio de la terminal, lo que sea menor); después aparece una barra a la derecha y se desplaza siguiendo al cursor (o con la rueda). Enter siempre envía; para un salto de línea usa `\` + Enter o Alt+Enter (Shift+Enter y Ctrl+Enter no se distinguen de Enter en la terminal).
-
-Pega con el atajo de tu terminal (en Linux casi siempre Ctrl+Shift+V). Moss activa el *pegado entre corchetes* (bracketed paste): un texto pegado con varias líneas queda completo en la caja, sin enviarse, y los tabuladores pasan a 4 espacios. Si tu terminal no lo soporta, cada salto de línea pegado llega como Enter y envía el mensaje a la mitad: pega una sola línea o usa otra terminal. En los campos de una línea de la configuración (URL, keys, filtro y modelo), los saltos de línea pegados se quitan. Un pegado de más de 256 KiB se recorta y avisa.
-
-Si subes en el historial, la vista se queda donde está aunque llegue texto nuevo, y la línea de estado muestra `↓ Hay más abajo (End)`, o `(PgDn)` si hay texto en la caja (porque ahí End mueve el cursor). Al enviar un mensaje, la vista regresa abajo.
-
-Moss captura el ratón para la rueda. Para seleccionar texto con el ratón, mantén Shift mientras arrastras, como en la mayoría de terminales con apps que usan el ratón. Para abrir un enlace, Shift+clic sobre él (en Kitty también Ctrl+Shift+clic): un clic simple lo recibe Moss y no abre nada.
-
-#### Comandos
-
-Escribe `/` al principio de la caja y arriba de ella aparece el menú de comandos, con sus argumentos y qué hacen (si la línea de estado no tiene avisos, el menú ocupa su lugar). Se filtra mientras escribes el nombre (`/g` deja solo `/guardar`; no distingue mayúsculas) y se cierra en cuanto escribes un espacio.
-
-| Comando | Qué hace |
-|---|---|
-| `/buscar <consulta>` | Busca en la web y responde con fuentes citadas (ver [Búsqueda web](#búsqueda-web)) |
-| `/copiar [número de bloque]` | Copia un bloque de código; sin número, el último |
-| `/guardar [número de bloque [nombre]]` | Guarda un bloque de código en un archivo |
-| `/exportar` | Exporta la conversación a Markdown |
-| `/model [proveedor] [modelo]` | Cambia de modelo o de proveedor (ver [Cambiar de modelo con /model](#cambiar-de-modelo-con-model)) |
-
-- ↑/↓ mueven el cursor del menú (dan la vuelta en los extremos). Tab completa el comando: `/buscar ` con un espacio para que escribas la consulta, o `/exportar` solo. Enter hace lo mismo con `/buscar` (no se envía sin consulta) y con los demás los completa y los ejecuta de una vez: `/ex` + Enter exporta.
-- Esc cierra el menú sin borrar lo que escribiste; no se vuelve a abrir hasta que cambies el texto. Con una respuesta en curso, el primer Esc cierra el menú y el segundo la cancela.
-- Con el ratón, pasar el puntero mueve el cursor y un clic hace lo mismo que Tab.
-- Un comando que ahora no sirve se ve atenuado con el motivo (`falta la key de búsqueda (F2)`, `no hay bloques de código`, `la conversación está vacía`, `espera a que termine la respuesta`), pero se puede elegir igual: al enviarlo aparece el aviso de siempre.
-- Si nada coincide, el menú dice `Sin comandos que coincidan · se enviará como mensaje`: un texto como `/hola` va al modelo como cualquier mensaje.
-- En una terminal angosta la descripción se recorta con `…` y, si no cabe, se oculta antes que el nombre. Con la barra de conversaciones o la configuración con el foco no hay menú.
-
-#### Cambiar de modelo con /model
-
-`/model` cambia de modelo o de proveedor sin abrir F2 y sin cerrar la conversación; el cambio se guarda en `config.json` igual que en F2 y en el historial queda `Ahora se usa <modelo> de <proveedor>.`. No pide ni guarda keys: solo deja elegir proveedores con key guardada (o locales, como Ollama).
-
-| Escribes | Hace |
-|---|---|
-| `/model` | Abre el selector en la lista de proveedores |
-| `/model <proveedor>` | Abre el selector en la lista de modelos de ese proveedor |
-| `/model <modelo>` | Cambia el modelo en el proveedor actual |
-| `/model <proveedor> <modelo>` | Cambia de proveedor y de modelo |
-
-- `<proveedor>` es el id de la tabla de [Configurar](#configurar) (`nvidia`, `openai`, `gemini`, …, `ollama`) o el de uno de tus [endpoints](#endpoints-personalizados), solo o con `custom:` (`/model omniroute qwen3` y `/model custom:omniroute qwen3` hacen lo mismo), sin distinguir mayúsculas. Una sola palabra que no es un id se toma como modelo (`/model z-ai/glm5`).
-- El selector aparece donde el menú de comandos y se maneja igual (lo que escribes filtra, ↑/↓, Enter, Esc, ratón). Los endpoints van después de la tabla, con su id y su nombre. Cada proveedor dice `key guardada`, `local` o, atenuado y sin poderse elegir, `sin key`. Para agregar un endpoint, usa F2. En la lista de modelos, si el filtro no deja nada o el proveedor no da la lista, la última fila es `Usar «<texto>»` para escribir el id a mano. Esc regresa a los proveedores y, ahí, cierra.
-- El modelo no se valida contra la lista: si no existe, el siguiente mensaje da el error de modelo no encontrado.
-- No funciona con una respuesta en curso ni con `CHAT_MODEL` definida; con `CHAT_BASE_URL` solo cambia el modelo.
-
-### Markdown en las respuestas
-
-Las respuestas del asistente se muestran con formato de markdown, también mientras van llegando. Tus mensajes, los errores y los avisos se muestran como texto plano.
-
-Se muestra:
-
-- Párrafos, encabezados (`#` a `######`), citas (también anidadas) y líneas horizontales (`---`).
-- **Negritas**, *cursivas*, ~~tachado~~, `==resaltado==` y `código en línea`.
-- Listas con viñetas y numeradas, anidadas, y listas de tareas (`- [ ]` y `- [x]`).
-- Bloques de código con su número y el lenguaje como título (`#3 · cpp`, o `#3` si no dice el lenguaje). Las líneas largas se parten, sin colores de sintaxis. El número sirve para `/copiar` y `/guardar`.
-- Tablas con alineación por columna. Si no caben, el texto se ajusta dentro de las celdas; si ni así caben, cada fila se muestra como una tarjeta `Encabezado: valor`.
-- Enlaces: el texto subrayado y la dirección al lado. En las terminales que lo soportan, el enlace se abre con Shift+clic.
-- Imágenes como `[imagen: descripción]` con su dirección, porque la terminal no muestra imágenes.
-- Alertas de GitHub (`> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`, `[!CAUTION]`).
-- Notas al pie (`[^1]`), que aparecen al final de la respuesta.
-- Fórmulas de LaTeX (`$...$` y `$$...$$`) como texto, sin convertir.
-
-El HTML dentro de la respuesta se muestra tal cual, como texto. Los caracteres de control que podrían alterar la terminal (por ejemplo, las secuencias que empiezan con ESC) se reemplazan por `�`, también en tus mensajes y en los errores.
-
-Para ver cómo se muestra un archivo markdown sin usar la API:
+Interfaz gráfica, desde la misma carpeta (busca `moss-rpc` junto a su ejecutable, o donde diga `--rpc`):
 
 ```bash
-./build/release/tools/md_preview --width 60 tests/data/markdown_muestra.md
-./build/release/tools/md_preview --theme terminal tests/data/markdown_muestra.md
+(cd gui && flutter pub get && flutter build linux --release)
+gui/build/linux/x64/release/bundle/moss-gui --rpc="$PWD/build/release/cli/moss-rpc"
 ```
 
-`--width` es el ancho en columnas (80 si no lo pones). `--theme` elige el tema (`catppuccin-mocha` si no lo pones, o `terminal`), `--background theme|terminal` el fondo y `--symbols unicode|simple` los símbolos (`unicode` si no lo pones). Si la salida es una terminal, se ve con colores y estilos; si la rediriges a un archivo, sale como texto plano.
+Ubuntu y Debian, Windows (MSYS2), los demás presets y las pruebas: [guias/11-compilacion.md](guias/11-compilacion.md). La GUI en desarrollo y en Windows: [gui/README.md](gui/README.md).
 
-### Pensamiento del modelo
+## Documentación
 
-Algunos modelos mandan su "pensamiento" aparte de la respuesta (en NIM, Nemotron con el razonamiento en Predeterminado o encendido; en OpenRouter, los que lo devuelven). Moss lo muestra arriba de la respuesta, atenuado, en una línea plegable:
+- [Usar Moss en la terminal](guias/uso.md): teclas, comandos, `/model`, copiar y exportar.
+- [Configurar](guias/configurar.md): proveedores, keys, endpoints, colores, búsqueda web, modo portable.
+- [Instalar](guias/instalar.md): Windows y Linux, paso a paso.
+- [Bot de Telegram](guias/telegram.md): crearlo, configurarlo y autorizar a los alumnos.
+- [Interfaz gráfica](gui/README.md) y su [diseño](gui/diseno/DISENO.md).
+- [Protocolo de `moss-rpc`](rpc/PROTOCOL.md): para hacer otra interfaz.
+- [Empaquetado y releases](guias/17-empaquetado.md).
+- Contribuir: [reglas del proyecto](AGENTS.md) y [compilación y pruebas](guias/11-compilacion.md).
 
-```text
-▸ Pensamiento · 1 240 palabras
-```
+## Privacidad
 
-- Mientras llega y todavía no hay texto, se ve abierto con sus **últimas 6 líneas** (la línea de estado sigue en "Pensando…"); con el primer texto de la respuesta se pliega solo.
-- **Clic** en la línea lo abre (`▾`, con el texto completo, sangrado) o lo cierra. **Ctrl+T** abre el de todas las respuestas, o los cierra si ya estaban todos abiertos.
-- Se abre y se cierra solo en la sesión: al reabrir una conversación todo empieza plegado.
-- Se guarda con la conversación (hasta 256 KiB por respuesta; si pasa, se recorta y lo dice al final), pero **nunca se le vuelve a mandar al modelo**. Tampoco cuenta para `/copiar`, `/guardar`, `/exportar` ni los números de los bloques: un bloque de código dentro del pensamiento no tiene botones.
-- Una respuesta cancelada (Esc) o cortada por un error conserva el pensamiento que alcanzó a llegar.
-- Si el modelo se queda sin salida mientras piensa (termina por `length` sin texto), el error dice `El modelo se quedó sin tokens pensando; sube el máximo de salida en Configuración del modelo.` en vez de `El modelo no devolvió texto.`
-- Con modelos que no lo mandan (por ejemplo Gemini por la capa compatible con OpenAI, u OpenAI en Chat Completions) no aparece ninguna línea. En modo de símbolos Sencillos, `▸`/`▾` se ven como `>`/`v`.
-
-### Copiar, guardar y exportar
-
-Los bloques de código de las respuestas se numeran desde 1 en toda la conversación, en el orden en que aparecen; el número va en el título del bloque (`#3 · cpp`).
-
-**Con el ratón.** Cada bloque lleva a la derecha de su título los botones `[Copiar]` y `[Guardar]`. Si el bloque es más alto que la pantalla, al bajar con la rueda los botones se quedan pegados a la primera fila visible del bloque y desaparecen con él cuando ya no queda ninguna fila de código a la vista.
-
-- `[Copiar]` copia el bloque y cambia a `[✓ Copiado]` hasta que mueves el puntero fuera del botón o pasan 2 segundos.
-- `[Guardar]` lo guarda con el nombre por defecto (`bloque-3.cpp`). Para otro nombre, usa `/guardar 3 suma.cpp`.
-- `[Exportar]`, a la derecha de la barra de título, exporta la conversación. Sin respuestas que exportar se ve atenuado y no hace nada.
-- El resultado aparece en la línea de estado, corto y con lo importante primero: `#1 copiado con wl-copy`, `#1 copiado con OSC 52 · si no pega, usa [Guardar]`, `#1 guardado en ~/Descargas/moss/bloque-1.cpp` o `No se pudo copiar #1 · usa [Guardar]`. Si no cabe, termina en `…`; el indicador de la derecha (`Pensando…`) nunca se recorta. Los botones no agregan nada a la conversación ni mueven la vista: puedes copiar un bloque de la mitad de la conversación sin que salte al final.
-- Funcionan también mientras llega una respuesta: un bloque que sigue llegando se copia como va, y el aviso empieza con `⚠ #1 incompleto (aún no termina)`. Lo mismo con un bloque de una respuesta cancelada (`se canceló`) o cortada por un error (`se cortó`).
-- En una terminal angosta los botones se acortan a `[C]` `[G]`; si tampoco caben, no se muestran (los comandos siguen funcionando). Con el puntero encima van en el color de selección del tema (invertidos con `NO_COLOR`).
-
-**Con comandos**, para cuando no hay ratón (por ejemplo, por SSH desde una terminal que no lo manda) o prefieres el teclado. No se envían al modelo ni entran al historial: el resultado aparece como un aviso en la conversación.
-
-| Comando | Qué hace |
-|---|---|
-| `/copiar` | Copia el último bloque de código de la conversación |
-| `/copiar 3` | Copia el bloque #3 |
-| `/guardar` o `/guardar 3` | Guarda el último bloque, o el #3, como `bloque-3.cpp` (la extensión sale del lenguaje) |
-| `/guardar 3 suma.cpp` | Lo guarda con ese nombre (si no le pones extensión, se agrega la del lenguaje) |
-| `/exportar` | Exporta la conversación a Markdown, como `conversacion-<id>.md` |
-
-- Solo en minúsculas y con los argumentos separados por espacios. Cualquier otro texto que empiece con `/` (por ejemplo `/copiarx`) se envía como un mensaje normal.
-- Con una respuesta en curso, la línea de estado dice `Espera a que termine la respuesta`. Si no hay bloques, el número no existe o sobran argumentos, la línea de estado explica cómo se usa y el texto se queda en la caja.
-- `/guardar` y `/exportar` nunca sobrescriben: si el archivo ya existe, usan `suma-2.cpp`, `suma-3.cpp`… (hasta `-99`). Los archivos se crean con permisos 0644 (o menos, según tu `umask`), nunca como ejecutables (tampoco los `.sh`).
-- El nombre que das es solo el nombre del archivo: no puede llevar `/`, `\`, `..` ni caracteres de control, ni empezar con `.`, y mide como máximo 100 bytes. Para que lo guardado se pueda copiar a Windows, en todos los sistemas tampoco puede llevar `< > : " | ? *`, terminar en punto o espacio, ni llamarse como un dispositivo de Windows (`CON`, `PRN`, `AUX`, `NUL`, `COM1` a `COM9`, `LPT1` a `LPT9`, también con extensión: `con.cpp`).
-- El archivo exportado tiene el título, la fecha y el modelo, y cada pregunta (`## Tú`, tal como la escribiste, también el `/buscar …`) con su respuesta (`## Asistente`) y, si hubo búsqueda, sus fuentes (`### Fuentes`). Nunca incluye las instrucciones del sistema, los resultados de búsqueda que recibió el modelo, keys, avisos ni errores.
-
-**Cómo se copia**, en este orden:
-
-1. Si estás conectado por SSH (`SSH_CONNECTION` o `SSH_TTY`), primero con la secuencia OSC 52 de la terminal, para que llegue al portapapeles de tu máquina local.
-2. Con un programa del sistema que esté en tu `PATH`: `termux-clipboard-set` en Termux (paquete `termux-api` y la app Termux:API), `wl-copy` en Wayland, o `xclip` o `xsel` en X11. En Fedora: `sudo dnf install wl-clipboard` (Wayland) o `sudo dnf install xclip` (X11).
-   En Windows, en lugar de un programa, el portapapeles de Windows.
-3. Si nada de eso funciona, con OSC 52, y el aviso dice `si tu terminal no lo soporta, usa /guardar`. Kitty, WezTerm, foot, Alacritty y Ghostty soportan OSC 52; dentro de tmux se envía envuelta para tmux, y puede hacer falta `set -g allow-passthrough on` o `set -g set-clipboard on` en tu `~/.tmux.conf`.
-
-OSC 52 solo manda bloques de hasta 100 000 bytes; para uno más grande, usa `/guardar`.
-
-**Dónde se guarda:** en la carpeta `moss/` (se crea con permisos 0755, o menos según tu `umask`) dentro de la primera de estas que aplique:
-
-1. `CHAT_DOWNLOAD_DIR`, si la defines;
-2. tu carpeta de descargas de `~/.config/user-dirs.dirs` (`XDG_DOWNLOAD_DIR`, la que configura tu escritorio), si existe;
-3. en Termux, `~/storage/downloads` (después de correr `termux-setup-storage`);
-4. `~/Descargas` o `~/Downloads`, la que exista;
-5. tu carpeta personal (`~`).
-
-En Windows: `CHAT_DOWNLOAD_DIR`, si la defines; si no, tu carpeta Descargas; si Windows no la da, `%USERPROFILE%`.
-
-Para cambiarla, define la variable antes de abrir Moss:
-
-```bash
-CHAT_DOWNLOAD_DIR=~/proyectos/escuela ./build/release/cli/moss
-```
-
-## Otras interfaces: `moss-rpc`
-
-`moss-rpc` es Moss sin pantalla: habla [JSON-RPC 2.0](https://www.jsonrpc.org/specification) por stdin/stdout, un mensaje por línea, y hace lo mismo que la terminal porque usa su misma lógica (configuración, conversaciones guardadas, `/buscar`). Es la base de la interfaz gráfica y sirve para que cualquiera adapte otra interfaz sin reescribir nada: el protocolo completo, con lo que ya está implementado, está en [`rpc/PROTOCOL.md`](rpc/PROTOCOL.md). Se compila con todo lo demás (también en Windows) y sale en `build/<preset>/cli/moss-rpc` (junto a `moss`).
-
-Para probarlo a mano, sin interfaz (con [`jq`](https://jqlang.org/) para leer la salida):
-
-```bash
-printf '%s\n' \
-  '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocol_version":1,"client":{"name":"manual","version":"0"}}}' \
-  '{"jsonrpc":"2.0","id":2,"method":"conversation.get","params":{"conversation":"c1"}}' \
-  '{"jsonrpc":"2.0","id":3,"method":"shutdown","params":{}}' \
-  '{"jsonrpc":"2.0","method":"exit"}' \
-| ./build/dev/cli/moss-rpc | jq -c .
-```
-
-Usa la misma configuración que la terminal (y el modo portable). stdout es solo del protocolo; los avisos van a stderr. `CHAT_DEBUG_RPC=/ruta/archivo` guarda cada línea que entra y sale con las keys tapadas, pero **contiene la conversación**: solo para diagnosticar.
-
-## Bot de Telegram
-
-`moss-telegram` es un bot de Telegram que responde con el mismo modelo y las mismas instrucciones que Moss de la terminal. Usa *long polling* (solo hace peticiones HTTPS de salida, sin servidor público ni certificados), responde **solo en chats privados** (en grupos y canales no contesta) y las conversaciones viven **solo en memoria**: se borran tras un rato sin mensajes, con `/nuevo` o al reiniciar el bot. Solo Linux por ahora.
-
-Mientras el modelo escribe, el alumno ve la respuesta crecer en una vista previa con un botón para **detenerla**; al terminar llega como un mensaje con formato (encabezados, listas, tablas, código, fórmulas). Si Telegram no acepta el formato, llega como texto plano. Las respuestas muy largas se parten en varios mensajes.
-
-> **Privacidad y edad.** El bot no guarda conversaciones ni nombres; solo los IDs de quienes entran con el código de invitación. La edad mínima para usarlo, qué se le dice a las familias y quién administra el bot se acuerdan con la escuela antes de dárselo a los alumnos.
-
-### Crear el bot
-
-1. En Telegram, abre [@BotFather](https://t.me/BotFather), manda `/newbot` y sigue los pasos (nombre y usuario terminado en `bot`). Te da el **token**, algo como `123456789:AA...`. Es una contraseña: no lo compartas ni lo subas al repositorio.
-2. Recomendado: en @BotFather, `/setjoingroups` → *Disable*, para que nadie pueda meter al bot en un grupo.
-3. Pide para el bot **su propia key** del proveedor del modelo (no la tuya), con su propio tope diario de gasto: así un mal uso del bot no te deja sin servicio y el gasto queda acotado. Lo mismo con la key de búsqueda (Tavily) si vas a usar `/buscar`. Si no le pones keys propias, el bot usa las de la app.
-
-### Instalar o quitar el addon
-
-En Linux, cualquier preset compila el bot junto con la app: `moss-telegram` queda junto a `moss`, en `build/<preset>/cli/`.
-
-```bash
-cmake --preset release && cmake --build --preset release
-./build/release/cli/moss --help      # dice si el addon está instalado
-```
-
-> **Si ya tenías `build/<preset>/` de antes**, CMake recuerda las opciones de entonces y puede seguir sin compilar el bot: borra la carpeta (`rm -rf build/<preset>`) o pasa `-DCHATBOT_BUILD_TELEGRAM=ON` una vez.
-
-El addon es solo el programa `moss-telegram`. `moss telegram` lo busca **junto a `moss`** y después en el `PATH` (en [modo portable](#modo-portable), solo junto a `moss`). Para instalarlo en una app compilada sin él (`-DCHATBOT_BUILD_TELEGRAM=OFF`), copia `moss-telegram` de otro build junto a `moss`, sin recompilar nada. Para quitarlo, bórralo: F2 dirá "No instalado" y el servicio sale con 69 sin reintentar. Si la app y el bot no entienden la misma versión de la configuración, F2 dice "Incompatible" y muestra los campos sin dejar editarlos.
-
-### Configurar desde F2 → Addons
-
-Todo se configura en la app, sin editar archivos: **F2 → Addons → Telegram**. El bot usa el mismo `config.json` y el mismo `credentials.json` que la app (sección "addons" → "telegram" y llaves `telegram`, `telegram:api_key` y `telegram:search_key`), y también el mismo proveedor, URL base, instrucciones del sistema y límite del historial. Solo el modelo puede ser otro.
-
-Arriba se ve si el addon está instalado, cómo está el servicio (y su último error si no corre), los botones `[Reiniciar]` y `[Actualizar estado]`, `[Ver registro]`, el aviso de linger y el comando del registro. Debajo, los campos (cada uno dice su error debajo, en rojo):
-
-| Campo | Qué es | Por defecto |
-|-------|--------|-------------|
-| Activado | Si el servicio corre. | apagado |
-| Token | El de @BotFather. Se ve enmascarado (`guardada: …AbCd`); vacío = se conserva el guardado. | — |
-| Modelo | Vacío: el de la app. | el de la app |
-| Key del modelo, Key de búsqueda | Keys propias del bot. `[Quitar]` las borra y el bot vuelve a usar las de la app. | las de la app |
-| IDs autorizados | IDs de Telegram separados por comas. | ninguno |
-| Código de invitación | Para entrar con `/start <código>` (de 8 a 64 letras sin acento, números, `_` o `-`). `[Generar]` hace uno al azar. Vacío: sin código. | sin código |
-| Mensajes por día | Mensajes al modelo por alumno por día (1 a 10000). | 50 |
-| Respuestas a la vez | En todo el bot (1 a 32); las demás esperan su turno. | 4 |
-| Min. de inactividad | Minutos sin mensajes para borrar una conversación (1 a 1440). | 60 |
-| Min. mensaje viejo | Un mensaje que llega con más de estos minutos (el bot estuvo apagado) no va al modelo: el bot pide mandarlo otra vez. | 10 |
-| Vista previa (ms) | Cada cuánto se actualiza la vista previa, como mucho (250 a 10000). | 1000 |
-| Zona horaria | Cambio de día del tope diario: un nombre de IANA (`America/Tijuana`) o un desfase fijo (`-06:00`). | `America/Mexico_City` |
-| Detalle de errores en el registro | El registro guarda el mensaje de error del servidor, que puede citar lo que escribió el alumno. Solo para diagnosticar. | apagado |
-
-Las variables `CHAT_TELEGRAM_TOKEN`, `CHAT_API_KEY` y `CHAT_SEARCH_API_KEY` ganan sobre `credentials.json`, pero el servicio no ve las de tu terminal: si están definidas, F2 lo avisa y no bloquea ningún campo.
-
-**Guardar** escribe la configuración y deja el servicio como dice **Activado**, aunque no hayas cambiado la casilla, sin cerrar F2 (el resultado sale abajo). Si el servicio no está como dice la casilla, arriba lo avisa (por ejemplo, `Activado, pero el servicio está detenido: guarda para arrancarlo.`):
-
-- **Activado:** si falta el servicio lo instala (si hay uno hecho a mano, primero pregunta `¿Reemplazar el servicio existente? (s/n)`), si se movió `moss` lo actualiza, y si está detenido o deshabilitado lo arranca y lo habilita; si ya corría, le manda la configuración nueva **sin borrar las conversaciones**.
-- **Sin Activado:** si corre o está habilitado, lo detiene y lo deshabilita.
-- El **token** y **Respuestas a la vez** solo se toman al arrancar: si cambian con el bot corriendo, F2 pregunta si reiniciarlo (eso borra las conversaciones en memoria).
-- Las preguntas `(s/n)` solo se contestan con **s** o **n**; **Esc** cancela sin hacer nada.
-- `[Reiniciar]` se ve atenuado y no hace nada si Activado no está guardado: dice `Activa el addon y guarda para arrancarlo.`
-
-### Autorizar a los alumnos
-
-Sin IDs autorizados ni código de invitación nadie entra. A quien no tiene acceso, el bot le contesta *"No tienes acceso a este bot."* y **su ID**, para que se lo dé al profe:
-
-- **Lista de IDs:** agrega el ID en F2 y guarda; vale al momento.
-- **Código de invitación:** el alumno manda `/start <código>`, o abre el enlace `https://t.me/<usuario_del_bot>?start=<código>`. Su ID se guarda (solo el ID, permisos 600) y sigue entrando después de reiniciar, aunque luego quites el código. F2 → Addons muestra los invitados al final; **Supr** sobre uno lo quita al momento, sin esperar a Guardar, y deja de poder escribir. Si el archivo de invitados está dañado, F2 lo dice en lugar de la lista y el bot no arranca (no lo toca: arréglalo o quítalo).
-
-Comandos: `/start`, `/ayuda`, `/nuevo` (conversación nueva) y `/buscar <consulta>` (si hay key de búsqueda). El bot solo lee texto: a fotos, stickers, audios y archivos responde que por ahora solo puede leer texto.
-
-### El servicio (systemd de usuario)
-
-F2 escribe `~/.config/systemd/user/moss-telegram.service`, que arranca `moss telegram`, y lo controla con `systemctl --user`. Si se cae, systemd lo levanta otra vez a los 10 s, salvo con un error que no se arregla solo (configuración, addon borrado, archivo de invitados dañado, carpeta de datos sin permisos): ahí se queda detenido y F2 dice qué pasó. Sin red no hace falta reiniciarlo: el bot espera y reintenta solo. Después de un apagón, los mensajes que llegaron mientras estaba apagado (Telegram los guarda hasta 24 h) con más de "Min. mensaje viejo" reciben *"Estuve desconectado y se me pasó tu mensaje; mándalo otra vez."*, sin gastar el tope diario.
-
-**Linger.** Sin él, el servicio se detiene al cerrar sesión y no arranca al prender la PC hasta que inicies sesión. F2 avisa si está apagado; actívalo tú una vez (la app nunca lo hace):
-
-```bash
-loginctl enable-linger "$USER"
-```
-
-El registro (una línea por evento con IDs, tiempos, tamaños y tipos de error; **nunca** el texto de los alumnos, las respuestas, el token ni las keys):
-
-```bash
-journalctl --user -u moss-telegram -f
-```
-
-O, sin salir de la app, **F2 → Addons → `[Ver registro]`**: las últimas 200 líneas, empezando por la más nueva abajo, con las de error en rojo (rueda, PgUp/PgDn, Inicio/Fin; `[Actualizar]` las vuelve a leer y Esc regresa). Con "Detalle de errores en el registro" apagado no se muestra lo que va desde ` detalle=`. Si un servidor repite la key en su mensaje de error, la app y el bot la cambian por `[key oculta]`.
-
-Por SSH sin sesión gráfica puede no haber systemd de usuario: F2 dice `No hay systemd de usuario en esta sesión.`
-
-También se puede correr a mano, sin servicio, con `./build/release/cli/moss telegram` (Ctrl+C lo apaga en menos de 2 s). Sale con 0 si está desactivado, 65 si el archivo de invitados está dañado, 69 si no encuentra `moss-telegram`, 73 si no puede escribir en su carpeta de datos y 78 si la configuración no sirve (incluido un token inválido); el mensaje dice qué arreglar.
-
-### Si venías de `telegram.json`
-
-El bot ya no lee `telegram.json`, `--config` ni `CHAT_TELEGRAM_CONFIG`, y no hay migración. Detén y borra lo de antes, y configura todo otra vez desde F2:
-
-```bash
-systemctl --user disable --now moss-telegram     # si tenías el servicio hecho a mano
-rm ~/.config/systemd/user/moss-telegram.service
-systemctl --user daemon-reload
-rm -r ~/.config/moss-telegram                    # telegram.json y su credentials.json
-```
-
-Los invitados de antes (`<data_dir>/invitados.json`) no se leen: vuelven a entrar con el código, o pon sus IDs en "IDs autorizados".
-
-### Probar cómo se ven los mensajes
-
-`moss-telegram-probe` manda a un chat unos mensajes de prueba (el signo de pesos, fórmulas, escapes, una vista previa con streaming) para revisar en el celular cómo los muestra Telegram. Solo se corre a mano, con el token de un bot de prueba y tu ID (te lo dice el bot si le escribes sin estar autorizado):
-
-```bash
-CHAT_TELEGRAM_TOKEN=123456789:AA... ./build/release/cli/moss-telegram-probe --chat <tu ID>
-```
-
-Los mensajes con formato llegaron a Telegram en junio de 2026 (Bot API 10.1); en una app desactualizada podrían no verse bien. Falta probarlo con un celular real.
-
-## Code signing policy
-
-Los binarios de Windows todavía no están firmados. Estamos solicitando la firma gratuita de SignPath Foundation.
-
-Solo se firmarían los binarios que se construyen desde este repositorio, en GitHub Actions (`release.yml`).
-
-- Authors: [Ricky182771](https://github.com/Ricky182771)
-- Reviewers: [Ricky182771](https://github.com/Ricky182771)
-- Approvers: [Ricky182771](https://github.com/Ricky182771)
-
-**Privacidad:** Moss no manda información a ningún otro sistema salvo lo que el usuario pide: los mensajes van al proveedor de IA que él configura, y la búsqueda web y el bot de Telegram solo si los activa. No hay telemetría.
-
-Tres detalles:
+Moss no manda información a ningún otro sistema salvo lo que el usuario pide: los mensajes van al proveedor de IA que él configura, y la búsqueda web y el bot de Telegram solo si los activa. No hay telemetría. Tres detalles:
 
 - Al abrir F2 en la terminal o Configuración en la ventana, si ya pusiste la URL y la key, Moss le pide al mismo proveedor la lista de sus modelos. No manda ningún mensaje tuyo.
 - Mientras el bot de Telegram está activo, le pregunta a Telegram todo el tiempo si llegaron mensajes nuevos. Si lo apagas, deja de hacerlo.
 - La búsqueda web no tiene un interruptor aparte: se usa solo cuando escribes `/buscar` y tienes una key de búsqueda guardada. Sin key, no se manda nada.
 
+Qué se manda a Tavily: [Búsqueda web](guias/configurar.md#búsqueda-web). Qué guarda el bot: [Bot de Telegram](guias/telegram.md).
+
+## Code signing policy
+
+The Windows binaries are not signed yet. We have applied to SignPath Foundation for free code signing.
+
+Only binaries built from this repository by GitHub Actions (`release.yml`) would be signed.
+
+- Authors: [Ricky182771](https://github.com/Ricky182771)
+- Reviewers: [Ricky182771](https://github.com/Ricky182771)
+- Approvers: [Ricky182771](https://github.com/Ricky182771)
+
+Privacy: Moss sends nothing to any other system except what the user asks for; there is no telemetry. See [Privacidad](#privacidad).
+
 ## Licencia
 
-Moss se distribuye bajo la GPL v3 o, a tu elección, cualquier versión posterior; ver LICENSE.
+Moss se distribuye bajo la GPL v3 o, a tu elección, cualquier versión posterior (GPL-3.0-or-later); ver [LICENSE](LICENSE). Los paquetes traen `AVISOS-TERCEROS.txt` con las licencias de las bibliotecas que incluyen ([cómo se genera](guias/17-empaquetado.md#avisos-tercerostxt)).
