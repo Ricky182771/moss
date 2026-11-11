@@ -26,7 +26,7 @@ target_link_libraries(chatbot_telegram
     PRIVATE chatbot::markdown nlohmann_json::nlohmann_json)
 chatbot_set_warnings(chatbot_telegram)
 
-# El bot: "moss telegram" lo arranca (README, "Bot de Telegram").
+# El bot: "moss telegram" lo arranca (guias/telegram.md).
 add_executable(moss-telegram src/main.cpp)
 target_link_libraries(moss-telegram PRIVATE chatbot::telegram)
 target_compile_definitions(moss-telegram PRIVATE CHATBOT_VERSION="${PROJECT_VERSION}")
