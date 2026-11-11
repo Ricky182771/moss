@@ -1,5 +1,5 @@
 // Recursos de versión de @MOSS_RC_NAME@.exe (chatbot_windows_version en
-// CMakeLists.txt): los pide SignPath y se ven en Propiedades → Detalles. La
+// CMakeLists.txt): se ven en Propiedades → Detalles. La
 // versión sale de VERSION; la CI revisa que coincida.
 #pragma code_page(65001)
 #include <winver.h>

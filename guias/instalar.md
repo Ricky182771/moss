@@ -9,8 +9,8 @@ Los archivos están en la página de [releases](https://github.com/Ricky182771/m
 
 No hace falta instalar nada más: las DLL que necesita van en la carpeta. El `LEEME.txt` del ZIP lo explica para quien nunca ha usado algo así.
 
-- **SmartScreen** ("Windows protegió su PC"): sale porque los binarios todavía no están firmados. "Más información" → "Ejecutar de todas formas"; o, antes de descomprimir, clic derecho en el ZIP → Propiedades → Desbloquear.
-- **Control Inteligente de Aplicaciones** (Windows 11): bloquea los programas sin firma que no conoce y no tiene excepción por programa; solo se puede apagar para toda la computadora, y no lo recomendamos. Estamos tramitando la firma (ver [Code signing policy](../README.md#code-signing-policy)).
+- **SmartScreen** ("Windows protegió su PC"): sale porque los binarios no están firmados. "Más información" → "Ejecutar de todas formas"; o, antes de descomprimir, clic derecho en el ZIP → Propiedades → Desbloquear.
+- **Control Inteligente de Aplicaciones** (Windows 11): bloquea los programas sin firma que no conoce y no tiene excepción para un solo programa: con él encendido, Moss no abre en Windows 11.
 - **Modo portable** (escuelas, memoria USB): renombra `moss.portable.ejemplo` a `moss.portable` y todo (configuración, key y chats) queda en `datos\`, dentro de la carpeta; ver [Modo portable](configurar.md#modo-portable). La key queda ahí sin cifrar: al terminar en una computadora ajena, borra la carpeta.
 - **Desinstalar:** borra la carpeta y, si no usaste el modo portable, `%APPDATA%\moss` y `%LOCALAPPDATA%\moss`.
 

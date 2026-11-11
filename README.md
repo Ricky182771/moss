@@ -37,7 +37,7 @@ Bájalo de la página de [releases](https://github.com/Ricky182771/moss/releases
 - **Debian o Ubuntu:** `sudo apt install ./moss_<versión>-1_amd64.deb`
 - **Otro Linux:** `tar -xzf moss-<versión>-linux-x86_64.tar.gz && ./moss-<versión>/moss-gui`
 
-`SHA256SUMS` trae la suma de cada archivo. Los binarios de Windows todavía no están firmados: ver [Code signing policy](#code-signing-policy). Qué hacer con SmartScreen y el Control Inteligente de Aplicaciones, el modo portable (escuelas, memoria USB) y cómo desinstalar: [guias/instalar.md](guias/instalar.md).
+`SHA256SUMS` trae la suma de cada archivo. Los binarios de Windows no están firmados; si Windows los bloquea, ver [guias/instalar.md](guias/instalar.md#windows), que también explica el modo portable (escuelas, memoria USB) y cómo desinstalar.
 
 ## Compilar
 
@@ -86,18 +86,6 @@ Moss no manda información a ningún otro sistema salvo lo que el usuario pide: 
 - La búsqueda web no tiene un interruptor aparte: se usa solo cuando escribes `/buscar` y tienes una key de búsqueda guardada. Sin key, no se manda nada.
 
 Qué se manda a Tavily: [Búsqueda web](guias/configurar.md#búsqueda-web). Qué guarda el bot: [Bot de Telegram](guias/telegram.md).
-
-## Code signing policy
-
-The Windows binaries are not signed yet. We have applied to SignPath Foundation for free code signing.
-
-Only binaries built from this repository by GitHub Actions (`release.yml`) would be signed.
-
-- Authors: [Ricky182771](https://github.com/Ricky182771)
-- Reviewers: [Ricky182771](https://github.com/Ricky182771)
-- Approvers: [Ricky182771](https://github.com/Ricky182771)
-
-Privacy: Moss sends nothing to any other system except what the user asks for; there is no telemetry. See [Privacidad](#privacidad).
 
 ## Licencia
 
