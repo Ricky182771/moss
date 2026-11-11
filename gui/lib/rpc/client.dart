@@ -8,7 +8,7 @@ import 'package:stream_channel/stream_channel.dart';
 import 'errors.dart';
 
 /// La versión de `pubspec.yaml` (una prueba vigila que coincidan).
-const kClientVersion = '0.1.0';
+const kClientVersion = '1.0.0';
 const kProtocolVersion = 1;
 
 // Tiempos de espera del proceso, no animaciones: no van en motion.dart.

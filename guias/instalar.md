@@ -23,20 +23,20 @@ Cada [release](https://github.com/Ricky182771/moss/releases) trae tres formatos 
 - **Fedora** (`.rpm`):
 
   ```bash
-  sudo dnf install ./moss-0.1.0-1.x86_64.rpm
+  sudo dnf install ./moss-*.x86_64.rpm
   ```
 
 - **Debian 12, Ubuntu 22.04 o más nuevos** (`.deb`):
 
   ```bash
-  sudo apt install ./moss_0.1.0-1_amd64.deb
+  sudo apt install ./moss_*_amd64.deb
   ```
 
 - **Cualquier lugar** (`.tar.gz`): se descomprime donde sea y se corre desde ahí; su `LEEME.md` dice qué instalar del sistema (GTK 3, libcurl, EGL y GLES).
 
   ```bash
-  tar -xzf moss-0.1.0-linux-x86_64.tar.gz
-  ./moss-0.1.0/moss-gui
+  tar -xzf moss-*-linux-x86_64.tar.gz
+  ./moss-*/moss-gui
   ```
 
 Los paquetes instalan todo en `/usr/lib/moss/`, con `moss`, `moss-gui` y `moss-rpc` en `/usr/bin/`, y Moss aparece en el menú de aplicaciones. Desinstalar (`sudo dnf remove moss` o `sudo apt remove moss`) no borra tu configuración ni tus chats (`~/.config/moss` y `~/.local/share/moss`). Si el bot de Telegram está activo y cambias de formato o mueves la carpeta del `.tar.gz`, abre F2 → Addons → Telegram y guarda, para que el servicio apunte al `moss` nuevo.

@@ -1,8 +1,12 @@
 # Cambios
 
+
 Cada versión, con lo que trae para quien la instala. De aquí salen las notas
 del GitHub Release (`tools/release-notes.sh`, `guias/17-empaquetado.md`). El
 detalle de cada hito está en `guias/HISTORIAL.md`.
+
+## 1.0.0
+Primera versión estable de Moss
 
 ## 0.1.0
 
