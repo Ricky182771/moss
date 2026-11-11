@@ -33,8 +33,8 @@ Descargas: `.rpm` (Fedora), `.deb` (Debian 12, Ubuntu 22.04 o más nuevos) y
 Lo que todavía falta:
 
 - **Windows sin firma digital:** al abrir Moss, SmartScreen avisa ("Windows
-  protegió su PC") y en Windows 11 el Control Inteligente de Aplicaciones lo
-  bloquea. El `LEEME.txt` del ZIP explica qué hacer. Estamos tramitando la
-  firma.
+  protegió su PC"), y en Windows 11, con el Control Inteligente de
+  Aplicaciones encendido, Moss no abre. El `LEEME.txt` del ZIP explica qué
+  hacer con SmartScreen.
 - En modo portable, la key queda sin cifrar en la carpeta `datos`.
 - Sin versiones para ARM ni macOS.

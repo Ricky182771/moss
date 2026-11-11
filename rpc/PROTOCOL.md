@@ -119,11 +119,11 @@ cliente                                  servidor
 // →
 {"jsonrpc":"2.0","id":1,"method":"initialize","params":{
   "protocol_version":1,
-  "client":{"name":"moss-gui","version":"0.1.0"}}}
+  "client":{"name":"moss-gui","version":"1.0.0"}}}
 // ←
 {"jsonrpc":"2.0","id":1,"result":{
   "protocol_version":1,
-  "server":{"name":"moss-rpc","version":"0.1.0"},
+  "server":{"name":"moss-rpc","version":"1.0.0"},
   "platform":"linux",                 // "linux" | "windows"
   "portable":false,
   "conversation":"c1",                // handle de la conversación abierta (siempre hay una)
@@ -689,7 +689,7 @@ Todas las `service.*` salvo `service.status` y `service.log`, y `invited.remove`
 ## 8. Ejemplo completo
 
 ```jsonc
-→ {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocol_version":1,"client":{"name":"moss-gui","version":"0.1.0"}}}
+→ {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocol_version":1,"client":{"name":"moss-gui","version":"1.0.0"}}}
 ← {"jsonrpc":"2.0","id":1,"result":{"protocol_version":1,"ready":true,"platform":"linux","conversation":"c1", ...}}
 → {"jsonrpc":"2.0","id":2,"method":"conversation.get","params":{"conversation":"c1"}}
 ← {"jsonrpc":"2.0","id":2,"result":{"conversation":"c1","rev":0,"id":null,"title":"","phase":"idle","entries":[]}}
@@ -831,7 +831,7 @@ Future<Peer> startServer(String exe) async {
   unawaited(peer.listen());
   await peer.sendRequest('initialize', {
     'protocol_version': 1,
-    'client': {'name': 'moss-gui', 'version': '0.1.0'},
+    'client': {'name': 'moss-gui', 'version': '1.0.0'},
   });
   return peer;
 }
