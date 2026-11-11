@@ -31,18 +31,15 @@ No abras moss-rpc.exe: moss-gui.exe lo usa por detrás.
 --------------------------------
 
 "Windows protegió su PC" (SmartScreen)
-  Sale con programas descargados que todavía no tienen firma digital.
+  Sale con programas descargados que no tienen firma digital, como Moss.
   Haz clic en "Más información" y luego en "Ejecutar de todas formas".
   Para que no salga, antes de descomprimir: clic derecho en el ZIP >
   Propiedades > marca "Desbloquear" > Aceptar.
 
 "Control inteligente de aplicaciones bloqueó..." (solo Windows 11)
   Es una protección de Windows 11 que bloquea los programas sin firma que
-  no conoce. No tiene botón para dejar pasar a un solo programa: la única
-  forma es apagarla para toda la computadora, y no te lo recomendamos:
-  te protege de programas peligrosos. Estamos tramitando la firma
-  digital de Moss para que esto deje de pasar. Mientras, usa Moss en una
-  computadora con Windows 10 o con esa protección apagada.
+  no conoce, y Moss no tiene firma digital. No tiene botón para dejar
+  pasar a un solo programa: con esa protección encendida, Moss no abre.
 
 
 3. EN LA ESCUELA: MODO PORTABLE
