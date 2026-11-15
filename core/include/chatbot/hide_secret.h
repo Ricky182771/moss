@@ -1,5 +1,5 @@
-#ifndef CHATBOT_SRC_HIDE_SECRET_H
-#define CHATBOT_SRC_HIDE_SECRET_H
+#ifndef CHATBOT_HIDE_SECRET_H
+#define CHATBOT_HIDE_SECRET_H
 
 #include <cstddef>
 #include <string>
@@ -28,4 +28,4 @@ inline constexpr std::string_view kHiddenKey = "[key oculta]";
 
 } // namespace chatbot
 
-#endif // CHATBOT_SRC_HIDE_SECRET_H
+#endif // CHATBOT_HIDE_SECRET_H

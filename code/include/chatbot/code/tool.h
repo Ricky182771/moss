@@ -83,7 +83,7 @@ struct Tool;
 /// excepciones hacia fuera.
 class ToolRegistry {
 public:
-    /// Las herramientas del modo código: read (C1, las demás se agregan aquí).
+    /// Las herramientas del modo código: read, glob, grep y todo_write (C1).
     [[nodiscard]] static ToolRegistry standard();
 
     explicit ToolRegistry(std::vector<std::shared_ptr<const Tool>> tools)

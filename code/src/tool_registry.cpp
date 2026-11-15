@@ -1,8 +1,8 @@
-#include "chatbot/code/output_cap.h"
 #include "chatbot/code/tool.h"
 #include "chatbot/hide_secret.h"
 #include "chatbot/utf8.h"
 
+#include "output_cap.h"
 #include "tool_internal.h"
 #include "tool_schema.h"
 

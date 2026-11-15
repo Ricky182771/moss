@@ -6,6 +6,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <chrono>
 #include <cstddef>
 #include <filesystem>
 #include <functional>
@@ -47,6 +48,22 @@ struct Tool {
 /// process::find_in_path, pero solo si da una ruta absoluta: nunca un programa de la carpeta
 /// actual (el proyecto) por una entrada relativa del PATH. En Windows, nullopt.
 [[nodiscard]] std::optional<std::string> find_program(std::string_view name);
+
+/// Opciones para lanzar git y rg: timeout, cancel y el entorno sin ninguna CHAT_* (las keys), con
+/// LC_ALL=C (la salida de git no depende del idioma), GIT_TERMINAL_PROMPT=0 y
+/// GIT_OPTIONAL_LOCKS=0.
+[[nodiscard]] process::ProcessOptions helper_options(std::chrono::milliseconds timeout,
+                                                     const CancelToken& cancel);
+
+/// El único lugar que lanza git: git_path (ruta absoluta) con args (el subcomando y lo suyo) en la
+/// raíz, con helper_options y sin lo que un .git/config ajeno puede ejecutar al leer el índice o
+/// el estado: `git --no-optional-locks -c core.fsmonitor= -c core.hooksPath=/dev/null -C <raíz>
+/// <args>`.
+[[nodiscard]] process::ProcessResult run_git(const ProcessLauncher& launch,
+                                             const std::string& git_path, const ProjectRoot& root,
+                                             const std::vector<std::string>& args,
+                                             std::chrono::milliseconds timeout,
+                                             const CancelToken& cancel);
 
 /// Filtro de list_project_files: la ruta relativa a la carpeta base, con '/'.
 using RelativeFilter = std::function<bool(std::string_view relative)>;

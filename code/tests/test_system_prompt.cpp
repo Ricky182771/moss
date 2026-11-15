@@ -311,11 +311,11 @@ TEST_CASE("system prompt: git con rama y estado", "[system_prompt]") {
         CHECK(contains(prompt.text, "- Git repository: yes, branch main...origin/main [ahead 1]\n"));
         CHECK(contains(prompt.text, "<git_status>\n M src/a.cpp\n?? nuevo.txt\n</git_status>"));
         // Por ruta absoluta, sin shell, en la raíz, con tiempo límite corto y cancelable.
-        REQUIRE(git.argv.size() >= 4);
-        CHECK(git.argv.front() == "/fake/git");
-        CHECK(std::find(git.argv.begin(), git.argv.end(), utf8(fixture.root.path())) !=
-              git.argv.end());
-        CHECK(std::find(git.argv.begin(), git.argv.end(), "--short") != git.argv.end());
+        // Sin fsmonitor ni hooks del .git/config del proyecto, y sin las keys en el entorno.
+        CHECK(git.argv == tool_test::git_argv("/fake/git", fixture.root,
+                                              {"-c", "color.status=false", "status", "--short",
+                                               "--branch"}));
+        tool_test::check_helper_environment(git.options);
         CHECK(git.options.timeout <= std::chrono::milliseconds{5000});
         CHECK(git.options.cancel == &fixture.cancel);
     }
@@ -408,7 +408,8 @@ TEST_CASE("system prompt con git real", "[system_prompt][git]") {
     SystemPromptOptions options;
     options.now = [] { return kNow; };
     const CodeSystemPrompt prompt = build(fixture, options);
-    // El texto de "sin commits" depende del idioma de git: solo la rama.
+    // Con LC_ALL=C el texto de "sin commits" no depende del idioma, pero sí de la versión de git:
+    // solo la rama.
     const std::size_t line = prompt.text.find("- Git repository: yes, branch ");
     REQUIRE(line != std::string::npos);
     CHECK(prompt.text.substr(line, prompt.text.find('\n', line) - line).ends_with("rama-prueba"));

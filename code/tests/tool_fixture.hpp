@@ -9,11 +9,35 @@
 
 #include "project_root_fixture.hpp"
 
+#include <catch2/catch_test_macros.hpp>
+
 #include <filesystem>
+#include <map>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace tool_test {
+
+/// El argv exacto con que glob, grep y las instrucciones lanzan git (run_git): sin nada que un
+/// .git/config ajeno pueda ejecutar.
+inline std::vector<std::string> git_argv(const std::string& git,
+                                         const chatbot::code::ProjectRoot& root,
+                                         const std::vector<std::string>& args) {
+    std::vector<std::string> argv{git, "--no-optional-locks", "-c", "core.fsmonitor=",
+                                  "-c", "core.hooksPath=/dev/null", "-C",
+                                  project_root_test::utf8(root.path())};
+    argv.insert(argv.end(), args.begin(), args.end());
+    return argv;
+}
+
+/// git y rg corren sin ninguna CHAT_* (las keys) y con salida estable.
+inline void check_helper_environment(const chatbot::process::ProcessOptions& options) {
+    CHECK(options.env_remove_prefixes == std::vector<std::string>{"CHAT_"});
+    CHECK(options.env_set == std::map<std::string, std::string>{{"LC_ALL", "C"},
+                                                                {"GIT_TERMINAL_PROMPT", "0"},
+                                                                {"GIT_OPTIONAL_LOCKS", "0"}});
+}
 
 namespace fs = std::filesystem;
 using chatbot::code::ToolContext;

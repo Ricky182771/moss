@@ -48,11 +48,16 @@ std::vector<std::string> sorted_lines(const std::string& text) {
 }
 
 /// Un lanzador que responde que git terminó bien con esta salida (-z).
-void fake_git(ToolFixture& fixture, std::string out, std::vector<std::string>* argv = nullptr) {
-    fixture.context.run_process = [out = std::move(out), argv](const std::vector<std::string>& args,
-                                                                const ProcessOptions&) {
+void fake_git(ToolFixture& fixture, std::string out, std::vector<std::string>* argv = nullptr,
+              ProcessOptions* options = nullptr) {
+    fixture.context.run_process = [out = std::move(out), argv, options](
+                                      const std::vector<std::string>& args,
+                                      const ProcessOptions& given) {
         if (argv != nullptr) {
             *argv = args;
+        }
+        if (options != nullptr) {
+            *options = given;
         }
         ProcessResult result;
         result.status = ProcessResult::Status::Exited;
@@ -88,22 +93,23 @@ TEST_CASE("glob con la lista de git: lo ajeno no aparece", "[glob]") {
     ToolFixture fixture;
     fixture.file("b.cpp", "x");
     std::vector<std::string> argv;
+    ProcessOptions options;
     using namespace std::string_literals;
     fake_git(fixture,
              "src/a.txt\0../fuera/secreto.txt\0datos-moss/credentials.json\0borrado.txt\0b.cpp\0"s +
                  "src\0"s + "src/a.txt\0"s,
-             &argv);
+             &argv, &options);
     const ToolResult result = glob_with_fake_git(fixture, R"({"pattern": "*"})");
     CHECK(result.status == ToolStatus::Ok);
     // El directorio "src" y el duplicado no cuentan; fuera, bloqueado y borrado, tampoco.
     CHECK(sorted_lines(result.text) == std::vector<std::string>{"b.cpp", "src/a.txt"});
     CHECK(result.display == "2 archivos");
-    REQUIRE(argv.size() == 8);
-    CHECK(argv[0] == "/fake/git");
-    CHECK(argv[1] == "-C");
-    CHECK(argv[3] == "ls-files");
-    CHECK(argv[4] == "-z");
-    CHECK(argv[7] == "--exclude-standard");
+    // Sin fsmonitor ni hooks del .git/config del proyecto, y sin las keys en el entorno.
+    CHECK(argv == tool_test::git_argv("/fake/git", fixture.root,
+                                      {"ls-files", "-z", "--cached", "--others",
+                                       "--exclude-standard"}));
+    tool_test::check_helper_environment(options);
+    CHECK(options.cancel == &fixture.cancel);
 }
 
 TEST_CASE("glob con git: path acota y el patrón se compara contra esa carpeta", "[glob]") {

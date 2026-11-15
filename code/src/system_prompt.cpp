@@ -169,15 +169,10 @@ std::string git_section(const ProjectRoot& root, const SystemPromptOptions& opti
         if (!git || !options.run_process) {
             return {};
         }
-        process::ProcessOptions process_options;
-        process_options.timeout = kGitTimeout;
-        process_options.cancel = &cancel;
-        // Sin fsmonitor: un .git/config ajeno no puede lanzar un programa; sin candados opcionales,
-        // no le estorba al git del usuario.
-        const process::ProcessResult result = options.run_process(
-            {*git, "--no-optional-locks", "-c", "core.fsmonitor=false", "-c",
-             "color.status=false", "-C", utf8_text(root.path()), "status", "--short", "--branch"},
-            process_options);
+        const process::ProcessResult result =
+            run_git(options.run_process, *git, root,
+                    {"-c", "color.status=false", "status", "--short", "--branch"}, kGitTimeout,
+                    cancel);
         if (!result.ok()) {
             return {};
         }

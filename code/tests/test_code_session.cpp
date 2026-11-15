@@ -960,3 +960,54 @@ TEST_CASE("code session: el destructor con una herramienta bloqueada termina en 
     CHECK(harness.results.size() == results);
     CHECK(harness.turns.empty());
 }
+
+TEST_CASE("code session: destruir durante la petición termina en < 2 s y la cola no toca nada",
+          "[code_session][cancelar]") {
+    Harness harness;
+    harness.open();
+    harness.transport->block_at = 0;
+    harness.transport->chunk_before_block = chunk({{"content", "a medias"}});
+
+    REQUIRE(harness.session->send("hola"));
+    REQUIRE(harness.transport->blocked.wait_for(kThreadTimeout));
+    CHECK(harness.session->state() == LoopState::Requesting);
+    const auto start = Clock::now();
+    harness.session.reset();
+    const auto elapsed = Clock::now() - start;
+    chatbot_test::report_latency("destruir la sesión durante la petición", elapsed);
+    CHECK(elapsed < std::chrono::seconds{2});
+
+    // Lo que el hilo de trabajo dejó en la cola ya no hace nada.
+    const std::size_t texts = harness.texts.size();
+    harness.queue.run_until([] { return false; }, std::chrono::milliseconds{50});
+    CHECK(harness.texts.size() == texts);
+    CHECK(harness.turns.empty());
+    CHECK_FALSE(harness.off_thread);
+}
+
+TEST_CASE("code session: destruir esperando aprobación termina en < 2 s y la cola no toca nada",
+          "[code_session][cancelar]") {
+    Harness harness;
+    Options options;
+    options.rule = [](std::string_view name, std::string_view) {
+        return name == "count" ? Permission::Ask : Permission::Allow;
+    };
+    harness.open(options);
+    harness.respond({calls_response({{"c1", "count", "{}"}})});
+
+    REQUIRE(harness.session->send("corre"));
+    REQUIRE(harness.drain_until(
+        [&] { return harness.session->state() == LoopState::AwaitingApproval; }));
+    const auto start = Clock::now();
+    harness.session.reset();
+    const auto elapsed = Clock::now() - start;
+    chatbot_test::report_latency("destruir la sesión esperando aprobación", elapsed);
+    CHECK(elapsed < std::chrono::seconds{2});
+
+    const std::size_t results = harness.results.size();
+    harness.queue.run_until([] { return false; }, std::chrono::milliseconds{50});
+    CHECK(harness.results.size() == results);
+    CHECK(harness.turns.empty());
+    CHECK(harness.probe->counted().empty());
+    CHECK_FALSE(harness.off_thread);
+}

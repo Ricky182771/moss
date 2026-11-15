@@ -1,5 +1,4 @@
-#include "chatbot/utf8.h"
-
+#include "output_cap.h"
 #include "tool_internal.h"
 
 #include <cstddef>
@@ -43,25 +42,6 @@ constexpr std::string_view kSchema = R"({
 
 std::string lines_es(std::size_t count) {
     return std::to_string(count) + (count == 1 ? " línea" : " líneas");
-}
-
-/// La línea sin '\r' final y, si pasa de kMaxLineChars caracteres, recortada con una marca.
-std::string shown_line(std::string_view line) {
-    if (!line.empty() && line.back() == '\r') {
-        line.remove_suffix(1);
-    }
-    std::size_t chars = 0;
-    std::size_t i = 0;
-    while (i < line.size()) {
-        if (chars == kMaxLineChars) {
-            return std::string{line.substr(0, i)} + " [… line truncated]";
-        }
-        if (!utf8::next_code_point(line, i)) {
-            ++i; // Byte inválido: cuenta como un carácter.
-        }
-        ++chars;
-    }
-    return std::string{line};
 }
 
 /// Número alineado a la derecha en 6 columnas, como cat -n.
@@ -129,7 +109,7 @@ ToolResult run_read(const json& arguments, ToolContext& context) {
     for (std::size_t number = first; number <= last; ++number) {
         text += numbered(number);
         text += '\t';
-        text += shown_line(lines[number - 1]);
+        text += shown_line(lines[number - 1], kMaxLineChars);
         text += '\n';
     }
     std::string display = lines_es(last - first + 1);

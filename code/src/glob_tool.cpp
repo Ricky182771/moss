@@ -55,13 +55,10 @@ struct Found {
 std::optional<std::vector<WalkFile>> list_with_git(ToolContext& context, const fs::path& base,
                                                    const RelativeFilter& keep,
                                                    const std::string& git) {
-    process::ProcessOptions options;
-    options.timeout = kGitTimeout;
-    options.cancel = &context.cancel;
-    const process::ProcessResult result = context.run_process(
-        {git, "-C", utf8_text(context.root.path()), "ls-files", "-z", "--cached", "--others",
-         "--exclude-standard"},
-        options);
+    const process::ProcessResult result =
+        run_git(context.run_process, git, context.root,
+                {"ls-files", "-z", "--cached", "--others", "--exclude-standard"}, kGitTimeout,
+                context.cancel);
     if (!result.ok() || result.out.size() >= process::kMaxProcessOutput) {
         return std::nullopt;
     }
@@ -196,6 +193,27 @@ std::optional<std::string> find_program(std::string_view name) {
         return std::nullopt;
     }
     return found;
+}
+
+process::ProcessOptions helper_options(std::chrono::milliseconds timeout,
+                                       const CancelToken& cancel) {
+    process::ProcessOptions options;
+    options.timeout = timeout;
+    options.cancel = &cancel;
+    options.env_remove_prefixes = {"CHAT_"};
+    options.env_set = {{"LC_ALL", "C"}, {"GIT_TERMINAL_PROMPT", "0"}, {"GIT_OPTIONAL_LOCKS", "0"}};
+    return options;
+}
+
+process::ProcessResult run_git(const ProcessLauncher& launch, const std::string& git_path,
+                               const ProjectRoot& root, const std::vector<std::string>& args,
+                               std::chrono::milliseconds timeout, const CancelToken& cancel) {
+    // core.fsmonitor vacío (no "false": git < 2.36 lo tomaría como el programa "false") y hooks en
+    // una carpeta que no existe: un .git/config ajeno no lanza nada.
+    std::vector<std::string> argv{git_path, "--no-optional-locks", "-c", "core.fsmonitor=",
+                                  "-c", "core.hooksPath=/dev/null", "-C", utf8_text(root.path())};
+    argv.insert(argv.end(), args.begin(), args.end());
+    return launch(argv, helper_options(timeout, cancel));
 }
 
 ProjectFiles list_project_files(ToolContext& context, const fs::path& base,

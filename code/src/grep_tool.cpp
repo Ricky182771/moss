@@ -3,6 +3,7 @@
 #include "chatbot/utf8.h"
 
 #include "glob_match.h"
+#include "output_cap.h"
 #include "tool_internal.h"
 
 #include <algorithm>
@@ -166,8 +167,9 @@ std::optional<std::pair<std::size_t, std::size_t>> counted_repeat(std::string_vi
 /// El error si la búsqueda propia no acepta pattern. Con __polynomial, std::regex de libstdc++
 /// simula el autómata en vez de retroceder (nada exponencial), pero su costo por carácter crece
 /// con el tamaño del autómata, que las repeticiones contadas multiplican ("(a{100}){100}"), y
-/// cada lookahead lanza otra búsqueda por posición. Estima el tamaño sumando los átomos y
-/// multiplicando por las repeticiones contadas; sobrestimar basta.
+/// cada lookahead lanza otra búsqueda por posición. Estima el tamaño sumando los átomos y los
+/// grupos (cientos de "(.)" también son cientos de estados) y multiplicando por las repeticiones
+/// contadas; sobrestimar basta.
 std::optional<ToolResult> pattern_problem(std::string_view pattern) {
     std::vector<std::size_t> groups{0}; // Peso de cada grupo abierto.
     std::size_t last = 0;               // Peso del último átomo, al que se aplica una repetición.
@@ -191,7 +193,7 @@ std::optional<ToolResult> pattern_problem(std::string_view pattern) {
             last = 0;
             continue;
         } else if (c == ')' && groups.size() > 1) {
-            atom = groups.back() + 1;
+            atom = groups.back() + 2; // Lo de dentro más sus estados de inicio y de fin.
             groups.pop_back();
         } else if (c == '*' || c == '+' || c == '?') {
             groups.back() += 1;
@@ -234,7 +236,10 @@ std::variant<std::regex, ToolResult> compile_pattern(const std::string& pattern,
     if (std::optional<ToolResult> problem = pattern_problem(pattern)) {
         return std::move(*problem);
     }
-    std::regex::flag_type flags = std::regex::ECMAScript | std::regex_constants::__polynomial;
+    // nosubs: solo importa si hay coincidencia; con grupos que capturan, el ejecutor copiaría sus
+    // resultados en cada estado y cada carácter.
+    std::regex::flag_type flags =
+        std::regex::ECMAScript | std::regex::nosubs | std::regex_constants::__polynomial;
     if (ignore_case) {
         flags |= std::regex::icase;
     }
@@ -575,10 +580,8 @@ std::optional<Outcome> search_rg(const Query& query, ToolContext& context,
     argv.push_back(query.pattern);
     argv.push_back(utf8_text(query.base));
 
-    process::ProcessOptions options;
-    options.timeout = kRgTimeout;
-    options.cancel = &context.cancel;
-    const process::ProcessResult result = context.run_process(argv, options);
+    const process::ProcessResult result =
+        context.run_process(argv, helper_options(kRgTimeout, context.cancel));
     if (context.cancel.is_cancelled() ||
         result.status == process::ProcessResult::Status::Cancelled) {
         return Outcome{cancelled_result()};
@@ -601,30 +604,6 @@ std::optional<Outcome> search_rg(const Query& query, ToolContext& context,
 }
 
 // ---- Resultado -----------------------------------------------------------------------------
-
-/// La línea para el modelo: sin '\r' final, UTF-8 válido (U+FFFD en lo que no lo es) y, si pasa
-/// de kMaxShownLineChars caracteres, recortada con una marca.
-std::string shown_line(std::string_view line) {
-    if (!line.empty() && line.back() == '\r') {
-        line.remove_suffix(1);
-    }
-    std::string out;
-    std::size_t chars = 0;
-    for (std::size_t i = 0; i < line.size(); ++chars) {
-        if (chars == kMaxShownLineChars) {
-            out += " [\xE2\x80\xA6 line truncated]";
-            break;
-        }
-        const std::size_t start = i;
-        if (utf8::next_code_point(line, i)) {
-            out += line.substr(start, i - start);
-        } else {
-            out += utf8::kReplacement;
-            ++i;
-        }
-    }
-    return out;
-}
 
 std::string files_es(std::size_t count) {
     return std::to_string(count) + (count == 1 ? " archivo" : " archivos");
@@ -672,7 +651,7 @@ ToolResult format_hits(std::vector<FileHits> files, const Query& query,
                 text += separator;
                 text += std::to_string(line.number);
                 text += separator;
-                text += shown_line(line.text);
+                text += shown_line(line.text, kMaxShownLineChars);
                 text += '\n';
                 previous = line.number;
                 shown += line.match ? 1 : 0;

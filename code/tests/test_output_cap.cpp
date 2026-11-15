@@ -1,13 +1,16 @@
 // Tope del resultado de una herramienta (output_cap.h): puro, sin red.
 
-#include "chatbot/code/output_cap.h"
+#include "output_cap.h"
 
 #include "chatbot/utf8.h"
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <cstddef>
+#include <optional>
+#include <random>
 #include <string>
+#include <string_view>
 
 using chatbot::code::cap_tool_output;
 
@@ -32,8 +35,62 @@ bool ends_with(const std::string& text, const std::string& suffix) {
            text.compare(text.size() - suffix.size(), suffix.size(), suffix) == 0;
 }
 
+// Caracteres como los cuenta el tope: un punto de código válido o un byte inválido.
+std::size_t code_points(std::string_view text) {
+    std::size_t count = 0;
+    for (std::size_t i = 0; i < text.size(); ++count) {
+        if (!chatbot::utf8::next_code_point(text, i)) {
+            ++i;
+        }
+    }
+    return count;
+}
+
 // Lo que la marca y sus dos saltos de línea pueden sumar al tope.
 constexpr std::size_t kMarkerRoom = 40;
+
+/// Cabeza y cola de un resultado recortado (lo de antes y lo de después de la marca); nullopt si
+/// no hay marca.
+struct Parts {
+    std::string head;
+    std::string tail;
+};
+std::optional<Parts> split_capped(const std::string& capped) {
+    const std::size_t mark = capped.find("[\xE2\x80\xA6 ");
+    if (mark == std::string::npos) {
+        return std::nullopt;
+    }
+    const std::string end = " lines omitted \xE2\x80\xA6]\n";
+    const std::size_t close = capped.find(end, mark);
+    if (close == std::string::npos) {
+        return std::nullopt;
+    }
+    return Parts{capped.substr(0, mark), capped.substr(close + end.size())};
+}
+
+/// Lo que cap_tool_output promete para cualquier entrada: el tope (más la marca), cabeza y cola
+/// sacadas del texto sin encimarse, y UTF-8 válido si la entrada lo es.
+void check_cap(const std::string& text, std::size_t cap) {
+    const std::string capped = cap_tool_output(text, cap);
+    CHECK(code_points(capped) <= cap + kMarkerRoom);
+    if (code_points(text) <= cap) {
+        CHECK(capped == text);
+        return;
+    }
+    const std::optional<Parts> parts = split_capped(capped);
+    REQUIRE(parts.has_value());
+    // La cabeza puede llevar un '\n' de más (cuando el texto no tenía saltos donde cortó).
+    std::string head = parts->head;
+    if (!text.starts_with(head) && head.ends_with('\n')) {
+        head.pop_back();
+    }
+    CHECK(text.starts_with(head));
+    CHECK(text.ends_with(parts->tail));
+    CHECK(head.size() + parts->tail.size() <= text.size());
+    if (chatbot::utf8::is_valid(text)) {
+        CHECK(chatbot::utf8::is_valid(capped));
+    }
+}
 
 std::string numbered_lines(int count) {
     std::string text;
@@ -138,4 +195,80 @@ TEST_CASE("cap_tool_output: el tope por defecto es de 30000 caracteres", "[code]
     const std::string at_cap(30000, 'a');
     CHECK(cap_tool_output(at_cap) == at_cap);
     CHECK(chars(cap_tool_output(at_cap + "a")) <= 30000 + kMarkerRoom);
+}
+
+TEST_CASE("cap_tool_output: 2000 líneas de 2000 bytes de continuación sueltos", "[code][tope]") {
+    // Cada 0x80 es un byte inválido: un carácter. Antes la cola retrocedía cada racha entera como
+    // si fuera uno y salía casi todo el texto.
+    std::string text;
+    for (int i = 0; i < 2000; ++i) {
+        text += std::string(2000, '\x80') + "\n";
+    }
+    const std::string capped = cap_tool_output(text);
+    CHECK(code_points(capped) <= chatbot::code::kDefaultToolOutputCap + kMarkerRoom);
+    CHECK(capped.size() <= chatbot::code::kDefaultToolOutputCap + kMarkerRoom);
+    check_cap(text, chatbot::code::kDefaultToolOutputCap);
+}
+
+TEST_CASE("cap_tool_output: rachas de continuación sueltas", "[code][tope]") {
+    // Rachas de 1 a 6 bytes de continuación, solas o detrás de un inicio de secuencia (válida o
+    // no), con y sin saltos de línea; topes que caen en todas partes.
+    for (const std::string_view lead : {"", "a", "\xC3", "\xE2", "\xF0", "\xE2\x82"}) {
+        for (std::size_t run = 1; run <= 6; ++run) {
+            for (const std::string_view separator : {"", "\n"}) {
+                std::string text;
+                for (int i = 0; i < 30; ++i) {
+                    text += lead;
+                    text += std::string(run, '\xAC');
+                    text += 'x';
+                    text += separator;
+                }
+                for (std::size_t cap = 1; cap < 40; ++cap) {
+                    INFO("lead " << lead.size() << ", run " << run << ", cap " << cap);
+                    check_cap(text, cap);
+                }
+            }
+        }
+    }
+}
+
+TEST_CASE("cap_tool_output: entradas de bytes al azar respetan el tope", "[code][tope]") {
+    std::mt19937 random{20261115U}; // Semilla fija: siempre las mismas entradas.
+    const auto pick = [&random](std::size_t below) {
+        return std::uniform_int_distribution<std::size_t>{0, below - 1}(random);
+    };
+    // Bytes con más peso para lo que importa: continuaciones, inicios de secuencia y saltos.
+    const std::string bytes_pool = std::string{"\n\n\naaa\x80\x8F\xBF\xC3\xE2\xF0\xF4\xFF"} + '\0';
+    for (int round = 0; round < 300; ++round) {
+        std::string text;
+        const std::size_t size = pick(400);
+        for (std::size_t i = 0; i < size; ++i) {
+            text += pick(4) == 0 ? static_cast<char>(pick(256)) : bytes_pool[pick(bytes_pool.size())];
+        }
+        const std::size_t cap = 1 + pick(120);
+        INFO("ronda " << round << ", cap " << cap);
+        check_cap(text, cap);
+    }
+    // UTF-8 válido al azar: el resultado también es válido.
+    const std::string_view pieces[] = {"a", "\n", "ñ", "€", "😀", "línea\n", " "};
+    for (int round = 0; round < 300; ++round) {
+        std::string text;
+        const std::size_t size = pick(300);
+        for (std::size_t i = 0; i < size; ++i) {
+            text += pieces[pick(std::size(pieces))];
+        }
+        const std::size_t cap = 1 + pick(120);
+        INFO("válido, ronda " << round << ", cap " << cap);
+        REQUIRE(chatbot::utf8::is_valid(text));
+        check_cap(text, cap);
+    }
+}
+
+TEST_CASE("shown_line: U+FFFD por cada byte inválido, sin \\r final y recortada", "[code][tope]") {
+    using chatbot::code::shown_line;
+    CHECK(shown_line("a\xFF" "b\xC3\r", 10) == "a\xEF\xBF\xBD" "b\xEF\xBF\xBD");
+    CHECK(shown_line("ñandú", 10) == "ñandú");
+    CHECK(shown_line("abcdef", 3) == "abc [\xE2\x80\xA6 line truncated]");
+    CHECK(shown_line("abc", 3) == "abc");
+    CHECK(chatbot::utf8::is_valid(shown_line(std::string(50, '\x80'), 10)));
 }

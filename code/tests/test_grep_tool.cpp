@@ -328,6 +328,36 @@ TEST_CASE("grep propio: los patrones catastróficos terminan a tiempo", "[grep][
     }
 }
 
+TEST_CASE("grep propio: cientos de grupos que capturan terminan a tiempo", "[grep][perf]") {
+    ToolFixture fixture;
+    std::string lines;
+    for (int i = 0; i < 5; ++i) {
+        lines += std::string(4000, 'a') + "\n";
+    }
+    fixture.file("grupos.txt", lines);
+    std::string groups;
+    for (int i = 0; i < 300; ++i) {
+        groups += "(.)";
+    }
+    const auto start = std::chrono::steady_clock::now();
+    // Sin coincidencia (no hay '!'): cada línea se recorre entera. Con coincidencia, igual.
+    const ToolResult none = grep(fixture, std::nullopt,
+                                 json{{"pattern", groups + "!"}, {"path", "grupos.txt"}}.dump());
+    const ToolResult found = grep(fixture, std::nullopt,
+                                  json{{"pattern", groups}, {"path", "grupos.txt"}}.dump());
+    const double ms = std::chrono::duration<double, std::milli>(
+                          std::chrono::steady_clock::now() - start)
+                          .count();
+    WARN("300 grupos que capturan sobre 5 líneas de 4000 bytes: " << ms << " ms");
+    CHECK(none.status == ToolStatus::Ok);
+    CHECK(none.display == "Sin coincidencias");
+    CHECK(found.text == "grupos.txt");
+    CHECK(ms < 60000.0);
+    if (chatbot_test::strict_performance()) {
+        CHECK(ms < 2000.0);
+    }
+}
+
 TEST_CASE("grep propio: rechaza lo que su motor no puede acotar", "[grep]") {
     ToolFixture fixture;
     for (const char* pattern : {"(a{100}){100}", "a{1000000}", "(?=a)b", "(?!a)b", "(a)\\1"}) {
@@ -343,6 +373,30 @@ TEST_CASE("grep propio: rechaza lo que su motor no puede acotar", "[grep]") {
     CHECK(grep(fixture, std::nullopt, R"({"pattern": "a)|(b"})").status == ToolStatus::Error);
     CHECK(grep(fixture, std::nullopt, json{{"pattern", std::string(1001, 'a')}}.dump()).status ==
           ToolStatus::Error);
+}
+
+TEST_CASE("grep propio con la lista de git: argv y entorno sin nada ajeno", "[grep]") {
+    ToolFixture fixture;
+    fixture.file("a.txt", "clave\n");
+    std::vector<std::string> argv;
+    ProcessOptions options;
+    fixture.context.run_process = [&](const std::vector<std::string>& args,
+                                      const ProcessOptions& given) {
+        argv = args;
+        options = given;
+        ProcessResult result;
+        result.status = ProcessResult::Status::Exited;
+        result.exit_code = 0;
+        result.out = std::string{"a.txt\0", 6};
+        return result;
+    };
+    CHECK(grep(fixture, std::nullopt, R"({"pattern": "clave"})", std::string{"/fake/git"}).text ==
+          "a.txt");
+    CHECK(argv == tool_test::git_argv("/fake/git", fixture.root,
+                                      {"ls-files", "-z", "--cached", "--others",
+                                       "--exclude-standard"}));
+    tool_test::check_helper_environment(options);
+    CHECK(options.cancel == &fixture.cancel);
 }
 
 TEST_CASE("grep propio cancelado", "[grep]") {
@@ -372,14 +426,18 @@ constexpr std::string_view kFakeRg = "/fake/rg";
 
 /// rg responde con esta salida; git (para la búsqueda propia) no funciona: se recorre.
 void fake_rg(ToolFixture& fixture, ProcessResult rg_result,
-             std::vector<std::string>* argv = nullptr) {
-    fixture.context.run_process = [rg_result = std::move(rg_result), argv](
-                                      const std::vector<std::string>& args, const ProcessOptions&) {
+             std::vector<std::string>* argv = nullptr, ProcessOptions* options = nullptr) {
+    fixture.context.run_process = [rg_result = std::move(rg_result), argv, options](
+                                      const std::vector<std::string>& args,
+                                      const ProcessOptions& given) {
         if (args.empty() || args[0] != kFakeRg) {
             return ProcessResult{};
         }
         if (argv != nullptr) {
             *argv = args;
+        }
+        if (options != nullptr) {
+            *options = given;
         }
         return rg_result;
     };
@@ -430,11 +488,14 @@ ToolResult fake_grep(ToolFixture& fixture, std::string_view raw) {
 TEST_CASE("grep con rg: argumentos sin shell, sin --follow ni configuración", "[grep][rg]") {
     ToolFixture fixture;
     std::vector<std::string> argv;
-    fake_rg(fixture, exited(1, rg_summary()), &argv);
+    ProcessOptions options;
+    fake_rg(fixture, exited(1, rg_summary()), &argv, &options);
     const ToolResult result = fake_grep(
         fixture,
         R"({"pattern": "-x", "ignore_case": true, "output_mode": "content", "context": 2})");
     CHECK(result.display == "Sin coincidencias");
+    tool_test::check_helper_environment(options);
+    CHECK(options.cancel == &fixture.cancel);
     REQUIRE(argv.size() >= 4);
     CHECK(argv[0] == kFakeRg);
     const auto has = [&argv](std::string_view flag) {

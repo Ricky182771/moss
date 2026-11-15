@@ -2,6 +2,8 @@
 
 #include "tool_fixture.hpp"
 
+#include "chatbot/utf8.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <nlohmann/json.hpp>
@@ -94,6 +96,20 @@ TEST_CASE("read: CRLF sin el \\r, y UTF-8 con acentos tal cual", "[read]") {
     CHECK(fixture.run("read", R"({"path": "acentos.txt"})").text == "     1\tcanción ñandú");
     fixture.file("año.txt", "x");
     CHECK(fixture.run("read", R"({"path": "año.txt"})").status == ToolStatus::Ok);
+}
+
+TEST_CASE("read: UTF-8 inválido llega como U+FFFD, contado y recortado igual", "[read]") {
+    ToolFixture fixture;
+    fixture.file("raro.txt", "a\xFF" "b\xC3\n" + std::string(2500, '\x80') + "\n");
+    const ToolResult result = fixture.run("read", R"({"path": "raro.txt"})");
+    CHECK(result.status == ToolStatus::Ok);
+    CHECK(chatbot::utf8::is_valid(result.text));
+    CHECK(result.text.starts_with("     1\ta\xEF\xBF\xBD" "b\xEF\xBF\xBD\n"));
+    std::string replaced;
+    for (int i = 0; i < 2000; ++i) {
+        replaced += "\xEF\xBF\xBD";
+    }
+    CHECK(result.text.ends_with("     2\t" + replaced + " [… line truncated]"));
 }
 
 TEST_CASE("read: archivo vacío", "[read]") {
