@@ -148,7 +148,7 @@ struct Message {
 - Un mensaje `tool` va con `role`, `tool_call_id` y `content`.
 ### 3.2 La petición
  
-- `complete_stream` recibe, aparte de los mensajes, un `ToolSet` opcional: la lista de herramientas como JSON Schema. Con herramientas manda `tools` y `"tool_choice": "auto"`; sin herramientas, el cuerpo **byte por byte igual que hoy** (prueba con las transcripciones existentes).
+- `complete_stream` recibe, aparte de los mensajes, un `RequestOptions {tools, replay_reasoning}` opcional, con las herramientas como `ToolSpec` (el esquema es una cadena JSON). Con herramientas manda `tools` y `"tool_choice": "auto"`; sin herramientas, el cuerpo **byte por byte igual que hoy** (prueba con las transcripciones existentes).
 - **No** se manda `parallel_tool_calls`: no todos los modelos lo aceptan. Si el modelo pide varias en una respuesta, se ejecutan en orden.
 - `tools` y `tool_choice` siguen reservadas en el JSON avanzado de M2 (`kReservedKeys`): nadie las pisa desde Configuración del modelo.
 ### 3.3 El flujo (SSE)
@@ -175,8 +175,17 @@ Las llamadas llegan en pedazos dentro de `choices[0].delta.tool_calls`:
 - Gemini por la capa compatible pide además su `thought_signature` (`extra_content.google`) en las llamadas a herramientas. **Fuera de alcance:** el modo código se prueba con NIM (D4).
 ### 3.5 Recorte del historial
  
-`trim_history` hoy quita pares usuario+asistente. Con herramientas, la unidad es el **grupo**: un asistente con `tool_calls` y todos sus `tool`. Nunca se deja un `tool` sin su llamada ni una llamada sin sus resultados. En el modo código el recorte es el último recurso; lo normal es compactar (sección 7).
+`trim_history` quita **grupos**: un `User` con todo lo que sigue hasta el siguiente `User` (asistente, `tool_calls` y `tool`). Nunca se deja un `tool` sin su llamada ni una llamada sin sus resultados, y el último grupo no se quita ni se parte. En el modo código el recorte es el último recurso; lo normal es compactar (sección 7).
  
+### Lo que cambió al implementarlo (C0)
+
+- En vez de `ToolSet`, `RequestOptions {tools, replay_reasoning}` con el esquema como cadena JSON, porque los headers públicos no exponen nlohmann.
+- 3.5: el grupo es un `User` con todo lo que sigue hasta el siguiente `User`, no solo "asistente con sus tool", para que tras el sistema siempre siga un `User` y el resultado sin herramientas sea el de antes.
+- Sin herramientas en la petición, los `tool_calls` que mande el servidor se ignoran como antes, para que el chat no cambie.
+- Ids: uno vacío o repetido (frente al historial o dentro de la respuesta) pasa a `call_moss_<n>` libre, porque hay servidores que repiten ids y la validación rechaza repetidos; `complete_trimmed` los revisa contra el historial completo.
+- Con herramientas, el reintento por contexto exige estado HTTP, porque un pedazo de llamada sin nombre no pasa por `on_delta`.
+- Una llamada con id vacío en el historial es error `Config`.
+
 ### 3.6 La sonda (para elegir modelos)
  
 `moss-tools-probe <modelo>` (solo en los presets de desarrollo, como `moss-telegram-probe`) corre cuatro escenarios contra el modelo real con herramientas falsas y escribe una tabla:
@@ -327,7 +336,7 @@ Todo aditivo, sin cambiar `protocol_version`:
  
 | Hito | Contenido |
 |---|---|
-| **C0** | Tool calling en el núcleo (3.1–3.5): `Role::Tool`, `ToolCall`, `content: null`, `tools`/`tool_choice`, el acumulador, `CompletionInfo.tool_calls`, `ToolCallStarted`, el pensamiento con su llave, recorte por grupos. `tools/fake-llm.py` con guiones de llamadas. La sonda `moss-tools-probe`. **Sin herramientas reales ni pantalla.** El chat no cambia en nada |
+| **C0** (En revisión, PR #64) | Tool calling en el núcleo (3.1–3.5): `Role::Tool`, `ToolCall`, `content: null`, `tools`/`tool_choice`, el acumulador, `CompletionInfo.tool_calls`, `ToolCallStarted`, el pensamiento con su llave, recorte por grupos. `tools/fake-llm.py` con guiones de llamadas. La sonda `moss-tools-probe`. **Sin herramientas reales ni pantalla.** El chat no cambia en nada |
 | **C1** | El motor sin pantalla: `code/` con `chatbot_code`, `ProjectRoot`, `read`, `glob`, `grep`, `todo_write`, `AgentLoop` con sus límites y cancelación, las instrucciones con `AGENTS.md`, y `moss code -p` (solo herramientas de lectura). Linux y Windows |
 | **C2** | La TUI del modo código, de solo lectura: `moss code`, la vista de herramientas y tareas, la línea de estado, Esc, `/model`, `/clear`, Ctrl+O |
 | **C3** | Editar: `edit`, `write`, diffs, la pregunta de aprobación, los modos (Shift+Tab, Plan con `exit_plan_mode`), las reglas de `.moss/`, `/permisos` y `/deshacer` |
