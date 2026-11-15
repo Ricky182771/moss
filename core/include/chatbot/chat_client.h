@@ -30,6 +30,25 @@ struct StreamDelta {
 /// devuelve ErrorKind::Cancelled).
 using StreamDeltaCallback = std::function<bool(const StreamDelta& delta)>;
 
+/// Una herramienta que se ofrece al modelo (formato OpenAI "function").
+struct ToolSpec {
+    std::string name;
+    std::string description;
+    std::string parameters; ///< JSON Schema como texto; tiene que ser un objeto.
+};
+
+/// Opciones de la petición del modo código (guias/18-moss-code.md, 3.2 y 3.4).
+/// Por defecto, el cuerpo es el del chat, byte por byte.
+struct RequestOptions {
+    /// Con herramientas se mandan "tools" y "tool_choice": "auto"; sin
+    /// ellas, ninguna de las dos llaves. Nombre vacío o repetido, o
+    /// parameters que no es un objeto JSON: error Config sin mandar nada.
+    std::vector<ToolSpec> tools{};
+    /// true: cada asistente con reasoning lo lleva en su llave
+    /// (reasoning_key). false: el pensamiento nunca se manda.
+    bool replay_reasoning{false};
+};
+
 /// Cliente del hito 1: petición simple sin streaming, con reintentos.
 /// Las excepciones internas nunca cruzan la API pública (sección 6).
 class ChatClient {
@@ -60,10 +79,12 @@ public:
     /// resultado: en éxito, el finish_reason (CompletionInfo); el texto
     /// completo ya pasó por el callback. Reintenta igual que complete() mientras no se haya entregado
     /// ningún delta, de ningún tipo. Cancela si on_delta devuelve false o con cancel, igual
-    /// que complete(). Nunca lanza excepciones.
+    /// que complete(). options: herramientas y pensamiento de regreso
+    /// (RequestOptions). Nunca lanza excepciones.
     [[nodiscard]] Result<CompletionInfo> complete_stream(const std::vector<Message>& messages,
                                                          const StreamDeltaCallback& on_delta,
-                                                         const CancelToken* cancel = nullptr);
+                                                         const CancelToken* cancel = nullptr,
+                                                         const RequestOptions& options = {});
 
     /// GET {base_url}/models: los id de modelo que da el servidor, sin el
     /// prefijo "models/" (Gemini), sin duplicados y en orden alfabético. No

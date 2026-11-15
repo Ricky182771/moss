@@ -61,7 +61,7 @@ std::size_t total_bytes(const std::vector<Message>& messages) {
 
 TrimmedCompletion complete_trimmed(ChatClient& client, const std::vector<Message>& history,
                                    std::size_t limit_bytes, const StreamDeltaCallback& on_delta,
-                                   const CancelToken* cancel) {
+                                   const CancelToken* cancel, const RequestOptions& options) {
     bool delivered = false;
     // Cualquier delta cuenta, también el pensamiento: ya se mostró algo.
     const StreamDeltaCallback deliver = [&](const StreamDelta& delta) {
@@ -70,7 +70,8 @@ TrimmedCompletion complete_trimmed(ChatClient& client, const std::vector<Message
     };
 
     const TrimResult first = trim_history(history, limit_bytes);
-    TrimmedCompletion done{client.complete_stream(first.messages, deliver, cancel), first.dropped};
+    TrimmedCompletion done{client.complete_stream(first.messages, deliver, cancel, options),
+                           first.dropped};
 
     // Reintento por contexto: una sola vez, si el servidor rechazó la
     // petición antes de mandar texto y recortar a la mitad quita algo más.
@@ -84,7 +85,7 @@ TrimmedCompletion complete_trimmed(ChatClient& client, const std::vector<Message
         // trim_history interpreta 0 como "sin límite": el mínimo es 1.
         const TrimResult second = trim_history(history, std::max<std::size_t>(base / 2, 1));
         if (second.dropped > first.dropped) {
-            TrimmedCompletion retry{client.complete_stream(second.messages, deliver, cancel),
+            TrimmedCompletion retry{client.complete_stream(second.messages, deliver, cancel, options),
                                     second.dropped};
             // Si el reintento también falla (sin cancelación ni texto
             // entregado), el error que sirve es el del primero: sin el aviso
