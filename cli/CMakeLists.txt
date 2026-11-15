@@ -43,6 +43,17 @@ if(WIN32)
 else()
     set(CHATBOT_CLIPBOARD_SOURCE src/clipboard_posix.cpp)
 endif()
+# moss code (code_command.h): con CHATBOT_BUILD_CODE usa el motor (chatbot::code) y Ctrl+C por
+# sistema; sin él, un archivo que solo avisa que no está incluido.
+if(CHATBOT_BUILD_CODE)
+    if(WIN32)
+        set(CHATBOT_CODE_COMMAND_SOURCES src/code_command.cpp src/interrupt_windows.cpp)
+    else()
+        set(CHATBOT_CODE_COMMAND_SOURCES src/code_command.cpp src/interrupt_posix.cpp)
+    endif()
+else()
+    set(CHATBOT_CODE_COMMAND_SOURCES src/code_command_stub.cpp)
+endif()
 add_library(chatbot_cli_lib STATIC
     src/addon_form.cpp
     src/addon_launcher.cpp
@@ -51,6 +62,7 @@ add_library(chatbot_cli_lib STATIC
     src/clipboard.cpp
     ${CHATBOT_CLIPBOARD_SOURCE}
     src/code_blocks.cpp
+    ${CHATBOT_CODE_COMMAND_SOURCES}
     src/command_menu.cpp
     src/command_parser.cpp
     src/commands.cpp
@@ -82,6 +94,9 @@ target_compile_definitions(chatbot_cli_lib PRIVATE CHATBOT_VERSION="${PROJECT_VE
 target_link_libraries(chatbot_cli_lib
     PUBLIC chatbot::core chatbot::process chatbot::markdown chatbot::addon_settings Threads::Threads
     PRIVATE nlohmann_json::nlohmann_json)
+if(CHATBOT_BUILD_CODE)
+    target_link_libraries(chatbot_cli_lib PRIVATE chatbot::code)
+endif()
 chatbot_set_warnings(chatbot_cli_lib)
 # Windows: portapapeles y ventana de solo mensajes (user32). Biblioteca del
 # sistema, no una dependencia nueva.
