@@ -27,6 +27,7 @@ moss code ~/proyectos/app -p "lista los TODO que haya"      # otra carpeta
 
 - Todo resultado se recorta a 30 000 caracteres (cabeza y cola, con `[… N lines omitted …]`).
 - **`rg` es opcional.** Con `rg` (ripgrep) en el `PATH`, `grep` lo usa. Sin él, usa una búsqueda propia (`std::regex`, sin retroceso exponencial): más lenta, sin lookahead, lookbehind ni referencias, solo archivos de hasta 1 MiB y líneas de hasta 4 KiB. En Windows siempre es la propia.
+- En Windows nunca se lanzan `git` ni `rg`: `glob` recorre la carpeta **sin respetar `.gitignore`**, `grep` usa la búsqueda propia y las instrucciones de sistema no traen rama ni estado de git.
 - `git` y `rg` se buscan en el `PATH` solo por ruta absoluta y se lanzan sin shell.
 
 ## Qué no puede tocar
@@ -55,6 +56,8 @@ Un turno se detiene si el modelo pasa de estos límites (salida 1, con el motivo
 | `max_invalid_calls` | Llamadas seguidas inválidas o a una herramienta que no existe | 3 | 1–100 |
 | `history_limit_bytes` | Tamaño del historial antes de recortar los grupos más viejos (0: sin límite) | 300000 | 0–100 000 000 |
 
+Dentro de un solo turno el historial no se recorta (el último grupo nunca se quita): un turno muy largo, con muchos resultados grandes, puede pasarse del contexto del modelo y terminar con error. La compactación llega en C5.
+
 Un valor que no es un entero o está fuera de rango usa el predeterminado y avisa.
 
 ## Seguridad
@@ -62,3 +65,4 @@ Un valor que no es un entero o está fuera de rango usa el predeterminado y avis
 - Lo que el modelo lee (archivos, resultados de `grep`, `AGENTS.md`) son **datos, no órdenes**: un archivo del proyecto que diga "ignora lo anterior" no es una instrucción para Moss.
 - Las keys nunca llegan al modelo: la carpeta de Moss está bloqueada en todas las herramientas y cada resultado pasa por `hide_secret` antes de enviarse.
 - Aun así, lo que leen las herramientas sale hacia el proveedor del modelo: no abras `moss code` en una carpeta con secretos que no quieras compartir con él.
+- Moss Code ejecuta `git` (y `rg`, si está) sobre la carpeta del proyecto, y `git` lee el `.git/config` de esa carpeta. Abrir con Moss Code un proyecto con un `.git/` que no es tuyo (por ejemplo, de un .zip) tiene el mismo riesgo que correr `git status` ahí. Moss desactiva `core.fsmonitor` y quita sus keys del entorno de esos procesos, pero un `.git/config` malicioso puede tener otros ganchos (filtros `clean`).

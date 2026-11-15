@@ -113,7 +113,7 @@ Idle ─send─► Requesting ─(texto, sin herramientas)─► Idle
  
 **Límites del turno** (configurables en `config.json` → `"code"`):
  
-- **Pasos:** 50 peticiones al modelo por turno. Al llegar, se detiene y pregunta "¿Seguir?".
+- **Pasos:** 50 peticiones al modelo por turno. Al llegar, se detiene con un aviso (la pregunta "¿Seguir?" llega con la pantalla, C2).
 - **Bucles:** la misma herramienta con los mismos argumentos 3 veces seguidas detiene el turno con un aviso. Los modelos gratis caen en esto.
 - **Argumentos rotos:** si el modelo manda argumentos que no son JSON, se le regresa el error como resultado para que corrija; 3 seguidos detienen el turno.
 - **Cuota:** el plan gratis de NIM limita las peticiones por minuto (se reporta alrededor de 40). El 429 con `Retry-After` ya se reintenta; la línea de estado dice "Esperando a NIM (límite de peticiones)…" en vez de quedarse muda.
@@ -227,13 +227,15 @@ Nombres y descripciones en inglés para el modelo (D7); en la pantalla, en espa�
 - El bloqueo de la carpeta de Moss y la pertenencia a la raíz van también por identidad de archivo (dispositivo e inodo; en Windows, volumen y FileId), no solo por ruta: un sistema de archivos sin distinción de mayúsculas o un montaje bind no se lo saltan.
 - No se acepta `/` ni una unidad como raíz: sería dejar al modelo leer todo el disco.
 - En Windows no se siguen enlaces simbólicos en v1 (uno hacia una ruta UNC mandaría credenciales de red); las uniones sí.
+- `output_cap.h` no es público: vive en `code/src/`.
 - `walk` y `read_file` son únicos para todas las herramientas: ninguna abre archivos por su cuenta.
 - `git` y `rg` solo por ruta absoluta (nunca del directorio actual) y la carpeta de Moss se excluye desde el comando de `rg`.
 - `rg` se lee con `--json`: una línea con texto raro no rompe el análisis.
 - La búsqueda propia usa el motor sin retroceso exponencial de libstdc++ (`__polynomial`): un patrón malicioso del modelo no cuelga la herramienta.
 - El recorte del historial del modo código usa su propio límite (`history_limit_bytes`, 300 000 bytes): el del chat (32 000) se llena con una sola lectura.
 - Los `arguments` que no son JSON se guardan como `{}` en el historial: el servidor rechaza una llamada con argumentos inválidos en la petición siguiente.
-- Un turno cortado por un límite en su primera petición devuelve el mensaje del usuario sin enviarlo, como el chat.
+- Si la primera petición del turno se cancela, falla o llega vacía, el turno devuelve el mensaje del usuario sin enviarlo, como el chat.
+- Al llegar al límite de pasos, C1 solo se detiene con un aviso; la pregunta "¿Seguir?" llega con la pantalla (C2).
 - El aviso "Esperando a NIM (límite de peticiones)…" (sección 2) todavía no existe: el núcleo no avisa de sus reintentos.
 
 ### 4.1 `bash` (C4)
