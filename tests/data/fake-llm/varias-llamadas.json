@@ -1,0 +1,11 @@
+[
+  {
+    "content": "Reviso dos archivos.",
+    "chunk_size": 6,
+    "tool_calls": [
+      {"id": "call_a", "name": "read", "arguments": {"path": "a.txt"}},
+      {"id": "call_b", "name": "read", "arguments": {"path": "b.txt"}}
+    ]
+  },
+  {"content": "Ya leí los dos."}
+]
