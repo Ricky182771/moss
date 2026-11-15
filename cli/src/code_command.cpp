@@ -133,6 +133,18 @@ int run_code(const CommandLine& line, CodeEnvironment& environment) {
             blocked.push_back(*dir);
         }
     }
+    // La de conversaciones por defecto es <datos>/moss/conversations: la carpeta de datos de Moss
+    // es su padre (con CHAT_DATA_DIR es una carpeta cualquiera y se bloquea tal cual).
+    if (environment.data_dir.has_value()) {
+        fs::path conversations = path_of(*environment.data_dir).lexically_normal();
+        if (!conversations.has_filename()) {
+            conversations = conversations.parent_path();
+        }
+        if (conversations.filename() == "conversations" &&
+            conversations.parent_path().filename() == std::string{kAppName}) {
+            blocked.push_back(utf8_of(conversations.parent_path()));
+        }
+    }
     const Result<code::ProjectRoot> root = code::ProjectRoot::open(folder, blocked);
     if (root.is_error()) {
         print_error(err, root.error());

@@ -248,6 +248,31 @@ TEST_CASE("moss code -p: la carpeta tiene que existir y no ser de Moss", "[code]
     }
 }
 
+TEST_CASE("moss code -p: la carpeta de datos por defecto bloquea todo <datos>/moss", "[code][cli]") {
+    Layout layout;
+    const fs::path outer = layout.project / "moss";
+    fs::create_directories(outer / "conversations");
+    write_file(outer / "otro.txt", "hermano\n");
+    const auto read_of = [&](const char* path) {
+        return run(layout, prompt_in(layout),
+                   scripted({ok(call_flow("read", std::string{R"({"path":")"} + path + R"("})")),
+                             ok(answer_flow("Listo."))}));
+    };
+    SECTION("la de por defecto (.../moss/conversations): su padre no se puede leer") {
+        layout.data_dir = outer / "conversations";
+        const Outcome result = read_of("moss/otro.txt");
+        CHECK(result.code == 0);
+        CHECK(result.err.find("[error]") != std::string::npos);
+        CHECK(read_of("a.txt").err.find("[error]") == std::string::npos);
+    }
+    SECTION("tipo CHAT_DATA_DIR: su padre sí") {
+        layout.data_dir = layout.project / "x" / "conversations";
+        fs::create_directories(layout.data_dir);
+        write_file(layout.project / "x" / "otro.txt", "hermano\n");
+        CHECK(read_of("x/otro.txt").err.find("[error]") == std::string::npos);
+    }
+}
+
 TEST_CASE("moss code -p: Ctrl+C durante la petición sale con 130 en menos de 2 s", "[code][cli]") {
     const Layout layout;
     chatbot_test::BlockingTransport* transport = nullptr;
