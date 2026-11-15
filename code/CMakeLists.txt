@@ -13,14 +13,18 @@ endif()
 add_library(chatbot_code STATIC
     ${CHATBOT_CODE_PLATFORM_SOURCE}
     src/output_cap.cpp
-    src/project_root.cpp)
+    src/project_root.cpp
+    src/read_tool.cpp
+    src/tool_registry.cpp
+    src/tool_schema.cpp)
 add_library(chatbot::code ALIAS chatbot_code)
 target_compile_features(chatbot_code PUBLIC cxx_std_20)
 target_include_directories(chatbot_code PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 target_link_libraries(chatbot_code
-    PUBLIC chatbot::core
-    PRIVATE chatbot::process nlohmann_json::nlohmann_json)
+    # process es pública: tool.h expone ProcessLauncher (la forma de run_process).
+    PUBLIC chatbot::core chatbot::process
+    PRIVATE nlohmann_json::nlohmann_json)
 chatbot_set_warnings(chatbot_code)
 
 if(CHATBOT_BUILD_TESTS)
