@@ -14,8 +14,11 @@ add_library(chatbot_code STATIC
     ${CHATBOT_CODE_PLATFORM_SOURCE}
     src/output_cap.cpp
     src/project_root.cpp
+    src/glob_match.cpp
+    src/glob_tool.cpp
     src/read_tool.cpp
     src/tool_registry.cpp
+    src/todo_write_tool.cpp
     src/tool_schema.cpp)
 add_library(chatbot::code ALIAS chatbot_code)
 target_compile_features(chatbot_code PUBLIC cxx_std_20)

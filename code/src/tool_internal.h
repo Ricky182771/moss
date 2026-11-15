@@ -27,6 +27,8 @@ struct Tool {
 };
 
 [[nodiscard]] std::shared_ptr<const Tool> make_read_tool();
+[[nodiscard]] std::shared_ptr<const Tool> make_glob_tool();
+[[nodiscard]] std::shared_ptr<const Tool> make_todo_write_tool();
 
 /// Texto del modelo para mostrar: como mucho max_bytes (sin partir un carácter), con "…" si se
 /// corta.

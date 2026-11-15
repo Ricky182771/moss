@@ -39,8 +39,10 @@ std::shared_ptr<const Tool> fake_tool(std::string name, std::string output, bool
 TEST_CASE("El registro estándar ofrece read con su esquema en inglés", "[tool_registry]") {
     const ToolRegistry registry = ToolRegistry::standard();
     const std::vector<chatbot::ToolSpec> specs = registry.specs();
-    REQUIRE(specs.size() == 1);
+    REQUIRE(specs.size() == 3);
     CHECK(specs[0].name == "read");
+    CHECK(specs[1].name == "glob");
+    CHECK(specs[2].name == "todo_write");
     CHECK(specs[0].description.starts_with("Reads a text file"));
     const nlohmann::json schema = nlohmann::json::parse(specs[0].parameters);
     CHECK(schema["type"] == "object");
@@ -95,7 +97,7 @@ TEST_CASE("execute: argumentos inválidos y herramienta desconocida", "[tool_reg
 
     const ToolResult unknown = fixture.run("borrar", "{}");
     CHECK(unknown.status == ToolStatus::UnknownTool);
-    CHECK(unknown.text == "Unknown tool: borrar. Available tools: read.");
+    CHECK(unknown.text == "Unknown tool: borrar. Available tools: read, glob, todo_write.");
     CHECK(unknown.display == "Herramienta desconocida: borrar");
     CHECK(fixture.state.reads.empty());
 }

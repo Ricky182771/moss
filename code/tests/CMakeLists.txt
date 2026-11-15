@@ -1,9 +1,12 @@
 # Pruebas de chatbot_code, sin red. Usan los helpers de tests/.
 add_executable(chatbot_code_tests
+    test_glob_match.cpp
+    test_glob_tool.cpp
     test_output_cap.cpp
     test_project_root.cpp
     test_read_tool.cpp
     test_tool_registry.cpp
+    test_todo_write_tool.cpp
     test_tool_schema.cpp)
 # Uniones y enlaces simbólicos creados con Win32: solo en Windows.
 if(WIN32)
