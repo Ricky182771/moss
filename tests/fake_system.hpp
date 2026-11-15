@@ -21,9 +21,9 @@ namespace chatbot_test {
 /// El addon "instalado" que contesta --config-version.
 inline constexpr const char* kAddonExecutable = "/home/ana/CB/build/moss-telegram";
 
-inline chatbot::cli::ProcessResult exited(int code, std::string out = {}, std::string err = {}) {
-    chatbot::cli::ProcessResult result;
-    result.status = chatbot::cli::ProcessResult::Status::Exited;
+inline chatbot::process::ProcessResult exited(int code, std::string out = {}, std::string err = {}) {
+    chatbot::process::ProcessResult result;
+    result.status = chatbot::process::ProcessResult::Status::Exited;
     result.exit_code = code;
     result.out = std::move(out);
     result.err = std::move(err);
@@ -54,7 +54,7 @@ public:
         answers_["systemctl --user is-enabled moss-telegram.service"] =
             enabled ? exited(0, "enabled\n") : exited(1, "disabled\n");
     }
-    void answer(const std::string& command, chatbot::cli::ProcessResult result) {
+    void answer(const std::string& command, chatbot::process::ProcessResult result) {
         const std::lock_guard<std::mutex> lock(mutex_);
         answers_[command] = std::move(result);
     }
@@ -79,7 +79,7 @@ public:
 
     chatbot::cli::ProcessRunner runner() {
         return [this](const std::vector<std::string>& argv,
-                      const chatbot::cli::ProcessOptions& options) {
+                      const chatbot::process::ProcessOptions& options) {
             std::string joined;
             for (const std::string& part : argv) {
                 joined += (joined.empty() ? "" : " ") + part;
@@ -95,8 +95,8 @@ public:
                 }
                 holding_ = false;
                 if (!released_) {
-                    chatbot::cli::ProcessResult cancelled;
-                    cancelled.status = chatbot::cli::ProcessResult::Status::Cancelled;
+                    chatbot::process::ProcessResult cancelled;
+                    cancelled.status = chatbot::process::ProcessResult::Status::Cancelled;
                     return cancelled;
                 }
             }
@@ -121,7 +121,7 @@ public:
 private:
     mutable std::mutex mutex_;
     std::condition_variable changed_;
-    std::map<std::string, chatbot::cli::ProcessResult> answers_;
+    std::map<std::string, chatbot::process::ProcessResult> answers_;
     std::vector<std::string> calls_;
     std::string held_;
     bool released_ = false;

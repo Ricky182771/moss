@@ -203,8 +203,8 @@ TEST_CASE("addons: instalado, no instalado e incompatible", "[addons][estado]") 
               telegram(), AddonInstall{"/x/moss-telegram", std::nullopt}, false)
               .starts_with("Incompatible: "));
 
-    chatbot::cli::ProcessResult result;
-    result.status = chatbot::cli::ProcessResult::Status::Exited;
+    chatbot::process::ProcessResult result;
+    result.status = chatbot::process::ProcessResult::Status::Exited;
     result.exit_code = 0;
     result.out = "1\n";
     CHECK(chatbot::cli::parse_config_version(result) == 1);

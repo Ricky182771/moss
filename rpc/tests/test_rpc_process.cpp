@@ -2,7 +2,7 @@
 // stdin y lee su stdout. Con HOME, XDG_* y CHAT_* propios y sin
 // configuración, así que nunca toca la red ni la configuración del usuario.
 
-#include "child_process.h"
+#include "chatbot/child_process.h"
 
 #include "temp_dir.hpp"
 
@@ -74,13 +74,13 @@ TEST_CASE("moss-rpc sin configuración: initialize, chat.send, shutdown y exit",
         "\n"
         R"({"jsonrpc":"2.0","method":"exit"})"
         "\n";
-    chatbot::cli::ProcessOptions options;
+    chatbot::process::ProcessOptions options;
     options.input = input;
     options.timeout = std::chrono::seconds{20};
-    const chatbot::cli::ProcessResult result =
-        chatbot::cli::run_process(rpc_command(dir, log), options);
+    const chatbot::process::ProcessResult result =
+        chatbot::process::run_process(rpc_command(dir, log), options);
     INFO(result.err);
-    REQUIRE(result.status == chatbot::cli::ProcessResult::Status::Exited);
+    REQUIRE(result.status == chatbot::process::ProcessResult::Status::Exited);
     CHECK(result.exit_code == 0);
     const std::vector<nlohmann::json> messages = messages_of(result.out);
     REQUIRE(messages.size() == 4);
@@ -105,14 +105,14 @@ TEST_CASE("moss-rpc sin configuración: initialize, chat.send, shutdown y exit",
 
 TEST_CASE("moss-rpc: EOF sale con 0 en menos de 3 s", "[rpc][proceso]") {
     const chatbot_test::ScopedTempDir dir;
-    chatbot::cli::ProcessOptions options;
+    chatbot::process::ProcessOptions options;
     options.input = kInitialize;
     options.timeout = std::chrono::seconds{20};
     const auto begin = std::chrono::steady_clock::now();
-    const chatbot::cli::ProcessResult result = chatbot::cli::run_process(rpc_command(dir), options);
+    const chatbot::process::ProcessResult result = chatbot::process::run_process(rpc_command(dir), options);
     const auto elapsed = std::chrono::steady_clock::now() - begin;
     INFO(result.err);
-    REQUIRE(result.status == chatbot::cli::ProcessResult::Status::Exited);
+    REQUIRE(result.status == chatbot::process::ProcessResult::Status::Exited);
     CHECK(result.exit_code == 0);
     CHECK(elapsed < std::chrono::seconds{3});
     const std::vector<nlohmann::json> messages = messages_of(result.out);
@@ -122,12 +122,12 @@ TEST_CASE("moss-rpc: EOF sale con 0 en menos de 3 s", "[rpc][proceso]") {
 
 TEST_CASE("moss-rpc: exit sin shutdown sale con 1", "[rpc][proceso]") {
     const chatbot_test::ScopedTempDir dir;
-    chatbot::cli::ProcessOptions options;
+    chatbot::process::ProcessOptions options;
     const std::string input = std::string{kInitialize} + R"({"jsonrpc":"2.0","method":"exit"})" "\n";
     options.input = input;
     options.timeout = std::chrono::seconds{20};
-    const chatbot::cli::ProcessResult result = chatbot::cli::run_process(rpc_command(dir), options);
+    const chatbot::process::ProcessResult result = chatbot::process::run_process(rpc_command(dir), options);
     INFO(result.err);
-    REQUIRE(result.status == chatbot::cli::ProcessResult::Status::Exited);
+    REQUIRE(result.status == chatbot::process::ProcessResult::Status::Exited);
     CHECK(result.exit_code == 1);
 }

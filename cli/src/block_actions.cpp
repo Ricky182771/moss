@@ -3,7 +3,7 @@
 #include "conversation_export.h"
 #include "conversation_store.h"
 #include "downloads.h"
-#include "child_process.h"
+#include "chatbot/child_process.h"
 
 #include <optional>
 #include <utility>
@@ -49,7 +49,7 @@ ClipboardAccess real_clipboard() {
     return ClipboardAccess{
         clipboard_methods(
             environment_value,
-            [](std::string_view program) { return find_in_path(program).has_value(); },
+            [](std::string_view program) { return process::find_in_path(program).has_value(); },
             current_os()),
         tmux.has_value() && !tmux->empty(),
         [](const std::vector<std::string>& argv, std::string_view text) {

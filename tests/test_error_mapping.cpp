@@ -1,7 +1,7 @@
 #include "chatbot/chat_client.h"
 #include "chatbot/error.h"
 #include "fake_transport.hpp"
-#include "hide_secret.h"
+#include "chatbot/hide_secret.h"
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>

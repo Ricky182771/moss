@@ -2,7 +2,7 @@
 // stdin, stdout y stderr, y la búsqueda en PATH. CMake lo compila en lugar
 // de child_process_windows.cpp fuera de Windows.
 
-#include "child_process.h"
+#include "chatbot/child_process.h"
 
 #include <algorithm>
 #include <cerrno>
@@ -21,7 +21,7 @@
 
 extern char** environ; // NOLINT: lo exige posix_spawnp.
 
-namespace chatbot::cli {
+namespace chatbot::process {
 
 namespace {
 
@@ -390,4 +390,4 @@ std::optional<unsigned long> current_user_id() {
     return static_cast<unsigned long>(::getuid());
 }
 
-} // namespace chatbot::cli
+} // namespace chatbot::process

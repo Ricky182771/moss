@@ -1,5 +1,5 @@
-#ifndef CHATBOT_CLI_CHILD_PROCESS_H
-#define CHATBOT_CLI_CHILD_PROCESS_H
+#ifndef CHATBOT_PROCESS_CHILD_PROCESS_H
+#define CHATBOT_PROCESS_CHILD_PROCESS_H
 
 #include "chatbot/cancel_token.h"
 
@@ -18,7 +18,7 @@
 /// interfaz si puede tardar. No se llama process.h: con cli/src en el
 /// include path, la pthread.h de MinGW tomaría este en lugar del <process.h>
 /// del sistema.
-namespace chatbot::cli {
+namespace chatbot::process {
 
 /// Tope de lo que se guarda de stdout y de stderr; el resto se lee y se tira
 /// (el programa no se queda esperando a que alguien lea).
@@ -79,6 +79,6 @@ struct ProcessResult {
 /// En Windows, siempre nullopt: ahí no se lanzan programas.
 [[nodiscard]] std::optional<std::string> find_in_path(std::string_view program);
 
-} // namespace chatbot::cli
+} // namespace chatbot::process
 
-#endif // CHATBOT_CLI_CHILD_PROCESS_H
+#endif // CHATBOT_PROCESS_CHILD_PROCESS_H

@@ -1,6 +1,6 @@
 #include "addon_launcher.h"
 
-#include "child_process.h"
+#include "chatbot/child_process.h"
 
 #include "chatbot/config.h"
 
@@ -58,8 +58,8 @@ std::optional<std::string> locate_addon(const settings::AddonInfo& addon) {
         return std::nullopt;
     }
     return find_addon_executable(addon, executable_dir().value_or(""),
-                                 process_portable_data_dir().has_value(), is_executable_file,
-                                 find_in_path);
+                                 process_portable_data_dir().has_value(),
+                                 process::is_executable_file, process::find_in_path);
 }
 
 std::string addon_not_found_message(const settings::AddonInfo& addon, bool portable) {
@@ -124,7 +124,7 @@ std::optional<int> run_command_line(const std::vector<std::string>& args) {
     }
     std::vector<std::string> argv{*path};
     argv.insert(argv.end(), line.arguments.begin(), line.arguments.end());
-    const std::string error = exec_program(*path, argv);
+    const std::string error = process::exec_program(*path, argv);
     std::cerr << "moss: no se pudo arrancar " << *path << ": " << error << '\n';
     return 1;
 }

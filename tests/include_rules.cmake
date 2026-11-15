@@ -2,12 +2,12 @@
 # "Addons"). La revisión del enlace la hace cmake/dependency_rules.cmake al
 # configurar; esta revisa el código fuente, también con los addons apagados:
 #   cmake -DSOURCE_DIR=<raíz del proyecto> -P include_rules.cmake
-# - core/, markdown/, cli/, rpc/, tools/ y tests/ nunca incluyen nada de
+# - core/, process/, markdown/, code/, cli/, rpc/, tools/ y tests/ nunca incluyen nada de
 #   addons/ (chatbot/bot/..., chatbot/telegram/... ni rutas con addons/),
 #   salvo chatbot/addon_settings/... en cli/, rpc/, tools/ y tests/.
-# - core/ y markdown/ tampoco incluyen chatbot/addon_settings/ (está encima).
+# - core/, process/, markdown/ y code/ tampoco incluyen chatbot/addon_settings/ (está encima).
 # - addons/settings/ no incluye chatbot/bot/ ni chatbot/telegram/ (está debajo).
-# - markdown/ y addons/ nunca incluyen FTXUI ni headers de cli/src.
+# - process/, markdown/, code/ y addons/ nunca incluyen FTXUI ni headers de cli/src.
 # - rpc/ nunca incluye FTXUI (sí los headers de chatbot_cli_lib).
 # Imprime cada violación con archivo y línea, y falla si hay alguna.
 
@@ -54,7 +54,7 @@ macro(add_violation file number text)
 endmacro()
 
 # 1. Nada fuera de addons/ incluye algo de addons/.
-foreach(directory core markdown cli rpc tools tests)
+foreach(directory core process markdown code cli rpc tools tests)
     sources_under(${directory} files)
     foreach(file IN LISTS files)
         read_includes("${file}" includes)
@@ -64,7 +64,7 @@ foreach(directory core markdown cli rpc tools tests)
             list(GET parts 1 path)
             if(path MATCHES "^chatbot/(bot|telegram)/" OR path MATCHES "(^|/)addons/")
                 add_violation("${file}" ${number} "incluye ${path}, que es de addons/")
-            elseif(path MATCHES "^chatbot/addon_settings/" AND directory MATCHES "^(core|markdown)$")
+            elseif(path MATCHES "^chatbot/addon_settings/" AND directory MATCHES "^(core|process|markdown|code)$")
                 add_violation("${file}" ${number} "incluye ${path}, que está encima de ${directory}/")
             endif()
         endforeach()
@@ -86,7 +86,7 @@ foreach(file IN LISTS files)
 endforeach()
 
 # 3. markdown/ y addons/ no incluyen FTXUI ni headers de cli/src.
-foreach(directory markdown addons)
+foreach(directory process markdown code addons)
     if(NOT IS_DIRECTORY "${SOURCE_DIR}/${directory}")
         continue()
     endif()

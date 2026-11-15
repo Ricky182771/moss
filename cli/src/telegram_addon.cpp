@@ -213,7 +213,7 @@ AddonInstall TelegramAddon::find_install(const CancelToken& cancel) const {
     AddonInstall install;
     install.path = environment_.locate(addon_);
     if (install.path.has_value()) {
-        ProcessOptions options;
+        process::ProcessOptions options;
         options.timeout = kServiceCommandTimeout;
         options.cancel = &cancel;
         install.config_version =

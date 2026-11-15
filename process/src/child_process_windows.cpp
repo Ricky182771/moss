@@ -2,9 +2,9 @@
 // lanzan programas (el portapapeles usa la API de Win32 y los addons no
 // están disponibles). CMake lo compila en lugar de child_process_posix.cpp.
 
-#include "child_process.h"
+#include "chatbot/child_process.h"
 
-namespace chatbot::cli {
+namespace chatbot::process {
 
 ProcessResult run_process(const std::vector<std::string>& /*argv*/,
                           const ProcessOptions& /*options*/) {
@@ -27,4 +27,4 @@ std::optional<std::string> find_in_path(std::string_view /*program*/) {
     return std::nullopt;
 }
 
-} // namespace chatbot::cli
+} // namespace chatbot::process

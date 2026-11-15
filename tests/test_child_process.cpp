@@ -2,7 +2,7 @@
 // búsqueda en PATH. Lanzan /bin/sh y programas de coreutils; solo POSIX
 // (en Windows run_process no lanza nada).
 
-#include "child_process.h"
+#include "chatbot/child_process.h"
 
 #include "chatbot/platform.h"
 
@@ -14,10 +14,10 @@
 #include <thread>
 #include <vector>
 
-using chatbot::cli::find_in_path;
-using chatbot::cli::ProcessOptions;
-using chatbot::cli::ProcessResult;
-using chatbot::cli::run_process;
+using chatbot::process::find_in_path;
+using chatbot::process::ProcessOptions;
+using chatbot::process::ProcessResult;
+using chatbot::process::run_process;
 using namespace std::chrono_literals;
 
 TEST_CASE("run_process: en Windows no lanza nada", "[process]") {
@@ -131,10 +131,10 @@ TEST_CASE("run_process: no existe el programa", "[process]") {
 
 TEST_CASE("run_process: guarda hasta kMaxProcessOutput", "[process]") {
     const ProcessResult result =
-        run_process({"head", "-c", std::to_string(chatbot::cli::kMaxProcessOutput + 5000),
+        run_process({"head", "-c", std::to_string(chatbot::process::kMaxProcessOutput + 5000),
                      "/dev/zero"});
     CHECK(result.ok());
-    CHECK(result.out.size() == chatbot::cli::kMaxProcessOutput);
+    CHECK(result.out.size() == chatbot::process::kMaxProcessOutput);
 }
 
 TEST_CASE("find_in_path: la ruta completa del programa", "[process]") {

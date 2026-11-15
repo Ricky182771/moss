@@ -103,6 +103,10 @@ foreach(addon_option IN LISTS CHATBOT_ADDON_OPTIONS)
     endif()
 endforeach()
 
+# Motor de Moss Code (code/, guias/18-moss-code.md): sin addons ni terminal,
+# también en Windows. Apagado, code/ no se compila y lo demás sigue igual.
+option(CHATBOT_BUILD_CODE "Compilar chatbot_code, el motor de Moss Code" ON)
+
 include(cmake/dependency_rules.cmake)
 
 if(CHATBOT_BUILD_TESTS)
@@ -123,7 +127,13 @@ if(CHATBOT_BUILD_TESTS)
 endif()
 
 add_subdirectory(core)
+# Programas externos sin shell (chatbot::process): sobre el núcleo, debajo de
+# cli/ y de code/.
+add_subdirectory(process)
 add_subdirectory(markdown)
+if(CHATBOT_BUILD_CODE)
+    add_subdirectory(code)
+endif()
 # Reglas de la configuración de los addons (chatbot::addon_settings): siempre,
 # también con los addons apagados y en Windows, porque la usa la pantalla de
 # configuración de cli/. Antes de cli/.
@@ -149,6 +159,10 @@ endif()
 chatbot_forbid_ui_dependencies(chatbot_core)
 chatbot_forbid_ui_dependencies(chatbot_markdown)
 chatbot_forbid_ui_dependencies(chatbot_addon_settings)
+chatbot_forbid_ui_dependencies(chatbot_process)
+if(CHATBOT_BUILD_CODE)
+    chatbot_forbid_ui_dependencies(chatbot_code)
+endif()
 # moss-rpc usa la lógica de la TUI (chatbot_cli_lib), pero nunca FTXUI ni
 # el dibujo (chatbot_cli_ui).
 chatbot_forbid_ui_dependencies(chatbot_rpc_lib chatbot_cli_lib)
@@ -159,3 +173,7 @@ foreach(app_target chatbot_core chatbot_markdown chatbot_addon_settings chatbot_
                    chatbot_cli_ui moss chatbot_rpc_lib moss-rpc)
     chatbot_forbid_addon_dependencies(${app_target})
 endforeach()
+chatbot_forbid_addon_dependencies(chatbot_process)
+if(CHATBOT_BUILD_CODE)
+    chatbot_forbid_addon_dependencies(chatbot_code)
+endif()

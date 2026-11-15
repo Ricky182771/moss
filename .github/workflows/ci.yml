@@ -141,7 +141,7 @@ jobs:
 
   # Sin addons: con CHATBOT_BUILD_TELEGRAM=OFF la app compila y pasa sus
   # pruebas sin addons/telegram ni addons/common, y "moss telegram" dice
-  # que no está instalado (69).
+  # que no está instalado (69). También sin code/ (CHATBOT_BUILD_CODE=OFF).
   no-addons:
     name: gcc / dev sin addons
     runs-on: ubuntu-24.04
@@ -159,7 +159,7 @@ jobs:
             cmake ninja-build g++ libcurl4-openssl-dev nlohmann-json3-dev catch2
 
       - name: Configurar
-        run: cmake --preset dev -DCHATBOT_BUILD_TELEGRAM=OFF
+        run: cmake --preset dev -DCHATBOT_BUILD_TELEGRAM=OFF -DCHATBOT_BUILD_CODE=OFF
 
       - name: Compilar
         run: cmake --build --preset dev

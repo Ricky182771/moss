@@ -1,7 +1,7 @@
 #ifndef CHATBOT_CLI_SERVICE_CONTROL_H
 #define CHATBOT_CLI_SERVICE_CONTROL_H
 
-#include "child_process.h"
+#include "chatbot/child_process.h"
 
 #include "chatbot/addon_settings/registry.h"
 #include "chatbot/addon_settings/systemd_unit.h"
@@ -44,7 +44,8 @@ inline constexpr std::string_view kEmptyLog = "El bot todavía no ha escrito nad
 
 /// Corre un programa: run_process en la app; en las pruebas, uno falso.
 using ProcessRunner =
-    std::function<ProcessResult(const std::vector<std::string>&, const ProcessOptions&)>;
+    std::function<process::ProcessResult(const std::vector<std::string>&,
+                                         const process::ProcessOptions&)>;
 
 /// Cómo está el servicio.
 struct ServiceStatus {
@@ -105,7 +106,7 @@ struct ServiceLog {
 
 /// systemctl --user no pudo hablar con el systemd de usuario (sin
 /// systemctl, o sin bus: por SSH sin sesión).
-[[nodiscard]] bool no_user_systemd(const ProcessResult& result);
+[[nodiscard]] bool no_user_systemd(const process::ProcessResult& result);
 
 class ServiceControl {
 public:
@@ -142,9 +143,9 @@ public:
                                  const CancelToken* cancel = nullptr) const;
 
 private:
-    [[nodiscard]] ProcessResult run(std::vector<std::string> argv,
+    [[nodiscard]] process::ProcessResult run(std::vector<std::string> argv,
                                     const CancelToken* cancel) const;
-    [[nodiscard]] ProcessResult systemctl(std::vector<std::string> arguments,
+    [[nodiscard]] process::ProcessResult systemctl(std::vector<std::string> arguments,
                                           const CancelToken* cancel) const;
     [[nodiscard]] ServiceAction simple(std::vector<std::string> arguments, std::string_view done,
                                        std::string_view failed, const CancelToken* cancel) const;

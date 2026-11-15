@@ -125,7 +125,7 @@ struct AddonInstall {
                                                 const AddonInstall& install, bool portable);
 
 /// La versión que imprimió --config-version (un entero y salto de línea).
-[[nodiscard]] std::optional<int> parse_config_version(const ProcessResult& result);
+[[nodiscard]] std::optional<int> parse_config_version(const process::ProcessResult& result);
 
 /// "Servicio: activo · habilitado", "Servicio: no instalado"… (sin systemd:
 /// kNoUserSystemd).

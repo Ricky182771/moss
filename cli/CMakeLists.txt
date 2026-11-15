@@ -36,12 +36,12 @@ FetchContent_MakeAvailable(ftxui)
 # reglas de la configuración de los addons); sin FTXUI, para poder probarla
 # sin terminal.
 find_package(Threads REQUIRED)
-# Portapapeles y programas externos: el lanzador (posix_spawnp) solo en
-# POSIX; la API de Win32 solo en Windows.
+# Portapapeles: la API de Win32 solo en Windows. Los programas externos
+# (posix_spawnp) son chatbot::process.
 if(WIN32)
-    set(CHATBOT_CLIPBOARD_SOURCE src/clipboard_windows.cpp src/child_process_windows.cpp)
+    set(CHATBOT_CLIPBOARD_SOURCE src/clipboard_windows.cpp)
 else()
-    set(CHATBOT_CLIPBOARD_SOURCE src/clipboard_posix.cpp src/child_process_posix.cpp)
+    set(CHATBOT_CLIPBOARD_SOURCE src/clipboard_posix.cpp)
 endif()
 add_library(chatbot_cli_lib STATIC
     src/addon_form.cpp
@@ -80,7 +80,7 @@ find_package(nlohmann_json 3.9 REQUIRED)
 # moss --version (addon_launcher.cpp).
 target_compile_definitions(chatbot_cli_lib PRIVATE CHATBOT_VERSION="${PROJECT_VERSION}")
 target_link_libraries(chatbot_cli_lib
-    PUBLIC chatbot::core chatbot::markdown chatbot::addon_settings Threads::Threads
+    PUBLIC chatbot::core chatbot::process chatbot::markdown chatbot::addon_settings Threads::Threads
     PRIVATE nlohmann_json::nlohmann_json)
 chatbot_set_warnings(chatbot_cli_lib)
 # Windows: portapapeles y ventana de solo mensajes (user32). Biblioteca del
