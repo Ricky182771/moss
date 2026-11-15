@@ -50,29 +50,16 @@ struct Found {
     fs::file_time_type modified;
 };
 
-std::string utf8_text(const fs::path& path) {
-    const std::u8string text = path.u8string();
-    return {text.begin(), text.end()};
-}
-
-std::string generic_text(const fs::path& path) {
-    const std::u8string text = path.generic_u8string();
-    return {text.begin(), text.end()};
-}
-
-ToolResult cancelled_result() {
-    return ToolResult{"Cancelled by the user.", "Cancelado", ToolStatus::Error};
-}
-
-/// Todos los archivos regulares bajo base que coinciden, según git; nullopt si no se pudo usar
-/// (sin git, no es un repo, falló, se pasó del tiempo o la lista llegó al tope y está incompleta).
-std::optional<std::vector<Found>> list_with_git(ToolContext& context, const fs::path& base,
-                                                const GlobPattern& pattern) {
+/// Los archivos normales bajo base que acepta keep, según git; nullopt si no se pudo usar (sin
+/// git, no es un repo, falló, se pasó del tiempo o la lista llegó al tope y está incompleta).
+std::optional<std::vector<WalkFile>> list_with_git(ToolContext& context, const fs::path& base,
+                                                   const RelativeFilter& keep,
+                                                   const std::string& git) {
     process::ProcessOptions options;
     options.timeout = kGitTimeout;
     options.cancel = &context.cancel;
     const process::ProcessResult result = context.run_process(
-        {"git", "-C", utf8_text(context.root.path()), "ls-files", "-z", "--cached", "--others",
+        {git, "-C", utf8_text(context.root.path()), "ls-files", "-z", "--cached", "--others",
          "--exclude-standard"},
         options);
     if (!result.ok() || result.out.size() >= process::kMaxProcessOutput) {
@@ -81,7 +68,7 @@ std::optional<std::vector<Found>> list_with_git(ToolContext& context, const fs::
 
     const std::string base_display = context.root.display(base);
     const std::string base_prefix = base_display == "." ? std::string{} : base_display + "/";
-    std::vector<Found> found;
+    std::vector<WalkFile> found;
     std::set<fs::path> seen;
     const std::string_view out = result.out;
     for (std::size_t start = 0; start < out.size() && !context.cancel.is_cancelled();) {
@@ -89,9 +76,9 @@ std::optional<std::vector<Found>> list_with_git(ToolContext& context, const fs::
         end = end == std::string_view::npos ? out.size() : end;
         const std::string_view entry = out.substr(start, end - start);
         start = end + 1;
-        // Texto ajeno: primero un filtro barato, y solo lo que coincide pasa por resolve.
+        // Texto ajeno: primero un filtro barato, y solo lo que pasa va a resolve.
         if (entry.empty() || !entry.starts_with(base_prefix) ||
-            !pattern.matches(entry.substr(base_prefix.size()))) {
+            !keep(entry.substr(base_prefix.size()))) {
             continue;
         }
         const ResolvedPath resolved = context.root.resolve(entry);
@@ -101,41 +88,19 @@ std::optional<std::vector<Found>> list_with_git(ToolContext& context, const fs::
             !seen.insert(*path).second) {
             continue;
         }
-        const fs::file_time_type modified = fs::last_write_time(*path, error);
-        if (!error) {
-            found.push_back({context.root.display(*path), modified});
-        }
+        found.push_back({*path, context.root.display(*path)});
     }
     return found;
-}
-
-/// Lo mismo, recorriendo la carpeta a mano.
-std::optional<PathError> list_with_walk(ToolContext& context, const fs::path& base,
-                                        const GlobPattern& pattern, std::vector<Found>& found) {
-    return context.root.walk(
-        base,
-        [](std::string_view name) {
-            return name == ".git" || name == "node_modules" || name.starts_with("build");
-        },
-        [&](const WalkFile& file) {
-            if (!pattern.matches(generic_text(file.path.lexically_relative(base)))) {
-                return true;
-            }
-            std::error_code error;
-            const fs::file_time_type modified = fs::last_write_time(file.path, error);
-            if (!error) {
-                found.push_back({file.display, modified});
-            }
-            return true;
-        },
-        context.cancel);
 }
 
 std::string files_es(std::size_t count) {
     return std::to_string(count) + (count == 1 ? " archivo" : " archivos");
 }
 
-ToolResult run_glob(const json& arguments, ToolContext& context) {
+} // namespace
+
+ToolResult run_glob(const json& arguments, ToolContext& context,
+                    const std::optional<std::string>& git_path) {
     const std::string pattern_text = arguments.at("pattern").get<std::string>();
     fs::path base = context.root.path();
     if (arguments.contains("path")) {
@@ -152,20 +117,23 @@ ToolResult run_glob(const json& arguments, ToolContext& context) {
     }
 
     const GlobPattern pattern{pattern_text, current_os() == Os::Windows};
-    std::optional<std::vector<Found>> listed = list_with_git(context, base, pattern);
+    const ProjectFiles listed = list_project_files(
+        context, base, [&pattern](std::string_view relative) { return pattern.matches(relative); },
+        git_path);
+    if (const auto* error = std::get_if<PathError>(&listed)) {
+        return path_error_result(*error);
+    }
     if (context.cancel.is_cancelled()) {
         return cancelled_result();
     }
-    if (!listed) {
-        listed.emplace();
-        if (const std::optional<PathError> error = list_with_walk(context, base, pattern, *listed)) {
-            return path_error_result(*error);
-        }
-        if (context.cancel.is_cancelled()) {
-            return cancelled_result();
+    std::vector<Found> found;
+    for (const WalkFile& file : std::get<std::vector<WalkFile>>(listed)) {
+        std::error_code error;
+        const fs::file_time_type modified = fs::last_write_time(file.path, error);
+        if (!error) {
+            found.push_back({file.display, modified});
         }
     }
-    std::vector<Found>& found = *listed;
 
     if (found.empty()) {
         return ToolResult{"No files matched the pattern \"" + shorten(pattern_text, kMaxShownBytes) +
@@ -195,6 +163,8 @@ ToolResult run_glob(const json& arguments, ToolContext& context) {
                       ToolStatus::Ok};
 }
 
+namespace {
+
 std::string summarize_glob(const json& arguments) {
     std::string summary = shorten(arguments.at("pattern").get<std::string>(), kMaxShownBytes);
     if (arguments.contains("path")) {
@@ -205,10 +175,66 @@ std::string summarize_glob(const json& arguments) {
 
 } // namespace
 
+std::string utf8_text(const fs::path& path) {
+    const std::u8string text = path.u8string();
+    return {text.begin(), text.end()};
+}
+
+std::string generic_text(const fs::path& path) {
+    const std::u8string text = path.generic_u8string();
+    return {text.begin(), text.end()};
+}
+
+ToolResult cancelled_result() {
+    return ToolResult{"Cancelled by the user.", "Cancelado", ToolStatus::Error};
+}
+
+std::optional<std::string> find_program(std::string_view name) {
+    std::optional<std::string> found = process::find_in_path(name);
+    // find_in_path no salta las entradas relativas del PATH ("." daría "./git").
+    if (!found || !found->starts_with('/')) {
+        return std::nullopt;
+    }
+    return found;
+}
+
+ProjectFiles list_project_files(ToolContext& context, const fs::path& base,
+                                const RelativeFilter& keep,
+                                const std::optional<std::string>& git_path) {
+    std::optional<std::vector<WalkFile>> listed;
+    if (git_path) {
+        listed = list_with_git(context, base, keep, *git_path);
+    }
+    if (listed || context.cancel.is_cancelled()) {
+        return listed ? std::move(*listed) : std::vector<WalkFile>{};
+    }
+    std::vector<WalkFile> found;
+    const std::optional<PathError> error = context.root.walk(
+        base,
+        [](std::string_view name) {
+            return name == ".git" || name == "node_modules" || name.starts_with("build");
+        },
+        [&](const WalkFile& file) {
+            if (keep(generic_text(file.path.lexically_relative(base)))) {
+                found.push_back(file);
+            }
+            return true;
+        },
+        context.cancel);
+    if (error) {
+        return *error;
+    }
+    return found;
+}
+
 std::shared_ptr<const Tool> make_glob_tool() {
     return std::make_shared<const Tool>(Tool{"glob", std::string{kDescription},
                                              json::parse(kSchema), "Buscar archivos",
-                                             summarize_glob, run_glob});
+                                             summarize_glob,
+                                             [](const json& arguments, ToolContext& context) {
+                                                 return run_glob(arguments, context,
+                                                                 find_program("git"));
+                                             }});
 }
 
 } // namespace chatbot::code

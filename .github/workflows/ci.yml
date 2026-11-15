@@ -46,11 +46,14 @@ jobs:
       # FTXUI y md4c se descargan solos por FetchContent al configurar.
       # tzdata: la base de zonas de C++20 (std::chrono::locate_zone) del tope
       # diario del addon de Telegram, que en Linux se compila por defecto.
+      # ripgrep: opcional para Moss (grep usa rg si está en el PATH); aquí va
+      # para que las pruebas de grep corran sus dos implementaciones.
       - name: Instalar dependencias
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            cmake ninja-build g++ clang libcurl4-openssl-dev nlohmann-json3-dev catch2 tzdata
+            cmake ninja-build g++ clang libcurl4-openssl-dev nlohmann-json3-dev catch2 tzdata \
+            ripgrep
 
       # Con vm.mmap_rnd_bits=32 (kernels recientes), TSan falla con
       # "FATAL: ThreadSanitizer: unexpected memory mapping".

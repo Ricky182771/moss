@@ -96,7 +96,8 @@ ToolResult path_error_result(const PathError& error) {
 }
 
 ToolRegistry ToolRegistry::standard() {
-    return ToolRegistry{{make_read_tool(), make_glob_tool(), make_todo_write_tool()}};
+    return ToolRegistry{
+        {make_read_tool(), make_glob_tool(), make_grep_tool(), make_todo_write_tool()}};
 }
 
 const Tool* ToolRegistry::find(std::string_view name) const {

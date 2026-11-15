@@ -253,6 +253,18 @@ TEST_CASE("ProjectRoot: bloqueada que aparece después por un enlace en su ruta"
           PathErrorKind::Blocked);
 }
 
+TEST_CASE("ProjectRoot: blocked_within da las bloqueadas que hoy están dentro, relativas",
+          "[project_root]") {
+    const Project project;
+    // Dentro (una aún no existe), fuera, y una que entra después por un enlace en su ruta.
+    const ProjectRoot root =
+        open_root(project.proy, {project.proy / "datos" / "moss", project.proy / ".moss",
+                                 project.moss, project.temp.path() / "x" / "datos"});
+    CHECK(root.blocked_within() == std::vector<std::string>{"datos/moss", ".moss"});
+    symlink_or_skip(project.proy, project.temp.path() / "x");
+    CHECK(root.blocked_within() == std::vector<std::string>{"datos/moss", ".moss", "datos"});
+}
+
 TEST_CASE("ProjectRoot: carpeta bloqueada que es un enlace o cuyo padre lo es",
           "[project_root]") {
     const Project project;

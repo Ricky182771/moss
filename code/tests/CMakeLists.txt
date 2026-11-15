@@ -2,6 +2,7 @@
 add_executable(chatbot_code_tests
     test_glob_match.cpp
     test_glob_tool.cpp
+    test_grep_tool.cpp
     test_output_cap.cpp
     test_project_root.cpp
     test_read_tool.cpp

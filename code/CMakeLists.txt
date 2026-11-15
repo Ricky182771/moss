@@ -16,6 +16,7 @@ add_library(chatbot_code STATIC
     src/project_root.cpp
     src/glob_match.cpp
     src/glob_tool.cpp
+    src/grep_tool.cpp
     src/read_tool.cpp
     src/tool_registry.cpp
     src/todo_write_tool.cpp

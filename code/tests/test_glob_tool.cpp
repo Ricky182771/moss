@@ -6,11 +6,16 @@
 #include "chatbot/child_process.h"
 #include "chatbot/platform.h"
 
+#include "tool_internal.h"
+#include "tool_schema.h"
+
 #include <catch2/catch_test_macros.hpp>
+#include <nlohmann/json.hpp>
 
 #include <algorithm>
 #include <chrono>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -64,6 +69,15 @@ void no_git(ToolFixture& fixture) {
     };
 }
 
+/// glob con git en una ruta falsa (sin depender del PATH ni del sistema): el lanzador falso
+/// responde por él.
+ToolResult glob_with_fake_git(ToolFixture& fixture, std::string_view raw) {
+    static const auto tool = chatbot::code::make_glob_tool();
+    nlohmann::json arguments = nlohmann::json::parse(raw);
+    REQUIRE_FALSE(chatbot::code::validate_arguments(tool->schema, arguments).has_value());
+    return chatbot::code::run_glob(arguments, fixture.context, std::string{"/fake/git"});
+}
+
 void touch(const fs::path& path, std::chrono::hours age) {
     fs::last_write_time(path, fs::file_time_type::clock::now() - age);
 }
@@ -79,13 +93,13 @@ TEST_CASE("glob con la lista de git: lo ajeno no aparece", "[glob]") {
              "src/a.txt\0../fuera/secreto.txt\0datos-moss/credentials.json\0borrado.txt\0b.cpp\0"s +
                  "src\0"s + "src/a.txt\0"s,
              &argv);
-    const ToolResult result = fixture.run("glob", R"({"pattern": "*"})");
+    const ToolResult result = glob_with_fake_git(fixture, R"({"pattern": "*"})");
     CHECK(result.status == ToolStatus::Ok);
     // El directorio "src" y el duplicado no cuentan; fuera, bloqueado y borrado, tampoco.
     CHECK(sorted_lines(result.text) == std::vector<std::string>{"b.cpp", "src/a.txt"});
     CHECK(result.display == "2 archivos");
     REQUIRE(argv.size() == 8);
-    CHECK(argv[0] == "git");
+    CHECK(argv[0] == "/fake/git");
     CHECK(argv[1] == "-C");
     CHECK(argv[3] == "ls-files");
     CHECK(argv[4] == "-z");
@@ -97,7 +111,8 @@ TEST_CASE("glob con git: path acota y el patrón se compara contra esa carpeta",
     fixture.file("b.txt", "x");
     using namespace std::string_literals;
     fake_git(fixture, "src/a.txt\0b.txt\0"s);
-    const ToolResult result = fixture.run("glob", R"({"pattern": "*.txt", "path": "src"})");
+    const ToolResult result =
+        glob_with_fake_git(fixture, R"({"pattern": "*.txt", "path": "src"})");
     CHECK(result.text == "src/a.txt");
     CHECK(result.display == "1 archivo");
 }
@@ -116,13 +131,28 @@ TEST_CASE("glob cae al recorrido si git falla, no está o llega al tope", "[glob
         result.exit_code = 128; // No es un repo.
         return result;
     };
-    CHECK(sorted_lines(fixture.run("glob", R"({"pattern": "*"})").text) ==
+    CHECK(sorted_lines(glob_with_fake_git(fixture, R"({"pattern": "*"})").text) ==
           std::vector<std::string>{"b.cpp", "src/a.txt"});
 
     // Lista incompleta: salida al tope. Lo que dijo git se ignora.
     fake_git(fixture, std::string(chatbot::process::kMaxProcessOutput, 'x'));
-    CHECK(sorted_lines(fixture.run("glob", R"({"pattern": "*"})").text) ==
+    CHECK(sorted_lines(glob_with_fake_git(fixture, R"({"pattern": "*"})").text) ==
           std::vector<std::string>{"b.cpp", "src/a.txt"});
+
+    // Sin git en el PATH: ni se intenta.
+    std::vector<std::string> argv;
+    fake_git(fixture, "nada.txt", &argv);
+    nlohmann::json arguments = {{"pattern", "*"}};
+    CHECK(sorted_lines(chatbot::code::run_glob(arguments, fixture.context, std::nullopt).text) ==
+          std::vector<std::string>{"b.cpp", "src/a.txt"});
+    CHECK(argv.empty());
+}
+
+TEST_CASE("find_program solo da rutas absolutas", "[glob]") {
+    if (const std::optional<std::string> git = chatbot::code::find_program("git")) {
+        CHECK(git->starts_with('/'));
+    }
+    CHECK_FALSE(chatbot::code::find_program("no-existe-este-programa-moss").has_value());
 }
 
 TEST_CASE("glob: el recorrido salta .git, node_modules, build* y la carpeta de Moss", "[glob]") {
@@ -220,7 +250,7 @@ TEST_CASE("glob cancelado da el error de cancelación", "[glob]") {
         cancelled.status = ProcessResult::Status::Cancelled;
         return cancelled;
     };
-    CHECK(with_git.run("glob", R"({"pattern": "*"})").text == "Cancelled by the user.");
+    CHECK(glob_with_fake_git(with_git, R"({"pattern": "*"})").text == "Cancelled by the user.");
 }
 
 TEST_CASE("glob: argumentos y resumen", "[glob]") {

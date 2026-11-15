@@ -439,6 +439,34 @@ ReadResult ProjectRoot::read_file(const fs::path& resolved, std::size_t max_byte
     return open_and_read(resolved, max_bytes, shown);
 }
 
+std::vector<std::string> ProjectRoot::blocked_within() const {
+    std::vector<std::string> inside;
+    for (const BlockedDir& dir : blocked_) {
+        std::error_code error;
+        const fs::path now = canonicalize(dir.path, error);
+        for (const fs::path& candidate : {dir.path, error ? dir.path : now}) {
+            if (!is_within(candidate, root_, false)) {
+                continue;
+            }
+            auto part = candidate.begin();
+            for (auto skip = root_.begin(); skip != root_.end(); ++skip) {
+                ++part;
+            }
+            std::string text;
+            for (; part != candidate.end(); ++part) {
+                if (!part->empty()) {
+                    text += text.empty() ? "" : "/";
+                    text += to_utf8(*part);
+                }
+            }
+            if (!text.empty() && std::find(inside.begin(), inside.end(), text) == inside.end()) {
+                inside.push_back(std::move(text));
+            }
+        }
+    }
+    return inside;
+}
+
 std::string ProjectRoot::display(const fs::path& target) const {
     constexpr std::size_t unlimited = std::string::npos;
     if (!is_within(target, root_, false)) {

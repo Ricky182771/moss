@@ -135,6 +135,13 @@ public:
     [[nodiscard]] ReadResult read_file(const std::filesystem::path& resolved,
                                        std::size_t max_bytes) const;
 
+    /// Las carpetas bloqueadas que ahora están dentro de la raíz, relativas a ella con '/', en
+    /// UTF-8 sin escapar (en POSIX, los bytes tal cual): para excluirlas en rg, no para mostrar.
+    /// Cada una se vuelve a canonizar en el momento, como en la comprobación de resolve: sale
+    /// también la que no existía al abrir o a la que ahora lleva un enlace en su ruta. Lo que solo
+    /// coincide por identidad (un montaje bind) no sale: resolve() sigue siendo la barrera.
+    [[nodiscard]] std::vector<std::string> blocked_within() const;
+
     /// Para mostrar (al modelo y en pantalla): target (canónica) relativa a la raíz y con "/", "."
     /// para la raíz misma; fuera de la raíz, la ruta completa. UTF-8 válido (U+FFFD en lo que no
     /// lo es) y controles escapados (\x0A); sin recortar, para que se pueda volver a pedir.
