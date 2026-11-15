@@ -36,3 +36,8 @@ petición, responde el JSON completo equivalente.
 
 `dos-pasos.json`, `varias-llamadas.json`, `sin-index.json`, `un-pedazo.json`,
 `argumentos-rotos.json`.
+
+`sonda-con-index.json`, `sonda-sin-index.json`, `sonda-un-pedazo.json` y
+`sonda-texto.json`: toda la secuencia de peticiones de `moss-tools-probe` para un
+modelo (cuatro escenarios y el 2 repetido sin pensamiento de regreso; 13
+respuestas, 5 en el de texto). Ver `guias/11-compilacion.md`.

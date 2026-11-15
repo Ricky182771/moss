@@ -1,0 +1,7 @@
+[
+  {"reasoning": "I should read the file.", "content": "<tool_call>{\"name\": \"read\", \"arguments\": {\"path\": \"notes/alpha.txt\"}}</tool_call>"},
+  {"reasoning": "I should list the files.", "content": "<tool_call>{\"name\": \"glob\", \"arguments\": {\"pattern\": \"*.md\"}}</tool_call>"},
+  {"reasoning": "I should read both files.", "content": "<tool_call>{\"name\": \"read\", \"arguments\": {\"path\": \"notes/alpha.txt\"}}</tool_call><tool_call>{\"name\": \"read\", \"arguments\": {\"path\": \"notes/beta.txt\"}}</tool_call>"},
+  {"reasoning": "I should read the file.", "content": "<tool_call>{\"name\": \"read\", \"arguments\": {\"path\": \"src/main.cpp\"}}</tool_call>"},
+  {"reasoning": "I should list the files.", "content": "<tool_call>{\"name\": \"glob\", \"arguments\": {\"pattern\": \"*.md\"}}</tool_call>"}
+]

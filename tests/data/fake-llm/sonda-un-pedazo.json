@@ -1,0 +1,15 @@
+[
+  {"reasoning": "I need to read notes/alpha.txt to get the launch code.", "tool_calls": [{"id": "call_1", "name": "read", "arguments": {"path": "notes/alpha.txt"}}], "variant": "single_chunk", "finish_reason": "stop"},
+  {"content": "The launch code in notes/alpha.txt is ALPHA-7431."},
+  {"reasoning": "First list the Markdown files with glob.", "tool_calls": [{"id": "call_2a", "name": "glob", "arguments": {"pattern": "*.md"}}], "variant": "single_chunk", "finish_reason": "stop"},
+  {"reasoning": "There is docs/readme.md; read it.", "tool_calls": [{"id": "call_2b", "name": "read", "arguments": {"path": "docs/readme.md"}}], "variant": "single_chunk", "finish_reason": "stop"},
+  {"content": "The secret word in docs/readme.md is DELTA-8847."},
+  {"reasoning": "Both files are independent, so I read them together.", "content": "Reading both notes.", "tool_calls": [{"id": "call_3a", "name": "read", "arguments": {"path": "notes/alpha.txt"}}, {"id": "call_3b", "name": "read", "arguments": {"path": "notes/beta.txt"}}], "variant": "single_chunk", "finish_reason": "stop"},
+  {"content": "The launch codes are ALPHA-7431 and BETA-2958."},
+  {"reasoning": "Read src/main.cpp.", "tool_calls": [{"id": "call_4a", "name": "read", "arguments": {"path": "src/main.cpp"}}], "variant": "single_chunk", "finish_reason": "stop"},
+  {"reasoning": "The read failed with a transient error; try the same call again.", "tool_calls": [{"id": "call_4b", "name": "read", "arguments": {"path": "src/main.cpp"}}], "variant": "single_chunk", "finish_reason": "stop"},
+  {"content": "The build tag in src/main.cpp is GAMMA-6120."},
+  {"reasoning": "First list the Markdown files with glob.", "tool_calls": [{"id": "call_5a", "name": "glob", "arguments": {"pattern": "*.md"}}], "variant": "single_chunk", "finish_reason": "stop"},
+  {"reasoning": "There is docs/readme.md; read it.", "tool_calls": [{"id": "call_5b", "name": "read", "arguments": {"path": "docs/readme.md"}}], "variant": "single_chunk", "finish_reason": "stop"},
+  {"content": "The secret word in docs/readme.md is DELTA-8847."}
+]
