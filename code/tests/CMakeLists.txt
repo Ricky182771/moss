@@ -1,5 +1,7 @@
 # Pruebas de chatbot_code, sin red. Usan los helpers de tests/.
 add_executable(chatbot_code_tests
+    test_code_limits.cpp
+    test_code_session.cpp
     test_glob_match.cpp
     test_glob_tool.cpp
     test_grep_tool.cpp

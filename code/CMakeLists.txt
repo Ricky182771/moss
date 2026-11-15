@@ -33,6 +33,10 @@ add_library(chatbot_code STATIC
     ${CHATBOT_CODE_PLATFORM_SOURCE}
     ${CMAKE_CURRENT_BINARY_DIR}/system_prompt_text.cpp
     src/system_prompt.cpp
+    src/agent_loop.cpp
+    src/code_limits.cpp
+    src/code_session.cpp
+    src/permissions.cpp
     src/output_cap.cpp
     src/project_root.cpp
     src/glob_match.cpp
