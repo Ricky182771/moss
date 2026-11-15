@@ -45,8 +45,9 @@ struct Tool {
                                   const std::optional<std::string>& rg_path,
                                   const std::optional<std::string>& git_path);
 
-/// process::find_in_path, pero solo si da una ruta absoluta: nunca un programa de la carpeta
-/// actual (el proyecto) por una entrada relativa del PATH. En Windows, nullopt.
+/// process::find_in_path (que ya salta las entradas vacías y relativas del PATH), y además
+/// comprueba que la ruta sea absoluta: nunca un programa de la carpeta actual (el proyecto).
+/// En Windows, nullopt.
 [[nodiscard]] std::optional<std::string> find_program(std::string_view name);
 
 /// Opciones para lanzar git y rg: timeout, cancel y el entorno sin ninguna CHAT_* (las keys), con

@@ -81,7 +81,9 @@ struct ProcessResult {
 [[nodiscard]] std::optional<unsigned long> current_user_id();
 
 /// La ruta del primer archivo ejecutable con ese nombre en las carpetas de
-/// PATH (sin la carpeta actual), o nullopt. Un nombre con '/' no se busca.
+/// PATH, o nullopt. Solo usa las carpetas absolutas: salta las vacías y las
+/// relativas ("." o "bin"), que dependen de la carpeta actual. Un nombre con
+/// '/' no se busca.
 /// En Windows, siempre nullopt: ahí no se lanzan programas.
 [[nodiscard]] std::optional<std::string> find_in_path(std::string_view program);
 

@@ -7,12 +7,15 @@
 #include "chatbot/platform.h"
 
 #include "env_guard.hpp"
+#include "temp_dir.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <chrono>
 #include <filesystem>
+#include <fstream>
 #include <string>
+#include <system_error>
 #include <thread>
 #include <vector>
 
@@ -181,6 +184,49 @@ TEST_CASE("find_in_path: la ruta completa del programa", "[process]") {
     CHECK_FALSE(find_in_path("programa-que-no-existe-moss").has_value());
     CHECK_FALSE(find_in_path("bin/sh").has_value()); // Con '/' no se busca.
     CHECK_FALSE(find_in_path("").has_value());
+}
+
+namespace {
+
+/// Cambia la carpeta actual mientras vive y la restaura aunque falle la prueba.
+class ScopedCurrentPath {
+public:
+    explicit ScopedCurrentPath(const std::filesystem::path& path)
+        : previous_{std::filesystem::current_path()} {
+        std::filesystem::current_path(path);
+    }
+    ~ScopedCurrentPath() {
+        std::error_code ignored;
+        std::filesystem::current_path(previous_, ignored);
+    }
+    ScopedCurrentPath(const ScopedCurrentPath&) = delete;
+    ScopedCurrentPath& operator=(const ScopedCurrentPath&) = delete;
+
+private:
+    std::filesystem::path previous_;
+};
+
+void write_fake_program(const std::filesystem::path& path) {
+    std::ofstream{path} << "#!/bin/sh\nexit 0\n";
+    std::filesystem::permissions(path, std::filesystem::perms::owner_all);
+}
+
+} // namespace
+
+TEST_CASE("find_in_path: salta las entradas vacías y relativas del PATH", "[process]") {
+    // Un rg plantado en la carpeta actual (el proyecto en moss code) nunca se encuentra.
+    const chatbot_test::ScopedTempDir dir;
+    std::filesystem::create_directory(dir.path() / "bin");
+    write_fake_program(dir.path() / "rg");
+    write_fake_program(dir.path() / "bin" / "rg");
+    const ScopedCurrentPath cwd{dir.path()};
+
+    for (const char* path : {".:/usr/bin", ":/usr/bin", "/usr/bin:", "bin:/usr/bin"}) {
+        INFO(path);
+        const chatbot_test::EnvGuard guard{"PATH", path};
+        const auto found = find_in_path("rg");
+        CHECK((!found || found->starts_with("/usr/bin/")));
+    }
 }
 
 #endif

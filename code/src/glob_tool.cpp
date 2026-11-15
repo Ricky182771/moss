@@ -188,7 +188,7 @@ ToolResult cancelled_result() {
 
 std::optional<std::string> find_program(std::string_view name) {
     std::optional<std::string> found = process::find_in_path(name);
-    // find_in_path no salta las entradas relativas del PATH ("." daría "./git").
+    // find_in_path ya salta las entradas relativas del PATH; esta es una segunda barrera.
     if (!found || !found->starts_with('/')) {
         return std::nullopt;
     }

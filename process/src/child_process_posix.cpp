@@ -403,8 +403,8 @@ std::optional<std::string> find_in_path(std::string_view program) {
     while (true) {
         const std::size_t end = rest.find(':');
         const std::string_view dir = rest.substr(0, end);
-        // Una carpeta vacía sería la actual: no se usa.
-        if (!dir.empty()) {
+        // Una carpeta vacía o relativa ("." o "bin") depende de la carpeta actual: no se usa.
+        if (dir.starts_with('/')) {
             std::string candidate = std::string{dir} + "/" + std::string{program};
             if (is_executable_file(candidate)) {
                 return candidate;
