@@ -408,6 +408,9 @@ TEST_CASE("system prompt con git real", "[system_prompt][git]") {
     SystemPromptOptions options;
     options.now = [] { return kNow; };
     const CodeSystemPrompt prompt = build(fixture, options);
-    CHECK(contains(prompt.text, "- Git repository: yes, branch No commits yet on rama-prueba\n"));
+    // El texto de "sin commits" depende del idioma de git: solo la rama.
+    const std::size_t line = prompt.text.find("- Git repository: yes, branch ");
+    REQUIRE(line != std::string::npos);
+    CHECK(prompt.text.substr(line, prompt.text.find('\n', line) - line).ends_with("rama-prueba"));
     CHECK(contains(prompt.text, "?? nuevo.txt\n"));
 }
