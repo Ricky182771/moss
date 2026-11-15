@@ -55,6 +55,10 @@ struct TurnOutcome {
     TurnEnd reason = TurnEnd::Answered;
     std::string answer;             ///< Answered: la respuesta final.
     std::optional<ChatError> error; ///< Error: el del modelo.
+    /// Si la primera petición del turno se canceló o falló (sin ningún asistente guardado), el
+    /// mensaje del usuario sale del historial, como en Session: nunca quedan dos User seguidos
+    /// (plantillas estrictas responden 400). Aquí regresa, para la caja; vacío en los demás casos.
+    std::string unsent_input{};
 };
 
 /// Avisos a la interfaz. Siempre corren en el hilo de la interfaz, por post y en el orden en que

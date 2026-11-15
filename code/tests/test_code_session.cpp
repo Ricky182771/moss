@@ -113,13 +113,13 @@ HttpResponse calls_response(const std::vector<Call>& calls, const std::string& t
               kDone);
 }
 
-/// FakeTransport que puede dejar las primeras peticiones esperando la cancelación (como el
-/// callback de progreso de curl), después de entregar un pedazo. Lo usa solo el hilo de trabajo;
-/// la prueba lo lee después de que ese hilo avisó por la cola.
+/// FakeTransport que puede dejar una petición esperando la cancelación (como el callback de
+/// progreso de curl), después de entregar un pedazo; esa no gasta respuesta de inner. Lo usa solo
+/// el hilo de trabajo; la prueba lo lee después de que ese hilo avisó por la cola.
 class GatedTransport final : public chatbot::Transport {
 public:
     chatbot_test::FakeTransport inner;
-    std::size_t block_first = 0;    ///< Cuántas peticiones (las primeras) esperan.
+    std::size_t block_at = static_cast<std::size_t>(-1); ///< Número de la petición que espera.
     std::string chunk_before_block; ///< Se entrega con 200 antes de esperar.
     chatbot::CancelToken blocked;   ///< Aviso: una petición está esperando.
 
@@ -129,7 +129,7 @@ public:
 
     [[nodiscard]] HttpResponse send_stream(const chatbot::HttpRequest& request,
                                            const chatbot::StreamCallback& on_chunk) override {
-        if (handled_++ >= block_first) {
+        if (handled_++ != block_at) {
             return inner.send_stream(request, on_chunk);
         }
         inner.requests.push_back(request);
@@ -381,15 +381,27 @@ bool one_result_per_call(const std::vector<Message>& history) {
     return true;
 }
 
+/// true si la petición trae dos mensajes user seguidos (plantillas estrictas responden 400).
+bool has_consecutive_users(const json& messages) {
+    for (std::size_t at = 1; at < messages.size(); ++at) {
+        if (messages[at - 1]["role"] == "user" && messages[at]["role"] == "user") {
+            return true;
+        }
+    }
+    return false;
+}
+
 /// Después de un turno que se cortó: un mensaje nuevo produce una petición que el núcleo valida y
-/// manda, y el historial sigue cumpliendo la invariante.
+/// manda, sin dos user seguidos, y el historial sigue cumpliendo la invariante.
 void check_next_message_works(Harness& harness) {
     const std::size_t requests = harness.transport->inner.requests.size();
     harness.transport->inner.responses.push_back(answer_response("Sigo aquí."));
     const TurnOutcome next = harness.run_turn("¿sigues?");
     CHECK(next.reason == TurnEnd::Answered);
     CHECK(next.answer == "Sigo aquí.");
-    CHECK(harness.transport->inner.requests.size() == requests + 1);
+    CHECK(next.unsent_input.empty());
+    REQUIRE(harness.transport->inner.requests.size() == requests + 1);
+    CHECK_FALSE(has_consecutive_users(harness.body(requests)["messages"]));
     CHECK(one_result_per_call(harness.session->history()));
 }
 
@@ -503,11 +515,12 @@ TEST_CASE("code session: varias llamadas en una respuesta, en orden", "[code_ses
     CHECK(one_result_per_call(harness.session->history()));
 }
 
-TEST_CASE("code session: cancelar durante la petición descarta la respuesta a medias",
+TEST_CASE("code session: cancelar durante la primera petición descarta la respuesta a medias "
+          "y regresa el mensaje",
           "[code_session][cancelar]") {
     Harness harness;
     harness.open();
-    harness.transport->block_first = 1;
+    harness.transport->block_at = 0;
     harness.transport->chunk_before_block = chunk({{"content", "a medias"}});
 
     REQUIRE(harness.session->send("hola"));
@@ -521,8 +534,33 @@ TEST_CASE("code session: cancelar durante la petición descarta la respuesta a m
     REQUIRE(harness.wait_turn(0));
     chatbot_test::report_latency("cancelar durante la petición", Clock::now() - start);
     CHECK(harness.turns.back().reason == TurnEnd::Cancelled);
-    REQUIRE(harness.session->history().size() == 2); // Sistema y usuario: sin asistente a medias.
-    CHECK(harness.session->history()[1].role == Role::User);
+    CHECK(harness.turns.back().unsent_input == "hola");
+    // Como antes del send: sin asistente a medias y sin el mensaje del usuario.
+    REQUIRE(harness.session->history().size() == 1);
+    CHECK(harness.session->history()[0].role == Role::System);
+
+    check_next_message_works(harness);
+}
+
+TEST_CASE("code session: cancelar en la petición del segundo paso no quita el mensaje",
+          "[code_session][cancelar]") {
+    Harness harness;
+    harness.open();
+    harness.transport->block_at = 1;
+    harness.respond({calls_response({{"c1", "count", "{}"}})});
+
+    REQUIRE(harness.session->send("cuenta"));
+    REQUIRE(harness.drain_until([&] {
+        return harness.results.size() == 1 && harness.session->state() == LoopState::Requesting;
+    }));
+    REQUIRE(harness.transport->blocked.wait_for(kThreadTimeout));
+    harness.session->cancel();
+    REQUIRE(harness.wait_turn(0));
+
+    CHECK(harness.turns.back().reason == TurnEnd::Cancelled);
+    CHECK(harness.turns.back().unsent_input.empty());
+    REQUIRE(harness.session->history().size() == 4); // Sistema, usuario, asistente y su tool.
+    CHECK(harness.session->history()[3].content == "count 1");
 
     check_next_message_works(harness);
 }
@@ -738,20 +776,33 @@ TEST_CASE("code session: tres llamadas inválidas seguidas detienen el turno",
     check_next_message_works(harness);
 }
 
-TEST_CASE("code session: 429 o error de red a la mitad del turno", "[code_session]") {
+TEST_CASE("code session: 429 o error de red en el primer paso o a la mitad del turno",
+          "[code_session]") {
     const int status = GENERATE(429, 0);
+    const bool first_step = GENERATE(true, false);
     Harness harness;
     harness.open();
     HttpResponse failure{status, "", std::nullopt, false, status == 0 ? "sin red" : ""};
-    harness.respond({calls_response({{"c1", "count", "{}"}}), failure});
+    if (first_step) {
+        harness.respond({failure});
+    } else {
+        harness.respond({calls_response({{"c1", "count", "{}"}}), failure});
+    }
 
     const TurnOutcome turn = harness.run_turn("cuenta");
     CHECK(turn.reason == TurnEnd::Error);
     REQUIRE(turn.error.has_value());
     CHECK(turn.error->kind == (status == 429 ? ErrorKind::RateLimited : ErrorKind::Network));
-    // Lo completado (el paso con la herramienta) se queda.
-    REQUIRE(harness.session->history().size() == 4);
-    CHECK(harness.session->history()[3].content == "count 1");
+    if (first_step) {
+        // Sin ningún paso completado, el mensaje regresa y el historial queda como antes.
+        CHECK(turn.unsent_input == "cuenta");
+        CHECK(harness.session->history().size() == 1);
+    } else {
+        // Lo completado (el paso con la herramienta) se queda.
+        CHECK(turn.unsent_input.empty());
+        REQUIRE(harness.session->history().size() == 4);
+        CHECK(harness.session->history()[3].content == "count 1");
+    }
     CHECK(one_result_per_call(harness.session->history()));
 
     check_next_message_works(harness);
@@ -766,7 +817,8 @@ TEST_CASE("code session: respuesta sin texto ni llamadas no se guarda", "[code_s
     CHECK(turn.reason == TurnEnd::Error);
     REQUIRE(turn.error.has_value());
     CHECK(turn.error->kind == ErrorKind::BadResponse);
-    CHECK(harness.session->history().size() == 2);
+    CHECK(turn.unsent_input == "hola");
+    CHECK(harness.session->history().size() == 1);
 
     check_next_message_works(harness);
 }

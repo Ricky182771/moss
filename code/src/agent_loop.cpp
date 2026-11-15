@@ -56,6 +56,16 @@ ToolResult rejected(const std::string& reason) {
     return ToolResult{std::move(text), "Rechazada", ToolStatus::Error};
 }
 
+/// Fin de turno sin respuesta: si fue en la primera petición (el último mensaje es su User, sin
+/// asistente después), ese User sale del historial y regresa en unsent_input.
+TurnOutcome unsent(std::vector<Message>& history, TurnOutcome outcome) {
+    if (!history.empty() && history.back().role == Role::User) {
+        outcome.unsent_input = std::move(history.back().content);
+        history.pop_back();
+    }
+    return outcome;
+}
+
 bool same_todos(const std::vector<TodoItem>& a, const std::vector<TodoItem>& b) {
     return std::equal(a.begin(), a.end(), b.begin(), b.end(),
                       [](const TodoItem& x, const TodoItem& y) {
@@ -189,11 +199,11 @@ void AgentLoop::on_request_done(Result<CompletionInfo> result, std::string text,
                                 std::string reasoning) {
     // La respuesta a medias se descarta: nunca queda un asistente incompleto.
     if (cancel_requested_ || (result.is_error() && result.error().kind == ErrorKind::Cancelled)) {
-        finish(TurnOutcome{TurnEnd::Cancelled, {}, std::nullopt});
+        finish(unsent(history_, TurnOutcome{TurnEnd::Cancelled, {}, std::nullopt}));
         return;
     }
     if (result.is_error()) {
-        finish(TurnOutcome{TurnEnd::Error, {}, result.error()});
+        finish(unsent(history_, TurnOutcome{TurnEnd::Error, {}, result.error()}));
         return;
     }
     const CompletionInfo& info = result.value();
@@ -203,12 +213,12 @@ void AgentLoop::on_request_done(Result<CompletionInfo> result, std::string text,
     if (info.tool_calls.empty()) {
         if (assistant.content.empty()) {
             // Un asistente vacío rompería todas las peticiones siguientes: no se guarda.
-            finish(TurnOutcome{TurnEnd::Error,
-                               {},
-                               ChatError{ErrorKind::BadResponse, 0,
-                                         "El modelo respondió sin texto ni llamadas a "
-                                         "herramientas.",
-                                         std::nullopt}});
+            finish(unsent(history_, TurnOutcome{TurnEnd::Error,
+                                                {},
+                                                ChatError{ErrorKind::BadResponse, 0,
+                                                          "El modelo respondió sin texto ni "
+                                                          "llamadas a herramientas.",
+                                                          std::nullopt}}));
             return;
         }
         std::string answer_text = assistant.content;
@@ -318,6 +328,7 @@ void AgentLoop::on_tool_done(ToolResult result, std::vector<TodoItem> todos) {
         });
     }
     if (cancel_requested_) {
+        // C3 (edit/write): si la herramienta ya terminó, entregar su resultado real, no este.
         answer_rest(cancelled_result());
         finish(TurnOutcome{TurnEnd::Cancelled, {}, std::nullopt});
         return;
