@@ -53,6 +53,21 @@ std::string one_line(const std::string& text) {
     return clean;
 }
 
+/// La respuesta para stdout: como md::sanitize (sin secuencias de escape, '\r' ni los demás
+/// controles), pero conserva '\t' (sanitize lo pasa a espacios) y '\n'.
+std::string keep_tabs(const std::string& text) {
+    std::string clean;
+    for (std::size_t start = 0;;) {
+        const std::size_t tab = text.find('\t', start);
+        clean += md::sanitize(text.substr(start, tab - start));
+        if (tab == std::string::npos) {
+            return clean;
+        }
+        clean += '\t';
+        start = tab + 1;
+    }
+}
+
 void print_error(std::ostream& err, const ChatError& error) {
     err << "[" << error_kind_label(error.kind) << "] " << one_line(error.message) << '\n';
 }
@@ -253,7 +268,7 @@ int run_code(const CommandLine& line, CodeEnvironment& environment) {
 
     switch (outcome->reason) {
     case code::TurnEnd::Answered:
-        environment.out << md::sanitize(outcome->answer) << '\n' << std::flush;
+        environment.out << keep_tabs(outcome->answer) << '\n' << std::flush;
         return 0;
     case code::TurnEnd::Error:
         if (outcome->error.has_value()) {

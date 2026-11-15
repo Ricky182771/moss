@@ -163,6 +163,21 @@ TEST_CASE("moss code -p: tres pasos, stdout solo la respuesta final", "[code][cl
     CHECK(result.err.find("Voy a buscar.") == std::string::npos);
 }
 
+TEST_CASE("moss code -p: stdout conserva tabuladores y saltos, sin escapes ni controles",
+          "[code][cli]") {
+    const Layout layout;
+    const Outcome result =
+        run(layout, prompt_in(layout),
+            scripted({ok(answer_flow("a\tb\nc \x1b[31mrojo\r\nfin\x07\t."))}));
+    CHECK(result.code == 0);
+    CHECK(result.out.starts_with("a\tb\nc "));
+    CHECK(result.out.find("rojo\nfin") != std::string::npos);
+    CHECK(result.out.ends_with("\t.\n"));
+    for (const char forbidden : {'\x1b', '\x07', '\r'}) {
+        CHECK(result.out.find(forbidden) == std::string::npos);
+    }
+}
+
 TEST_CASE("moss code -p: una herramienta con error deja su línea [error] en stderr", "[code][cli]") {
     const Layout layout;
     const Outcome result =

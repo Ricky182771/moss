@@ -11,7 +11,7 @@ moss code ~/proyectos/app -p "lista los TODO que haya"      # otra carpeta
 ```
 
 - Sin `-p`, `moss code` avisa que la pantalla llega en C2 y sale con 2.
-- **stdout**: solo la respuesta final del modelo. Se puede redirigir o encadenar en un script.
+- **stdout**: solo la respuesta final del modelo. Se puede redirigir o encadenar en un script. Conserva los tabuladores y los saltos de línea; quita `\r` y cambia ESC y los demás caracteres de control por `�`, así que ninguna secuencia de escape llega a la terminal.
 - **stderr**: una línea `● <resumen>` por cada herramienta que usó el modelo, y los avisos (configuración, límites, instrucciones recortadas).
 - Salida: **0** bien; **1** error del modelo, de configuración o turno detenido por un límite; **2** uso incorrecto; **130** Ctrl+C (cancela el turno); **69** si Moss se compiló sin Moss Code (`CHATBOT_BUILD_CODE=OFF`).
 - Usa el proveedor y el modelo de la configuración de Moss; el modelo tiene que soportar herramientas.
