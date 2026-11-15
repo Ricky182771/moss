@@ -2,6 +2,10 @@
 add_executable(chatbot_code_tests
     test_output_cap.cpp
     test_project_root.cpp)
+# Uniones y enlaces simbólicos creados con Win32: solo en Windows.
+if(WIN32)
+    target_sources(chatbot_code_tests PRIVATE test_project_root_windows.cpp)
+endif()
 target_compile_features(chatbot_code_tests PRIVATE cxx_std_20)
 target_include_directories(chatbot_code_tests PRIVATE ${PROJECT_SOURCE_DIR}/tests)
 target_link_libraries(chatbot_code_tests PRIVATE
