@@ -9,6 +9,7 @@
 #include "model_params_internal.h"
 #include "redirect.h"
 #include "sse.h"
+#include "tool_call_accumulator.h"
 #include "tool_history.h"
 
 #include <nlohmann/json.hpp>
@@ -462,33 +463,43 @@ void append_debug_dump(const Config& config, int attempt, const HttpResponse& re
 /// Resultado de un intento de streaming ya consumido.
 struct StreamAttemptOutcome {
     Result<CompletionInfo> result{CompletionInfo{}}; ///< Éxito o error final de la petición.
-    bool delivered_any = false;   ///< Si ya se entregó al menos un delta.
+    /// Si ya se entregó al menos un delta o llegó un pedazo de llamada: no
+    /// se reintenta.
+    bool delivered_any = false;
     bool retryable = true;        ///< false si el fallo de red es permanente.
 };
 
 /// Ejecuta un intento de streaming: consume el cuerpo conforme llega con el
 /// parser SSE y entrega los deltas por on_delta. Los errores HTTP no se
 /// consumen como flujo: el cuerpo se acumula en la respuesta y se mapea al
-/// final, igual que en complete().
+/// final, igual que en complete(). with_tools: la petición mandó
+/// herramientas; si no, los tool_calls del servidor se ignoran. messages:
+/// lo enviado, para que un id generado no choque con los suyos.
 StreamAttemptOutcome run_stream_attempt(const Config& config, int attempt,
                                         const HttpRequest& request, Transport& transport,
-                                        const StreamDeltaCallback& on_delta) {
+                                        const StreamDeltaCallback& on_delta,
+                                        const std::vector<Message>& messages, bool with_tools) {
     StreamAttemptOutcome outcome;
 
     sse::Parser parser;
     std::string finish_reason; ///< Último choices[0].finish_reason no nulo.
     std::string reasoning;     ///< Pensamiento del chunk en curso.
+    ReasoningKey chunk_key = ReasoningKey::ReasoningContent; ///< Llave del pensamiento del chunk.
+    std::optional<ReasoningKey> reasoning_key; ///< Llave del primer pensamiento.
+    std::vector<sse::ToolCallChunk> tool_chunks; ///< Pedazos de llamada del chunk en curso.
+    ToolCallAccumulator calls;
     bool done = false;    ///< Se recibió data: [DONE].
     bool aborted = false; ///< Cuerpo inválido a mitad del flujo.
     std::optional<ChatError> abort_error;
 
     // Entrega el delta al callback de quien llama. Si lanza, la excepción
     // no debe llegar a libcurl (frames de C). Devuelve false para abortar.
-    const auto deliver = [&](StreamDelta::Kind kind, const std::string& text) {
+    const auto deliver = [&](StreamDelta::Kind kind, const std::string& text,
+                             std::size_t tool_index = 0) {
         outcome.delivered_any = true;
         try {
             // false: cancelación, curl aborta con status == 0.
-            return on_delta(StreamDelta{kind, text});
+            return on_delta(StreamDelta{kind, text, tool_index});
         } catch (const std::exception& e) {
             abort_error = ChatError{ErrorKind::Cancelled, 0,
                                     "El callback de streaming lanzó una excepción: " +
@@ -531,19 +542,41 @@ StreamAttemptOutcome run_stream_attempt(const Config& config, int attempt,
                 }
                 continue;
             }
-            const Result<std::optional<std::string>> delta =
-                sse::decode_openai_chunk(event.value().data, &finish_reason, &reasoning);
+            // Sin herramientas no se piden los pedazos: el chat no cambia.
+            const Result<std::optional<std::string>> delta = sse::decode_openai_chunk(
+                event.value().data, &finish_reason, &reasoning, &chunk_key,
+                with_tools ? &tool_chunks : nullptr);
             if (delta.is_error()) {
                 abort_error = delta.error();
                 aborted = true;
                 return false;
             }
-            if (!reasoning.empty() && !deliver(StreamDelta::Kind::Reasoning, reasoning)) {
-                return false;
+            if (!reasoning.empty()) {
+                if (!reasoning_key.has_value()) {
+                    reasoning_key = chunk_key;
+                }
+                if (!deliver(StreamDelta::Kind::Reasoning, reasoning)) {
+                    return false;
+                }
             }
             if (delta.value().has_value() && !delta.value()->empty() &&
                 !deliver(StreamDelta::Kind::Content, *delta.value())) {
                 return false;
+            }
+            if (!tool_chunks.empty()) {
+                // Ningún reintento después de un pedazo de llamada, aunque
+                // todavía no tenga nombre ni haya salido ToolCallStarted.
+                outcome.delivered_any = true;
+            }
+            for (const sse::ToolCallChunk& chunk : tool_chunks) {
+                calls.add(chunk);
+            }
+            while (const std::optional<ToolCallAccumulator::Started> started =
+                       calls.next_started()) {
+                if (!deliver(StreamDelta::Kind::ToolCallStarted, started->name,
+                             started->position)) {
+                    return false;
+                }
             }
         }
         return true;
@@ -602,8 +635,10 @@ StreamAttemptOutcome run_stream_attempt(const Config& config, int attempt,
         outcome.result = map_http_error(config, request, response);
         return outcome;
     }
-    // Con [DONE], o sin él pero con el flujo completo y limpio: éxito.
-    outcome.result = CompletionInfo{finish_reason};
+    // Con [DONE], o sin él pero con el flujo completo y limpio: éxito. Solo
+    // aquí salen las llamadas: con error o cancelación se descartan.
+    outcome.result = CompletionInfo{finish_reason, calls.finish(messages),
+                                    reasoning_key.value_or(ReasoningKey::ReasoningContent)};
     return outcome;
 }
 
@@ -742,7 +777,9 @@ Result<CompletionInfo> ChatClient::complete_stream(const std::vector<Message>& m
         if (is_cancelled(cancel)) {
             return cancelled_error();
         }
-        StreamAttemptOutcome outcome = run_stream_attempt(config_, attempt, request, *transport_, on_delta);
+        StreamAttemptOutcome outcome = run_stream_attempt(config_, attempt, request, *transport_,
+                                                          on_delta, messages,
+                                                          !options.tools.empty());
         if (is_cancelled(cancel)) {
             return cancelled_error(); // Igual que en complete(): la cancelación gana.
         }

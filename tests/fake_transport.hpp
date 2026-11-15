@@ -31,6 +31,9 @@ public:
     /// Gancho opcional que se ejecuta dentro de cada petición, después de
     /// registrarla (p. ej. para cancelar a mitad del intento).
     std::function<void()> on_send;
+    /// Las primeras N respuestas de send_stream, después de entregar su
+    /// cuerpo, terminan como un corte de red (status 0, reintentable).
+    std::size_t cut_after_body = 0;
 
     [[nodiscard]] chatbot::HttpResponse send(const chatbot::HttpRequest& request) override {
         requests.push_back(request);
@@ -64,6 +67,11 @@ public:
                     }
                 }
             }
+        }
+        if (next_index_ > 0 && next_index_ <= cut_after_body) {
+            chatbot::HttpResponse cut;
+            cut.error = "conexión cortada";
+            return cut;
         }
         return response;
     }

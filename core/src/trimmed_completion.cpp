@@ -2,6 +2,7 @@
 
 #include "chatbot/error.h"
 #include "chatbot/history.h"
+#include "tool_call_accumulator.h"
 
 #include <algorithm>
 #include <string>
@@ -73,10 +74,16 @@ TrimmedCompletion complete_trimmed(ChatClient& client, const std::vector<Message
     TrimmedCompletion done{client.complete_stream(first.messages, deliver, cancel, options),
                            first.dropped};
 
+    // Con herramientas, un pedazo de llamada sin nombre no pasa por on_delta,
+    // así que un error dentro del flujo (http_status 0) pudo llegar después
+    // de él: solo cuenta el rechazo con estado HTTP, que llega antes del flujo.
+    const bool before_stream = options.tools.empty() ||
+                               (done.result.is_error() && done.result.error().http_status != 0);
+
     // Reintento por contexto: una sola vez, si el servidor rechazó la
     // petición antes de mandar texto y recortar a la mitad quita algo más.
     if (done.result.is_error() && done.result.error().kind == ErrorKind::InvalidRequest &&
-        !delivered && (cancel == nullptr || !cancel->is_cancelled()) &&
+        !delivered && before_stream && (cancel == nullptr || !cancel->is_cancelled()) &&
         !names_param_key(done.result.error(), client.param_keys())) {
         // Mitad de min(límite, tamaño real): si el historial ya es menor
         // que el límite, recortar a la mitad del límite no quitaría nada.
@@ -96,6 +103,13 @@ TrimmedCompletion complete_trimmed(ChatClient& client, const std::vector<Message
                 done = std::move(retry);
             }
         }
+    }
+    // complete_stream solo vio lo recortado: un id puede repetir el de un
+    // grupo que quitó el recorte y que sigue en el historial completo.
+    if (done.result.is_ok() && done.dropped > 0 && !done.result.value().tool_calls.empty()) {
+        CompletionInfo info = done.result.value();
+        assign_free_ids(info.tool_calls, history);
+        done.result = std::move(info);
     }
     return done;
 }

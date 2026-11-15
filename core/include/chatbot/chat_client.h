@@ -9,6 +9,7 @@
 #include "chatbot/transport.h"
 #include "chatbot/types.h"
 
+#include <cstddef>
 #include <functional>
 #include <memory>
 #include <string>
@@ -16,18 +17,24 @@
 
 namespace chatbot {
 
-/// Un incremento del flujo: texto de la respuesta (delta.content) o
-/// pensamiento del modelo (delta.reasoning_content o delta.reasoning). El
-/// pensamiento es solo para mostrarse: nunca vuelve al modelo.
+/// Un incremento del flujo: texto de la respuesta (delta.content),
+/// pensamiento del modelo (delta.reasoning_content o delta.reasoning) o el
+/// aviso de que empezó una llamada a herramienta (ToolCallStarted, solo si
+/// la petición mandó herramientas). El pensamiento vuelve al modelo solo con
+/// RequestOptions::replay_reasoning.
 struct StreamDelta {
-    enum class Kind { Content, Reasoning };
+    enum class Kind { Content, Reasoning, ToolCallStarted };
     Kind kind = Kind::Content;
-    std::string_view text; ///< Nunca vacío; vale solo durante la llamada.
+    /// Nunca vacío; vale solo durante la llamada. En ToolCallStarted, el
+    /// nombre de la herramienta.
+    std::string_view text;
+    /// Solo ToolCallStarted: el lugar de la llamada en CompletionInfo::tool_calls.
+    std::size_t tool_index{0};
 };
 
-/// Callback de streaming: recibe cada incremento, de texto o de pensamiento,
-/// en el orden en que llegan. Devolver false cancela la petición (se
-/// devuelve ErrorKind::Cancelled).
+/// Callback de streaming: recibe cada incremento, de texto, de pensamiento
+/// o de llamada, en el orden en que llegan. Devolver false cancela la
+/// petición (se devuelve ErrorKind::Cancelled).
 using StreamDeltaCallback = std::function<bool(const StreamDelta& delta)>;
 
 /// Una herramienta que se ofrece al modelo (formato OpenAI "function").
@@ -75,11 +82,17 @@ public:
 
     /// Igual que complete() pero pidiendo stream:true al servidor: entrega
     /// los incrementos de texto y de pensamiento por on_delta conforme llegan
-    /// (en un mismo chunk, primero el pensamiento) y devuelve el
-    /// resultado: en éxito, el finish_reason (CompletionInfo); el texto
-    /// completo ya pasó por el callback. Reintenta igual que complete() mientras no se haya entregado
-    /// ningún delta, de ningún tipo. Cancela si on_delta devuelve false o con cancel, igual
-    /// que complete(). options: herramientas y pensamiento de regreso
+    /// (en un mismo chunk, primero el pensamiento, luego el texto y al final
+    /// las llamadas) y devuelve el resultado: en éxito, CompletionInfo; el
+    /// texto completo ya pasó por el callback. Con herramientas en options,
+    /// cada llamada a herramienta sale una vez como ToolCallStarted en cuanto
+    /// se conoce su nombre, en orden de aparición, y completa en
+    /// CompletionInfo::tool_calls; sin herramientas, los tool_calls del
+    /// servidor se ignoran. Reintenta igual que complete() mientras no se
+    /// haya entregado ningún delta, de ningún tipo, ni llegado ningún pedazo
+    /// de llamada. Con error o cancelación, las llamadas a medias se
+    /// descartan. Cancela si on_delta devuelve false o con cancel, igual que
+    /// complete(). options: herramientas y pensamiento de regreso
     /// (RequestOptions). Nunca lanza excepciones.
     [[nodiscard]] Result<CompletionInfo> complete_stream(const std::vector<Message>& messages,
                                                          const StreamDeltaCallback& on_delta,
