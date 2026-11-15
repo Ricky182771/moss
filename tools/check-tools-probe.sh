@@ -6,14 +6,15 @@
 #
 # Uso: tools/check-tools-probe.sh <moss-tools-probe>
 #
-# CHECK_PROBE_SCRIPT=<guion.json> cambia el guion (solo para ver que el script
-# falla cuando debe; por defecto, tests/data/fake-llm/sonda-con-index.json).
+# Por defecto corre los tres guiones (sonda-con-index, sonda-sin-index y
+# sonda-un-pedazo, en tests/data/fake-llm/), cada uno con su servidor.
+# CHECK_PROBE_SCRIPT=<guion.json> corre solo ese (también sirve para ver que el
+# script falla cuando debe).
 set -euo pipefail
 export LC_ALL=C.UTF-8
 
 probe=${1:?Uso: tools/check-tools-probe.sh <moss-tools-probe>}
 repo=$(cd "$(dirname "$0")/.." && pwd)
-script=${CHECK_PROBE_SCRIPT:-$repo/tests/data/fake-llm/sonda-con-index.json}
 test_key=ci-sin-key-real
 
 fail() {
@@ -38,42 +39,46 @@ export HOME=$work/home XDG_CONFIG_HOME=$work/config XDG_DATA_HOME=$work/data \
     XDG_STATE_HOME=$work/state XDG_CACHE_HOME=$work/cache
 mkdir -p "$HOME"
 
-port=$(python3 -I -c 'import socket
+run_one() {
+    local script=$1 port up status
+    echo "== guion: ${script##*/}"
+    rm -f "$work/req.jsonl"
+    port=$(python3 -I -c 'import socket
 s = socket.socket()
 s.bind(("127.0.0.1", 0))
 print(s.getsockname()[1])')
-python3 -I "$repo/tools/fake-llm.py" --port "$port" --script "$script" \
-    --log-requests "$work/req.jsonl" --require-reasoning-replay 2> "$work/fake.err" &
-server_pid=$!
-
-up=false
-for _ in $(seq 100); do
-    if (exec 3<> "/dev/tcp/127.0.0.1/$port") 2> /dev/null; then
-        up=true
-        break
-    fi
-    kill -0 "$server_pid" 2> /dev/null || { cat "$work/fake.err"; fail "fake-llm.py no arrancó"; }
-    sleep 0.1
-done
-$up || fail "fake-llm.py no escucha en el puerto $port"
-
-export CHAT_BASE_URL=http://127.0.0.1:$port/v1 CHAT_API_KEY=$test_key CHAT_DATA_DIR=$work/chats
-status=0
-timeout 120 "$probe" fake > "$work/tabla.txt" || status=$?
-cat "$work/tabla.txt"
-[ "$status" -eq 0 ] || fail "la sonda salió con $status (se esperaba 0)"
-
-# Escenarios 1-4: "bien" (la fila 5 también empieza con "2 ", se salta).
-for n in 1 2 3 4; do
-    row=$(grep -E "^  $n [a-z]" "$work/tabla.txt" | grep -v 'sin pensamiento' || true)
-    [ -n "$row" ] || fail "no hay fila del escenario $n en la tabla"
-    grep -qE '  bien( |$)' <<< "$row" || fail "el escenario $n no dice \"bien\": $row"
-done
-grep -q 'Exige el pensamiento de regreso: sí' "$work/tabla.txt" ||
-    fail "la sonda no dice que el modelo exige el pensamiento de regreso"
-
-# Lo que recibió el servidor.
-python3 -I - "$work/req.jsonl" "$test_key" << 'PY' || fail "las peticiones registradas no cumplen (arriba, el motivo)"
+    python3 -I "$repo/tools/fake-llm.py" --port "$port" --script "$script" \
+        --log-requests "$work/req.jsonl" --require-reasoning-replay 2> "$work/fake.err" &
+    server_pid=$!
+    
+    up=false
+    for _ in $(seq 100); do
+        if (exec 3<> "/dev/tcp/127.0.0.1/$port") 2> /dev/null; then
+            up=true
+            break
+        fi
+        kill -0 "$server_pid" 2> /dev/null || { cat "$work/fake.err"; fail "fake-llm.py no arrancó"; }
+        sleep 0.1
+    done
+    $up || fail "fake-llm.py no escucha en el puerto $port"
+    
+    export CHAT_BASE_URL=http://127.0.0.1:$port/v1 CHAT_API_KEY=$test_key CHAT_DATA_DIR=$work/chats
+    status=0
+    timeout 120 "$probe" fake > "$work/tabla.txt" || status=$?
+    cat "$work/tabla.txt"
+    [ "$status" -eq 0 ] || fail "la sonda salió con $status (se esperaba 0)"
+    
+    # Escenarios 1-4: "bien" (la fila 5 también empieza con "2 ", se salta).
+    for n in 1 2 3 4; do
+        row=$(grep -E "^  $n [a-z]" "$work/tabla.txt" | grep -v 'sin pensamiento' || true)
+        [ -n "$row" ] || fail "no hay fila del escenario $n en la tabla"
+        grep -qE '  bien( |$)' <<< "$row" || fail "el escenario $n no dice \"bien\": $row"
+    done
+    grep -q 'Exige el pensamiento de regreso: sí' "$work/tabla.txt" ||
+        fail "la sonda no dice que el modelo exige el pensamiento de regreso"
+    
+    # Lo que recibió el servidor.
+    python3 -I - "$work/req.jsonl" "$test_key" << 'PY' || fail "las peticiones registradas no cumplen (arriba, el motivo)"
 import json, sys
 
 path, key = sys.argv[1:]
@@ -114,5 +119,16 @@ for b in bad:
     print(b)
 sys.exit(1 if bad else 0)
 PY
+    kill "$server_pid" 2> /dev/null || true
+    server_pid=
+}
+
+if [ -n "${CHECK_PROBE_SCRIPT:-}" ]; then
+    run_one "$CHECK_PROBE_SCRIPT"
+else
+    for g in sonda-con-index sonda-sin-index sonda-un-pedazo; do
+        run_one "$repo/tests/data/fake-llm/$g.json"
+    done
+fi
 
 echo "OK"

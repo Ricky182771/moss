@@ -170,7 +170,7 @@ Las llamadas llegan en pedazos dentro de `choices[0].delta.tool_calls`:
 - Un modelo que escribe la llamada como texto (`<tool_call>…` dentro de `content`) **no** se interpreta: la sonda de C0 lo marca como modelo no apto.
 ### 3.4 El pensamiento (D6)
  
-- En el modo código, `decode_openai_chunk` también recuerda la llave en que llegó el pensamiento, y `Message::reasoning` lo guarda con ella.
+- `decode_openai_chunk` siempre recuerda la llave en que llegó el pensamiento y `CompletionInfo::reasoning_key` la reporta (también en el chat, que no la usa); lo que es solo del modo código es guardarlo en `Message::reasoning` con ella y reenviarlo.
 - Al armar la petición con `replay_reasoning = true`, cada asistente lleva su pensamiento con esa llave. El chat lo deja en `false`: su JSON no cambia.
 - Gemini por la capa compatible pide además su `thought_signature` (`extra_content.google`) en las llamadas a herramientas. **Fuera de alcance:** el modo código se prueba con NIM (D4).
 ### 3.5 Recorte del historial
@@ -184,11 +184,11 @@ Las llamadas llegan en pedazos dentro de `choices[0].delta.tool_calls`:
 - Sin herramientas en la petición, los `tool_calls` que mande el servidor se ignoran como antes, para que el chat no cambie.
 - Ids: uno vacío o repetido (frente al historial o dentro de la respuesta) pasa a `call_moss_<n>` libre, porque hay servidores que repiten ids y la validación rechaza repetidos; `complete_trimmed` los revisa contra el historial completo.
 - Con herramientas, el reintento por contexto exige estado HTTP, porque un pedazo de llamada sin nombre no pasa por `on_delta`.
-- Una llamada con id vacío en el historial es error `Config`.
+- Una llamada con id vacío en el historial es error `Config`; también un mensaje `tool` con `content` vacío ("mensaje sin contenido"): quien ejecuta la herramienta pone un texto aunque no haya salida.
 
 ### 3.6 La sonda (para elegir modelos)
  
-`moss-tools-probe <modelo>` (solo en los presets de desarrollo, como `moss-telegram-probe`) corre cuatro escenarios contra el modelo real con herramientas falsas y escribe una tabla:
+`moss-tools-probe <modelo>` (`tools/` se compila siempre, también en release y Windows; no se instala ni va en los paquetes) corre cuatro escenarios contra el modelo real con herramientas falsas y escribe una tabla:
  
 1. Una llamada simple (`read` de un archivo falso) y la respuesta final.
 2. Dos pasos encadenados (`glob` y luego `read` del resultado).

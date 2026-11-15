@@ -92,7 +92,7 @@ env $(compgen -e | grep '^CHAT_' | sed 's/^/-u /') CHAT_BASE_URL=http://127.0.0.
     ./build/dev/tools/moss-tools-probe fake        # el guion es para un solo modelo; reinicia el servidor entre corridas
 ```
 
-`tools/check-tools-probe.sh <moss-tools-probe>` hace esa corrida de punta a punta (con `sonda-con-index.json`, `--log-requests` y `--require-reasoning-replay`) y falla si algún escenario no sale "bien", si no detecta que se exige el pensamiento de regreso o si las peticiones no traen lo que dice la guía (`tools`, `tool_choice`, `tool_call_id`, `reasoning_content`, sin `parallel_tool_calls` ni key); es un paso de la CI en Linux (no en Windows: la CI instala en MSYS2 solo gcc, cmake, ninja, nlohmann-json y catch, sin Python).
+`tools/check-tools-probe.sh <moss-tools-probe>` hace esa corrida de punta a punta (con cada guion, `--log-requests y `--require-reasoning-replay`) y falla si algún escenario no sale "bien", si no detecta que se exige el pensamiento de regreso o si las peticiones no traen lo que dice la guía (`tools`, `tool_choice`, `tool_call_id`, `reasoning_content`, sin `parallel_tool_calls` ni key); es un paso de la CI en Linux. No hay paso en Windows: el script es de bash y corre en el shell de MSYS2, que se instala sin Python (el Python del runner solo se ve desde pwsh, como en `tools/check-rpc-https.ps1`). La punta a punta en Windows llega en C1 con `moss code -p`. Por defecto corre los tres guiones (`sonda-con-index`, `sonda-sin-index`, `sonda-un-pedazo`); `CHECK_PROBE_SCRIPT` corre solo uno.
 
 Con la key real, a mano y con tu permiso: `CHAT_API_KEY=... ./build/dev/tools/moss-tools-probe <modelo>` (cada modelo gasta unas 13 peticiones).
 
