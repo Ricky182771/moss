@@ -287,7 +287,7 @@ Una herramienta rechazada regresa como resultado: `"The user rejected this actio
 Las instrucciones de sistema del modo código se arman al empezar cada sesión:
  
 1. Las fijas de Moss Code (en inglés, D7): cómo usar las herramientas, leer antes de editar, preferir `edit` a `write`, no inventar rutas, ser breve, contestar en el idioma del usuario (español por defecto).
-2. El entorno: carpeta, sistema, fecha, si es un repo de git (rama y `git status --short`, recortado), y si hay `bash`.
+2. El entorno: carpeta, sistema, fecha, si es un repo de git (rama y `git status --short`, recortado), y si hay `bash`. Si la configuración de git tiene filtros `clean`/`process` (`git config --get-regexp`), `git status` no se corre y el entorno solo dice que el estado no se leyó.
 3. `~/.config/moss/AGENTS.md` (tuyo) y el `AGENTS.md` de la raíz (o `CLAUDE.md`), D5, hasta 40 KiB entre los dos.
 Las instrucciones del chat (`system_prompt` de `config.json`) **no** aplican en el modo código.
  

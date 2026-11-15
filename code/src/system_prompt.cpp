@@ -169,10 +169,27 @@ std::string git_section(const ProjectRoot& root, const SystemPromptOptions& opti
         if (!git || !options.run_process) {
             return {};
         }
+        // git status corre los filtros clean/process de la configuración (un .git/config ajeno
+        // lanzaría lo que quiera): si hay alguno, no se corre. config no ejecuta nada.
+        // Salida 1: no hay ninguno; 0: hay alguno; otra: falla como cualquier git.
+        const auto deadline = std::chrono::steady_clock::now() + kGitTimeout;
+        const process::ProcessResult filters =
+            run_git(options.run_process, *git, root,
+                    {"config", "--get-regexp", "^filter\\..*\\.(clean|process)$"}, kGitTimeout,
+                    cancel);
+        if (filters.status == process::ProcessResult::Status::Exited && filters.exit_code == 0) {
+            return "- Git: repository status not read, because the git configuration defines "
+                   "clean/process filters.\n";
+        }
+        const auto left = std::chrono::duration_cast<std::chrono::milliseconds>(
+            deadline - std::chrono::steady_clock::now());
+        if (filters.status != process::ProcessResult::Status::Exited || filters.exit_code != 1 ||
+            left <= std::chrono::milliseconds::zero()) {
+            return {};
+        }
         const process::ProcessResult result =
             run_git(options.run_process, *git, root,
-                    {"-c", "color.status=false", "status", "--short", "--branch"}, kGitTimeout,
-                    cancel);
+                    {"-c", "color.status=false", "status", "--short", "--branch"}, left, cancel);
         if (!result.ok()) {
             return {};
         }

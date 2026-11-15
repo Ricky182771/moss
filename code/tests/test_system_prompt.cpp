@@ -4,6 +4,7 @@
 
 #include "chatbot/code/system_prompt.h"
 
+#include "env_guard.hpp"
 #include "tool_fixture.hpp"
 
 #include "chatbot/child_process.h"
@@ -59,23 +60,6 @@ SystemPromptOptions no_git_options() {
     return options;
 }
 
-/// Un git falso que termina con este estado y esta salida; guarda argv y las opciones.
-struct FakeGit {
-    ProcessResult result;
-    std::vector<std::string> argv;
-    ProcessOptions options;
-
-    void install(SystemPromptOptions& target) {
-        target.git_path = "/fake/git";
-        target.run_process = [this](const std::vector<std::string>& args,
-                                    const ProcessOptions& opts) {
-            argv = args;
-            options = opts;
-            return result;
-        };
-    }
-};
-
 ProcessResult git_exited(int code, std::string out) {
     ProcessResult result;
     result.status = ProcessResult::Status::Exited;
@@ -83,6 +67,34 @@ ProcessResult git_exited(int code, std::string out) {
     result.out = std::move(out);
     return result;
 }
+
+const std::vector<std::string> kFilterQuery{"config", "--get-regexp",
+                                            "^filter\\..*\\.(clean|process)$"};
+
+/// Un git falso: `config` (la búsqueda de filtros) da config_result, que por defecto es "no hay
+/// ninguno" (salida 1); lo demás (status) da result. Guarda el argv y las opciones de status, y
+/// el argv de todas las llamadas.
+struct FakeGit {
+    ProcessResult config_result = git_exited(1, "");
+    ProcessResult result;
+    std::vector<std::string> argv;
+    ProcessOptions options;
+    std::vector<std::vector<std::string>> calls;
+
+    void install(SystemPromptOptions& target) {
+        target.git_path = "/fake/git";
+        target.run_process = [this](const std::vector<std::string>& args,
+                                    const ProcessOptions& opts) {
+            calls.push_back(args);
+            if (std::find(args.begin(), args.end(), "config") != args.end()) {
+                return config_result;
+            }
+            argv = args;
+            options = opts;
+            return result;
+        };
+    }
+};
 
 CodeSystemPrompt build(ToolFixture& fixture, const SystemPromptOptions& options) {
     return build_code_system_prompt(fixture.root, options, fixture.cancel);
@@ -317,7 +329,11 @@ TEST_CASE("system prompt: git con rama y estado", "[system_prompt]") {
                                                "--branch"}));
         tool_test::check_helper_environment(git.options);
         CHECK(git.options.timeout <= std::chrono::milliseconds{5000});
+        CHECK(git.options.timeout > std::chrono::milliseconds::zero());
         CHECK(git.options.cancel == &fixture.cancel);
+        // Antes, la búsqueda de filtros, también por run_git.
+        REQUIRE(git.calls.size() == 2);
+        CHECK(git.calls[0] == tool_test::git_argv("/fake/git", fixture.root, kFilterQuery));
     }
     SECTION("repo limpio") {
         git.result = git_exited(0, "## No commits yet on main\n");
@@ -350,6 +366,45 @@ TEST_CASE("system prompt: sin repo, git falla, se pasa del tiempo o se cancela: 
     git.result.status = status;
     const CodeSystemPrompt prompt = build(fixture, options);
     CHECK_FALSE(contains(prompt.text, "Git repository"));
+    CHECK(contains(prompt.text, "- Commands:"));
+}
+
+TEST_CASE("system prompt: con filtros clean/process en la configuración no se corre git status",
+          "[system_prompt]") {
+    ToolFixture fixture;
+    SystemPromptOptions options = no_git_options();
+    FakeGit git;
+    git.install(options);
+    git.result = git_exited(0, "## main\n M a.cpp\n");
+    git.config_result = git_exited(0, "filter.x.clean cmd\n");
+    const CodeSystemPrompt prompt = build(fixture, options);
+    REQUIRE(git.calls.size() == 1);
+    CHECK(git.calls[0] == tool_test::git_argv("/fake/git", fixture.root, kFilterQuery));
+    CHECK(contains(prompt.text, "- Git: repository status not read, because the git configuration "
+                                "defines clean/process filters.\n"));
+    CHECK_FALSE(contains(prompt.text, "Git repository"));
+    CHECK_FALSE(contains(prompt.text, "<git_status>"));
+    CHECK_FALSE(contains(prompt.text, "filter.x.clean"));
+}
+
+TEST_CASE("system prompt: si la búsqueda de filtros falla, ni status ni sección",
+          "[system_prompt]") {
+    const auto status =
+        GENERATE(ProcessResult::Status::Exited, ProcessResult::Status::TimedOut,
+                 ProcessResult::Status::NotFound, ProcessResult::Status::Cancelled);
+    ToolFixture fixture;
+    SystemPromptOptions options = no_git_options();
+    FakeGit git;
+    git.install(options);
+    git.result = git_exited(0, "## main\n");
+    // Exited con 3 (configuración inválida); los demás con 1, para que cuente el estado y no
+    // solo el código de salida.
+    git.config_result = git_exited(status == ProcessResult::Status::Exited ? 3 : 1, "");
+    git.config_result.status = status;
+    const CodeSystemPrompt prompt = build(fixture, options);
+    CHECK(git.calls.size() == 1);
+    CHECK_FALSE(contains(prompt.text, "Git repository"));
+    CHECK_FALSE(contains(prompt.text, "- Git:"));
     CHECK(contains(prompt.text, "- Commands:"));
 }
 
@@ -398,20 +453,37 @@ TEST_CASE("system prompt con git real", "[system_prompt][git]") {
         !chatbot::process::find_in_path("git").has_value()) {
         SKIP("sin git en el PATH (o Windows, donde no se lanzan programas)");
     }
+    // Sin la configuración global ni la del sistema de la máquina (git-lfs deja filtros ahí).
+    const chatbot_test::EnvGuard global{"GIT_CONFIG_GLOBAL", "/dev/null"};
+    const chatbot_test::EnvGuard no_system{"GIT_CONFIG_NOSYSTEM", "1"};
     ToolFixture fixture;
-    const ProcessResult init = chatbot::process::run_process(
-        {"git", "-C", utf8(fixture.project.proy), "init", "-q", "-b", "rama-prueba"});
+    const std::string proy = utf8(fixture.project.proy);
+    const ProcessResult init =
+        chatbot::process::run_process({"git", "-C", proy, "init", "-q", "-b", "rama-prueba"});
     if (!init.ok()) {
         SKIP("git init falló");
     }
     fixture.file("nuevo.txt", "x");
     SystemPromptOptions options;
     options.now = [] { return kNow; };
-    const CodeSystemPrompt prompt = build(fixture, options);
-    // Con LC_ALL=C el texto de "sin commits" no depende del idioma, pero sí de la versión de git:
-    // solo la rama.
-    const std::size_t line = prompt.text.find("- Git repository: yes, branch ");
-    REQUIRE(line != std::string::npos);
-    CHECK(prompt.text.substr(line, prompt.text.find('\n', line) - line).ends_with("rama-prueba"));
-    CHECK(contains(prompt.text, "?? nuevo.txt\n"));
+
+    SECTION("rama y estado") {
+        const CodeSystemPrompt prompt = build(fixture, options);
+        // Con LC_ALL=C el texto de "sin commits" no depende del idioma, pero sí de la versión de
+        // git: solo la rama.
+        const std::size_t line = prompt.text.find("- Git repository: yes, branch ");
+        REQUIRE(line != std::string::npos);
+        CHECK(prompt.text.substr(line, prompt.text.find('\n', line) - line)
+                  .ends_with("rama-prueba"));
+        CHECK(contains(prompt.text, "?? nuevo.txt\n"));
+    }
+    SECTION("con un filtro clean, sin estado") {
+        REQUIRE(chatbot::process::run_process({"git", "-C", proy, "config", "filter.x.clean", "true"})
+                    .ok());
+        const CodeSystemPrompt prompt = build(fixture, options);
+        CHECK(contains(prompt.text, "- Git: repository status not read, because the git "
+                                    "configuration defines clean/process filters.\n"));
+        CHECK_FALSE(contains(prompt.text, "Git repository"));
+        CHECK_FALSE(contains(prompt.text, "nuevo.txt"));
+    }
 }
