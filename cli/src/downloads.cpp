@@ -1,6 +1,7 @@
 #include "downloads.h"
 
 #include "chatbot/config.h"
+#include "chatbot/platform.h"
 #include "chatbot/utf8.h"
 
 #include <algorithm>
@@ -43,24 +44,6 @@ std::string lower(std::string_view text) {
     std::transform(out.begin(), out.end(), out.begin(),
                    [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     return out;
-}
-
-/// true si name es un dispositivo reservado de Windows (CON, PRN, AUX, NUL,
-/// COM1 a COM9, LPT1 a LPT9) sin distinguir mayúsculas, también con
-/// extensión ("con.cpp", "Aux.tar.gz"): Windows mira lo que va antes del
-/// primer punto, sin los espacios del final ("con .txt").
-bool is_reserved_windows_name(std::string_view name) {
-    std::string_view stem = name.substr(0, name.find('.'));
-    while (!stem.empty() && stem.back() == ' ') {
-        stem.remove_suffix(1);
-    }
-    const std::string device = lower(stem);
-    if (device == "con" || device == "prn" || device == "aux" || device == "nul") {
-        return true;
-    }
-    return device.size() == 4 &&
-           (device.compare(0, 3, "com") == 0 || device.compare(0, 3, "lpt") == 0) &&
-           device[3] >= '1' && device[3] <= '9';
 }
 
 /// Nombre con sufijo: "suma.cpp" → "suma-2.cpp"; sin extensión, "suma-2".
@@ -239,8 +222,9 @@ std::optional<std::string> validate_file_name(std::string_view name) {
     }
     if (is_reserved_windows_name(name)) {
         return "El nombre \"" + std::string{name} +
-               "\" está reservado en Windows (CON, PRN, AUX, NUL, COM1 a COM9 y LPT1 a LPT9, "
-               "también con extensión).";
+               "\" está reservado en Windows (CON, PRN, AUX, NUL, CONIN$, CONOUT$, COM1 a "
+               "COM9, LPT1 a LPT9 y COM o LPT con un 1, 2 o 3 en superíndice, también con "
+               "extensión).";
     }
     return std::nullopt;
 }
