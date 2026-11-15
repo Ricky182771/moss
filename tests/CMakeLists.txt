@@ -51,6 +51,7 @@ add_executable(chatbot_tests
     test_system_prompt_invariants.cpp
     test_tavily_search.cpp
     test_terminal_reply.cpp
+    test_tool_call_accumulator.cpp
     test_web_search.cpp)
 
 target_compile_features(chatbot_tests PRIVATE cxx_std_20)

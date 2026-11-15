@@ -71,6 +71,15 @@ jobs:
           fi
           ctest --preset ${{ matrix.preset }} --output-on-failure
 
+      # La sonda de tool calling (moss-tools-probe) contra tools/fake-llm.py:
+      # los cuatro escenarios en "bien", el pensamiento de regreso exigido y el
+      # cuerpo de las peticiones (tools, tool_choice, tool_call_id, sin key).
+      # Sin red ni keys. No hay paso en Windows: el script es de bash y corre en el shell de MSYS2, sin
+      # Python (el del runner solo se ve desde pwsh, como en check-rpc-https.ps1).
+      # La punta a punta en Windows llega en C1 con `moss code -p`.
+      - name: Sonda de tool calling
+        run: tools/check-tools-probe.sh build/${{ matrix.preset }}/tools/moss-tools-probe
+
       # Sin CHAT_API_KEY el programa debe salir con código 1 y el error de
       # configuración, sin abrir la interfaz ni conectarse a nada.
       - name: Arranque sin API key

@@ -146,6 +146,41 @@ ErrorKind classify_stream_error(const json& error) {
     return ErrorKind::BadResponse;
 }
 
+/// object[key] si es cadena; si falta o tiene otro tipo, vacío.
+std::string string_field(const json& object, const char* key) {
+    const auto it = object.find(key);
+    return it != object.end() && it->is_string() ? it->get<std::string>() : std::string{};
+}
+
+/// Los pedazos de delta.tool_calls. Lo que tiene tipo equivocado se ignora,
+/// como el pensamiento: el flujo sigue.
+std::vector<ToolCallChunk> tool_call_chunks(const json& delta) {
+    std::vector<ToolCallChunk> chunks;
+    const auto calls = delta.find("tool_calls");
+    if (calls == delta.end() || !calls->is_array()) {
+        return chunks;
+    }
+    for (const json& call : *calls) {
+        if (!call.is_object()) {
+            continue;
+        }
+        ToolCallChunk chunk;
+        // Los enteros no negativos de JSON se leen como unsigned.
+        if (const auto index = call.find("index");
+            index != call.end() && index->is_number_unsigned()) {
+            chunk.index = index->get<std::size_t>();
+        }
+        chunk.id = string_field(call, "id");
+        if (const auto function = call.find("function");
+            function != call.end() && function->is_object()) {
+            chunk.name = string_field(*function, "name");
+            chunk.arguments = string_field(*function, "arguments");
+        }
+        chunks.push_back(std::move(chunk));
+    }
+    return chunks;
+}
+
 } // namespace
 
 void Parser::feed(std::string_view raw) {
@@ -194,9 +229,14 @@ Result<Event> decode_event(const std::string& raw) {
 
 Result<std::optional<std::string>> decode_openai_chunk(const std::string& data,
                                                        std::string* finish_reason,
-                                                       std::string* reasoning) {
+                                                       std::string* reasoning,
+                                                       ReasoningKey* reasoning_key,
+                                                       std::vector<ToolCallChunk>* tool_calls) {
     if (reasoning != nullptr) {
         reasoning->clear();
+    }
+    if (tool_calls != nullptr) {
+        tool_calls->clear();
     }
     json document;
     try {
@@ -246,14 +286,21 @@ Result<std::optional<std::string>> decode_openai_chunk(const std::string& data,
         return ChatError{ErrorKind::BadResponse, 0,
                          "\"choices[0].delta\" no es un objeto.", std::nullopt};
     }
-    if (reasoning != nullptr) {
-        for (const char* key : {"reasoning_content", "reasoning"}) {
-            const auto it = delta.find(key);
-            if (it != delta.end() && it->is_string()) {
+    for (const auto& [key, which] : {std::pair{"reasoning_content", ReasoningKey::ReasoningContent},
+                                     std::pair{"reasoning", ReasoningKey::Reasoning}}) {
+        const auto it = delta.find(key);
+        if (it != delta.end() && it->is_string()) {
+            if (reasoning != nullptr) {
                 *reasoning = it->get<std::string>();
-                break;
             }
+            if (reasoning_key != nullptr) {
+                *reasoning_key = which;
+            }
+            break;
         }
+    }
+    if (tool_calls != nullptr) {
+        *tool_calls = tool_call_chunks(delta);
     }
     if (!delta.contains("content")) {
         // Chunk sin texto (p. ej. el cierre con finish_reason): no aporta nada.
@@ -261,7 +308,7 @@ Result<std::optional<std::string>> decode_openai_chunk(const std::string& data,
     }
     const json& content = delta.at("content");
     if (content.is_null()) {
-        // Primer chunk con solo role, reasoning_content o tool_calls: sin texto.
+        // Chunk con solo role, pensamiento o tool_calls (ya leídos arriba): sin texto.
         return std::optional<std::string>{std::nullopt};
     }
     if (!content.is_string()) {

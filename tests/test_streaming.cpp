@@ -1,5 +1,6 @@
 #include "chatbot/cancel_token.h"
 #include "chatbot/chat_client.h"
+#include "chatbot/trimmed_completion.h"
 #include "fake_transport.hpp"
 
 #include <nlohmann/json.hpp>
@@ -10,6 +11,7 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <chrono>
+#include <cstddef>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -639,4 +641,416 @@ TEST_CASE("complete_stream: cancelar durante el pensamiento", "[streaming][pensa
     CHECK(harness.transport->requests.size() == 1);
     REQUIRE_FALSE(seen.empty());
     CHECK(seen.front() == Seen{Kind::Reasoning, "pienso"});
+}
+
+// Llamadas a herramientas (guias/18-moss-code.md, 3.3).
+
+namespace {
+
+/// Un delta recibido, con su tipo y su lugar de llamada.
+struct Got {
+    Kind kind;
+    std::string text;
+    std::size_t tool_index;
+    bool operator==(const Got&) const = default;
+};
+
+chatbot::RequestOptions read_tool() {
+    return chatbot::RequestOptions{
+        {chatbot::ToolSpec{"read", "Lee un archivo.", R"({"type":"object"})"}}, false};
+}
+
+/// Evento con un pedazo de llamada; los campos vacíos no se mandan.
+std::string tool_chunk(int index, const std::string& id, const std::string& name,
+                       const std::string& arguments) {
+    nlohmann::json call = {{"index", index}};
+    if (!id.empty()) {
+        call["id"] = id;
+        call["type"] = "function";
+    }
+    nlohmann::json function = nlohmann::json::object();
+    if (!name.empty()) {
+        function["name"] = name;
+    }
+    if (!arguments.empty()) {
+        function["arguments"] = arguments;
+    }
+    if (!function.empty()) {
+        call["function"] = function;
+    }
+    const nlohmann::json delta = {{"tool_calls", nlohmann::json::array({call})}};
+    const nlohmann::json choice = {{"delta", delta}};
+    const nlohmann::json body = {{"choices", nlohmann::json::array({choice})}};
+    return "data: " + body.dump() + "\n\n";
+}
+
+const std::string kToolsDone =
+    "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\ndata: [DONE]\n\n";
+
+const std::string kContextError =
+    "data: {\"error\":{\"code\":400,\"message\":\"maximum context length exceeded\"}}\n\n";
+
+chatbot::HttpResponse ok_stream(const std::string& body) {
+    return chatbot::HttpResponse{200, body, std::nullopt, false, ""};
+}
+
+/// Una vuelta vieja grande (600 B) y el mensaje actual: con límite 1000, el
+/// reintento por contexto quita la vuelta vieja.
+std::vector<chatbot::Message> long_history() {
+    return {
+        chatbot::Message{chatbot::Role::System, "sistema"},
+        chatbot::Message{chatbot::Role::User, std::string(300, 'u')},
+        chatbot::Message{chatbot::Role::Assistant, std::string(300, 'a')},
+        chatbot::Message{chatbot::Role::User, "pregunta actual"},
+    };
+}
+
+} // namespace
+
+TEST_CASE("complete_stream: texto y dos llamadas, en orden", "[streaming][herramientas]") {
+    auto harness = make_client();
+    std::string flow =
+        "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"Voy\"}}]}\n\n";
+    flow += tool_chunk(0, "call_1", "read", "");
+    flow += tool_chunk(1, "call_2", "glob", "{\"p\":");
+    flow += tool_chunk(0, "", "", "{\"path\":\"a\"}");
+    flow += tool_chunk(1, "", "", "\"*\"}");
+    flow += kToolsDone;
+    harness.transport->responses.push_back(ok_stream(flow));
+    harness.transport->chunk_size = 7;
+
+    std::vector<Got> got;
+    const auto response = harness.client->complete_stream(
+        sample_messages(),
+        [&](const chatbot::StreamDelta& d) {
+            got.push_back(Got{d.kind, std::string{d.text}, d.tool_index});
+            return true;
+        },
+        nullptr, read_tool());
+
+    REQUIRE(response.is_ok());
+    CHECK(got == std::vector<Got>{{Kind::Content, "Voy", 0},
+                                  {Kind::ToolCallStarted, "read", 0},
+                                  {Kind::ToolCallStarted, "glob", 1}});
+    CHECK(response.value().finish_reason == "tool_calls");
+    const std::vector<chatbot::ToolCall>& calls = response.value().tool_calls;
+    REQUIRE(calls.size() == 2);
+    CHECK(calls[0].id == "call_1");
+    CHECK(calls[0].name == "read");
+    CHECK(calls[0].arguments == "{\"path\":\"a\"}");
+    CHECK(calls[1].id == "call_2");
+    CHECK(calls[1].name == "glob");
+    CHECK(calls[1].arguments == "{\"p\":\"*\"}");
+}
+
+TEST_CASE("complete_stream: dos llamadas con el mismo index y distinto id",
+          "[streaming][herramientas]") {
+    auto harness = make_client();
+    std::string flow = tool_chunk(0, "call_1", "read", "");
+    flow += tool_chunk(0, "", "", "{\"path\":\"a\"}");
+    flow += tool_chunk(0, "call_2", "glob", "{\"p\":");
+    flow += tool_chunk(0, "", "", "\"*\"}");
+    flow += kToolsDone;
+    harness.transport->responses.push_back(ok_stream(flow));
+    harness.transport->chunk_size = 7;
+
+    std::vector<Got> got;
+    const auto response = harness.client->complete_stream(
+        sample_messages(),
+        [&](const chatbot::StreamDelta& d) {
+            got.push_back(Got{d.kind, std::string{d.text}, d.tool_index});
+            return true;
+        },
+        nullptr, read_tool());
+
+    REQUIRE(response.is_ok());
+    CHECK(got == std::vector<Got>{{Kind::ToolCallStarted, "read", 0},
+                                  {Kind::ToolCallStarted, "glob", 1}});
+    const std::vector<chatbot::ToolCall>& calls = response.value().tool_calls;
+    REQUIRE(calls.size() == 2);
+    CHECK(calls[0].id == "call_1");
+    CHECK(calls[0].name == "read");
+    CHECK(calls[0].arguments == "{\"path\":\"a\"}");
+    CHECK(calls[1].id == "call_2");
+    CHECK(calls[1].name == "glob");
+    CHECK(calls[1].arguments == "{\"p\":\"*\"}");
+}
+
+TEST_CASE("complete_stream: pensamiento, texto y llamada en un chunk con finish_reason stop",
+          "[streaming][herramientas]") {
+    auto harness = make_client();
+    harness.transport->responses.push_back(ok_stream(
+        R"(data: {"choices":[{"delta":{"reasoning":"pienso","content":"digo","tool_calls":)"
+        R"([{"index":0,"id":"c1","function":{"name":"read","arguments":"{}"}}]},)"
+        R"("finish_reason":"stop"}]})"
+        "\n\ndata: [DONE]\n\n"));
+
+    std::vector<Got> got;
+    const auto response = harness.client->complete_stream(
+        sample_messages(),
+        [&](const chatbot::StreamDelta& d) {
+            got.push_back(Got{d.kind, std::string{d.text}, d.tool_index});
+            return true;
+        },
+        nullptr, read_tool());
+
+    REQUIRE(response.is_ok());
+    CHECK(got == std::vector<Got>{{Kind::Reasoning, "pienso", 0},
+                                  {Kind::Content, "digo", 0},
+                                  {Kind::ToolCallStarted, "read", 0}});
+    // Mandan las llamadas; el finish_reason se reporta tal como llegó.
+    CHECK(response.value().finish_reason == "stop");
+    REQUIRE(response.value().tool_calls.size() == 1);
+    CHECK(response.value().tool_calls[0].id == "c1");
+    CHECK(response.value().reasoning_key == chatbot::ReasoningKey::Reasoning);
+}
+
+TEST_CASE("complete_stream: la llave del pensamiento es la del primero que llegó",
+          "[streaming][pensamiento]") {
+    auto harness = make_client();
+    harness.transport->responses.push_back(ok_stream(reasoning_chunk("reasoning", "uno") +
+                                                     reasoning_chunk("reasoning_content", "dos") +
+                                                     sse_flow()));
+    harness.transport->responses.push_back(ok_stream(sse_flow()));
+    const auto ignore = [](const chatbot::StreamDelta&) { return true; };
+
+    const auto first = harness.client->complete_stream(sample_messages(), ignore);
+    REQUIRE(first.is_ok());
+    CHECK(first.value().reasoning_key == chatbot::ReasoningKey::Reasoning);
+    CHECK(first.value().tool_calls.empty());
+
+    const auto without = harness.client->complete_stream(sample_messages(), ignore);
+    REQUIRE(without.is_ok());
+    CHECK(without.value().reasoning_key == chatbot::ReasoningKey::ReasoningContent);
+}
+
+TEST_CASE("complete_stream: el id generado no choca con los del historial",
+          "[streaming][herramientas]") {
+    auto harness = make_client();
+    harness.transport->responses.push_back(ok_stream(tool_chunk(0, "", "read", "{}") + kToolsDone));
+    const std::vector<chatbot::Message> messages{
+        chatbot::Message{chatbot::Role::User, "Hola"},
+        chatbot::Message{chatbot::Role::Assistant, "", {chatbot::ToolCall{"call_moss_1", "read", "{}"}}},
+        chatbot::Message{chatbot::Role::Tool, "contenido", {}, "call_moss_1"},
+        chatbot::Message{chatbot::Role::User, "sigue"},
+    };
+
+    const auto response = harness.client->complete_stream(
+        messages, [](const chatbot::StreamDelta&) { return true; }, nullptr, read_tool());
+
+    REQUIRE(response.is_ok());
+    REQUIRE(response.value().tool_calls.size() == 1);
+    CHECK(response.value().tool_calls[0].id == "call_moss_2");
+}
+
+TEST_CASE("complete_stream: sin reintento después de un pedazo de llamada",
+          "[streaming][herramientas]") {
+    auto harness = make_client();
+    harness.transport->cut_after_body = 1;
+    // Solo index e id: todavía no sale ToolCallStarted.
+    harness.transport->responses.push_back(ok_stream(tool_chunk(0, "call_1", "", "")));
+    harness.transport->responses.push_back(ok_stream(sse_flow()));
+
+    std::vector<Got> got;
+    const auto response = harness.client->complete_stream(
+        sample_messages(),
+        [&](const chatbot::StreamDelta& d) {
+            got.push_back(Got{d.kind, std::string{d.text}, d.tool_index});
+            return true;
+        },
+        nullptr, read_tool());
+
+    REQUIRE(response.is_error());
+    CHECK(response.error().kind == chatbot::ErrorKind::Network);
+    CHECK(harness.transport->requests.size() == 1);
+    CHECK(harness.sleeper->sleeps.empty());
+    CHECK(got.empty());
+}
+
+TEST_CASE("complete_stream: con herramientas reintenta si el corte llega antes de cualquier pedazo",
+          "[streaming][herramientas]") {
+    auto harness = make_client();
+    harness.transport->cut_after_body = 1;
+    harness.transport->responses.push_back(
+        ok_stream("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\"}}]}\n\n"));
+    harness.transport->responses.push_back(ok_stream(tool_chunk(0, "call_1", "read", "{}") + kToolsDone));
+
+    const auto response = harness.client->complete_stream(
+        sample_messages(), [](const chatbot::StreamDelta&) { return true; }, nullptr, read_tool());
+
+    REQUIRE(response.is_ok());
+    CHECK(harness.transport->requests.size() == 2);
+    CHECK(response.value().tool_calls.size() == 1);
+}
+
+TEST_CASE("complete_stream: cancelar a la mitad de los argumentos descarta la llamada",
+          "[streaming][herramientas]") {
+    auto harness = make_client();
+    harness.transport->responses.push_back(
+        ok_stream(tool_chunk(0, "call_1", "write", "{\"path\":\"a\",\"content\":\"") +
+                  tool_chunk(0, "", "", "mucho texto\"}") + kToolsDone));
+    std::vector<Got> got;
+    const auto record = [&](const chatbot::StreamDelta& d) {
+        got.push_back(Got{d.kind, std::string{d.text}, d.tool_index});
+    };
+
+    SECTION("el callback devuelve false") {
+        const auto response = harness.client->complete_stream(
+            sample_messages(),
+            [&](const chatbot::StreamDelta& d) {
+                record(d);
+                return false;
+            },
+            nullptr, read_tool());
+        REQUIRE(response.is_error());
+        CHECK(response.error().kind == chatbot::ErrorKind::Cancelled);
+    }
+    SECTION("con el token") {
+        chatbot::CancelToken token;
+        const auto response = harness.client->complete_stream(
+            sample_messages(),
+            [&](const chatbot::StreamDelta& d) {
+                record(d);
+                token.cancel();
+                return true;
+            },
+            &token, read_tool());
+        REQUIRE(response.is_error());
+        CHECK(response.error().kind == chatbot::ErrorKind::Cancelled);
+    }
+    CHECK(harness.transport->requests.size() == 1);
+    CHECK(got == std::vector<Got>{{Kind::ToolCallStarted, "write", 0}});
+}
+
+TEST_CASE("complete_stream: sin herramientas en la petición, los tool_calls se ignoran como hoy",
+          "[streaming][herramientas]") {
+    auto harness = make_client();
+    std::vector<Got> got;
+    const auto record = [&](const chatbot::StreamDelta& d) {
+        got.push_back(Got{d.kind, std::string{d.text}, d.tool_index});
+        return true;
+    };
+
+    SECTION("sin ToolCallStarted ni llamadas") {
+        harness.transport->responses.push_back(ok_stream(
+            "data: {\"choices\":[{\"delta\":{\"content\":\"Hola\"}}]}\n\n" +
+            tool_chunk(0, "call_1", "read", "{}") + kToolsDone));
+        const auto response = harness.client->complete_stream(sample_messages(), record);
+        REQUIRE(response.is_ok());
+        CHECK(got == std::vector<Got>{{Kind::Content, "Hola", 0}});
+        CHECK(response.value().tool_calls.empty());
+    }
+    SECTION("un pedazo de llamada no impide el reintento") {
+        harness.transport->cut_after_body = 1;
+        harness.transport->responses.push_back(ok_stream(tool_chunk(0, "call_1", "read", "{}")));
+        harness.transport->responses.push_back(ok_stream(sse_flow()));
+        const auto response = harness.client->complete_stream(sample_messages(), record);
+        REQUIRE(response.is_ok());
+        CHECK(harness.transport->requests.size() == 2);
+        CHECK(got == std::vector<Got>{{Kind::Content, "Hola", 0}});
+    }
+}
+
+TEST_CASE("complete_trimmed con herramientas: sin reintento por contexto tras un pedazo de llamada",
+          "[streaming][herramientas][contexto]") {
+    auto harness = make_client();
+    harness.transport->responses.push_back(ok_stream(tool_chunk(0, "call_1", "", "") + kContextError));
+    harness.transport->responses.push_back(ok_stream(sse_flow()));
+    std::vector<Got> got;
+
+    const chatbot::TrimmedCompletion done = chatbot::complete_trimmed(
+        *harness.client, long_history(), 1000,
+        [&](const chatbot::StreamDelta& d) {
+            got.push_back(Got{d.kind, std::string{d.text}, d.tool_index});
+            return true;
+        },
+        nullptr, read_tool());
+
+    REQUIRE(done.result.is_error());
+    CHECK(done.result.error().kind == chatbot::ErrorKind::InvalidRequest);
+    CHECK(harness.transport->requests.size() == 1);
+    CHECK(got.empty());
+}
+
+TEST_CASE("complete_trimmed: reintento por contexto antes de cualquier pedazo",
+          "[streaming][herramientas][contexto]") {
+    auto harness = make_client();
+    const auto ignore = [](const chatbot::StreamDelta&) { return true; };
+
+    SECTION("con herramientas, rechazo HTTP 400: sí reintenta") {
+        harness.transport->responses.push_back(chatbot::HttpResponse{
+            400, R"({"error":{"message":"maximum context length exceeded"}})", std::nullopt, false,
+            ""});
+        harness.transport->responses.push_back(ok_stream(sse_flow()));
+        const chatbot::TrimmedCompletion done = chatbot::complete_trimmed(
+            *harness.client, long_history(), 1000, ignore, nullptr, read_tool());
+        REQUIRE(done.result.is_ok());
+        CHECK(harness.transport->requests.size() == 2);
+        CHECK(done.dropped == 2);
+    }
+    SECTION("con herramientas, 400 dentro del flujo: no reintenta (pudo seguir a un pedazo)") {
+        harness.transport->responses.push_back(ok_stream(kContextError));
+        harness.transport->responses.push_back(ok_stream(sse_flow()));
+        const chatbot::TrimmedCompletion done = chatbot::complete_trimmed(
+            *harness.client, long_history(), 1000, ignore, nullptr, read_tool());
+        REQUIRE(done.result.is_error());
+        CHECK(harness.transport->requests.size() == 1);
+    }
+    SECTION("sin herramientas, 400 dentro del flujo: sí reintenta, como hoy") {
+        harness.transport->responses.push_back(ok_stream(kContextError));
+        harness.transport->responses.push_back(ok_stream(sse_flow()));
+        const chatbot::TrimmedCompletion done =
+            chatbot::complete_trimmed(*harness.client, long_history(), 1000, ignore);
+        REQUIRE(done.result.is_ok());
+        CHECK(harness.transport->requests.size() == 2);
+        CHECK(done.dropped == 2);
+    }
+}
+
+TEST_CASE("complete_trimmed: el id generado no choca con el de un grupo recortado",
+          "[streaming][herramientas][contexto]") {
+    auto harness = make_client();
+    harness.transport->responses.push_back(ok_stream(tool_chunk(0, "", "read", "{}") + kToolsDone));
+    // 652 B; con límite 500 se va toda la vuelta vieja, con su call_moss_1.
+    const std::vector<chatbot::Message> history{
+        chatbot::Message{chatbot::Role::System, "sistema"},
+        chatbot::Message{chatbot::Role::User, std::string(300, 'u')},
+        chatbot::Message{chatbot::Role::Assistant, "", {chatbot::ToolCall{"call_moss_1", "read", "{}"}}},
+        chatbot::Message{chatbot::Role::Tool, std::string(300, 't'), {}, "call_moss_1"},
+        chatbot::Message{chatbot::Role::Assistant, "ok"},
+        chatbot::Message{chatbot::Role::User, "pregunta actual"},
+    };
+
+    const chatbot::TrimmedCompletion done = chatbot::complete_trimmed(
+        *harness.client, history, 500, [](const chatbot::StreamDelta&) { return true; }, nullptr,
+        read_tool());
+
+    REQUIRE(done.result.is_ok());
+    CHECK(done.dropped == 4);
+    REQUIRE(done.result.value().tool_calls.size() == 1);
+    CHECK(done.result.value().tool_calls[0].id == "call_moss_2");
+}
+
+TEST_CASE("complete_stream: el servidor repite call_0 en cada vuelta y el historial sigue válido",
+          "[streaming][herramientas]") {
+    auto harness = make_client();
+    harness.transport->responses.push_back(ok_stream(tool_chunk(0, "call_0", "read", "{}") + kToolsDone));
+    const auto ignore = [](const chatbot::StreamDelta&) { return true; };
+    std::vector<chatbot::Message> history{chatbot::Message{chatbot::Role::User, "Hola"}};
+
+    for (int turn = 0; turn < 2; ++turn) {
+        const auto response = harness.client->complete_stream(history, ignore, nullptr, read_tool());
+        REQUIRE(response.is_ok());
+        const std::vector<chatbot::ToolCall>& calls = response.value().tool_calls;
+        REQUIRE(calls.size() == 1);
+        history.push_back(chatbot::Message{chatbot::Role::Assistant, "", calls});
+        history.push_back(chatbot::Message{chatbot::Role::Tool, "contenido", {}, calls[0].id});
+    }
+    CHECK(history[1].tool_calls[0].id == "call_0");
+    CHECK(history[3].tool_calls[0].id == "call_moss_1");
+
+    // La tercera petición lleva los dos grupos: pasa validate_tool_history y se manda.
+    const auto third = harness.client->complete_stream(history, ignore, nullptr, read_tool());
+    REQUIRE(third.is_ok());
+    CHECK(harness.transport->requests.size() == 3);
 }

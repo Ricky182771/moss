@@ -1,6 +1,7 @@
 #include "chatbot/history.h"
 #include "chatbot/types.h"
 #include "chatbot/web_search.h"
+#include "tool_history.h"
 
 #include "performance.hpp"
 #include "system_prompt_invariants.hpp"
@@ -13,6 +14,7 @@
 #include <cstdint>
 #include <random>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -444,4 +446,176 @@ TEST_CASE("trim_history: sistema de 8000 B con límite de 1000 B y un bloque de 
     CHECK(result.dropped == 10);
     CHECK(result.messages.back().content.find("Pregunta del usuario: consulta\n") !=
           std::string::npos);
+}
+
+// Recorte por grupos (guias/18-moss-code.md, 3.5): un User con todo lo que le
+// sigue hasta el siguiente User, con sus llamadas a herramientas y sus Tool.
+
+namespace {
+
+using chatbot::ToolCall;
+
+Message calls(std::string content, std::vector<ToolCall> tool_calls) {
+    Message message{Role::Assistant, std::move(content)};
+    message.tool_calls = std::move(tool_calls);
+    return message;
+}
+
+Message tool_reply(std::string id, std::string content) {
+    Message message{Role::Tool, std::move(content)};
+    message.tool_call_id = std::move(id);
+    return message;
+}
+
+/// Lo conservado tras el sistema es un sufijo contiguo del original y pasa
+/// validate_tool_history. "" si se cumple.
+std::string check_groups(const std::vector<Message>& original, std::size_t system,
+                         const TrimResult& result) {
+    if (result.messages.size() + result.dropped != original.size()) {
+        return "dropped no coincide con los mensajes quitados";
+    }
+    for (std::size_t i = 0; i < system; ++i) {
+        if (result.messages[i].role != Role::System ||
+            result.messages[i].content != original[i].content) {
+            return "cambió un System inicial";
+        }
+    }
+    for (std::size_t i = system; i < result.messages.size(); ++i) {
+        const Message& expected = original[i + result.dropped];
+        if (result.messages[i].role != expected.role ||
+            result.messages[i].content != expected.content ||
+            result.messages[i].tool_call_id != expected.tool_call_id ||
+            result.messages[i].tool_calls.size() != expected.tool_calls.size()) {
+            return "lo conservado no es un sufijo contiguo (posición " + std::to_string(i) + ")";
+        }
+    }
+    if (const auto error = chatbot::validate_tool_history(result.messages)) {
+        return "el resultado no pasa validate_tool_history: " + error->message;
+    }
+    return {};
+}
+
+} // namespace
+
+TEST_CASE("trim_history: un turno con varios pasos de herramientas sale o se queda entero",
+          "[historial][herramientas]") {
+    const std::vector<Message> messages{
+        Message{Role::System, "s"},                         // 1
+        Message{Role::User, "u1" + bytes(98)},              // 100
+        calls("", {ToolCall{"c1", "read", "{}"}}),          // 8
+        tool_reply("c1", bytes(100)),                       // 102
+        calls("", {ToolCall{"c2", "glob", "{}"}}),          // 8
+        tool_reply("c2", bytes(100)),                       // 102
+        Message{Role::Assistant, bytes(100)},               // 100
+        Message{Role::User, "actual"},                      // 6
+    };
+    REQUIRE_FALSE(chatbot::validate_tool_history(messages).has_value());
+    for (std::size_t limit = 1; limit <= 440; ++limit) {
+        const TrimResult result = trim_history(messages, limit);
+        INFO("límite " << limit);
+        CHECK(check_groups(messages, 1, result) == "");
+        CHECK(result.dropped == (limit >= 427 ? 0U : 6U));
+    }
+}
+
+TEST_CASE("trim_history: grupos viejos con herramientas salen enteros y el último queda intacto",
+          "[historial][herramientas]") {
+    const std::vector<Message> messages{
+        Message{Role::System, "s"},
+        // Grupo 1: 4 mensajes.
+        Message{Role::User, bytes(50)},
+        calls("", {ToolCall{"a1", "read", R"({"path":"x"})"}}),
+        tool_reply("a1", bytes(200)),
+        Message{Role::Assistant, bytes(50)},
+        // Grupo 2: 5 mensajes, dos llamadas en una respuesta.
+        Message{Role::User, bytes(50)},
+        calls("Busco.", {ToolCall{"b1", "glob", "{}"}, ToolCall{"b2", "grep", "{}"}}),
+        tool_reply("b2", bytes(150)),
+        tool_reply("b1", bytes(150)),
+        Message{Role::Assistant, bytes(50)},
+        // Último grupo, a medio turno: termina en un Tool.
+        Message{Role::User, bytes(50)},
+        calls("", {ToolCall{"c1", "read", "{}"}}),
+        tool_reply("c1", bytes(100)),
+    };
+    REQUIRE_FALSE(chatbot::validate_tool_history(messages).has_value());
+    std::size_t total = 0;
+    for (std::size_t limit = 1; limit <= 1300; limit += 3) {
+        const TrimResult result = trim_history(messages, limit);
+        INFO("límite " << limit);
+        CHECK(check_groups(messages, 1, result) == "");
+        CHECK((result.dropped == 0 || result.dropped == 4 || result.dropped == 9));
+        REQUIRE(result.messages.size() >= 4);
+        CHECK(result.messages[1].role == Role::User);
+        CHECK(result.messages.back().tool_call_id == "c1");
+        total += result.dropped;
+    }
+    CHECK(total > 0);
+}
+
+TEST_CASE("trim_history: el último grupo a medio turno se conserva aunque solo él exceda",
+          "[historial][herramientas]") {
+    std::vector<Message> messages{
+        Message{Role::System, "s"},
+        Message{Role::User, bytes(100)},
+        Message{Role::Assistant, bytes(100)},
+        Message{Role::User, bytes(500)},
+        calls("", {ToolCall{"x1", "read", "{}"}}),
+        tool_reply("x1", bytes(500)),
+    };
+    SECTION("termina en Tool") {}
+    SECTION("termina en un asistente tras los Tool") {
+        messages.push_back(Message{Role::Assistant, bytes(10)});
+    }
+    const TrimResult result = trim_history(messages, 10);
+    CHECK(check_groups(messages, 1, result) == "");
+    CHECK(result.dropped == 2);
+    REQUIRE(result.messages.size() == messages.size() - 2);
+    CHECK(result.messages[1].role == Role::User);
+    CHECK(result.messages[2].tool_calls.size() == 1);
+}
+
+TEST_CASE("trim_history: con herramientas, los System iniciales quedan intactos",
+          "[historial][herramientas][sistema]") {
+    const std::vector<Message> messages{
+        Message{Role::System, "uno"},
+        Message{Role::System, "dos"},
+        Message{Role::User, bytes(100)},
+        calls("", {ToolCall{"a", "read", "{}"}}),
+        tool_reply("a", bytes(100)),
+        Message{Role::Assistant, bytes(100)},
+        Message{Role::User, "actual"},
+    };
+    const TrimResult result = trim_history(messages, 1);
+    CHECK(check_groups(messages, 2, result) == "");
+    REQUIRE(result.messages.size() == 3);
+    CHECK(result.messages[0].content == "uno");
+    CHECK(result.messages[1].content == "dos");
+    CHECK(result.messages[2].content == "actual");
+    CHECK(result.dropped == 4);
+}
+
+TEST_CASE("trim_history: los bytes cuentan tool_calls, tool_call_id y reasoning",
+          "[historial][herramientas]") {
+    SECTION("llamada y resultado") {
+        Message assistant = calls("ab", {ToolCall{"id1", "read", R"({"p":1})"}});
+        assistant.reasoning = "rrr";
+        const std::vector<Message> messages{
+            Message{Role::User, "u"},   // 1
+            assistant,                  // 2 + 3 + 3 + 4 + 7 = 19
+            tool_reply("id1", "xy"),    // 3 + 2 = 5
+            Message{Role::Assistant, "ok"}, // 2
+            Message{Role::User, "q"},   // 1
+        };
+        CHECK(trim_history(messages, 28).dropped == 0);
+        CHECK(trim_history(messages, 27).dropped == 4);
+    }
+    SECTION("solo pensamiento") {
+        Message assistant{Role::Assistant, "a"};
+        assistant.reasoning = bytes(10);
+        const std::vector<Message> messages{Message{Role::User, "u"}, assistant,
+                                            Message{Role::User, "q"}};
+        CHECK(trim_history(messages, 13).dropped == 0);
+        CHECK(trim_history(messages, 12).dropped == 2);
+    }
 }

@@ -75,6 +75,8 @@ add_library(chatbot_core STATIC
     src/utf8.cpp
     src/web_search.cpp
     src/tavily_search.cpp
+    src/tool_call_accumulator.cpp
+    src/tool_history.cpp
     src/trimmed_completion.cpp)
 
 add_library(chatbot::core ALIAS chatbot_core)

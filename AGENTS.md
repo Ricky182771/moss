@@ -119,7 +119,8 @@ Detalle: guias/05-estructura.md
 - `Transport` separa HTTP de `ChatClient`; producción con curl, pruebas con `FakeTransport`. El historial lo administra quien llama.
 - `CancelToken` seguro entre hilos, no copiable ni movible, vivo durante la petición. Cancelación antes/después del intento, transporte y espera; gana aunque el intento termine bien y, en `RequestRunner`, mientras `busy()` sea true.
 - Solo reintentar `RateLimited`, `Server`, `Network`, `Timeout`: máximo 3, espera exponencial desde 1 s, `Retry-After` e inyección de espera. Nunca errores permanentes, cancelación ni `NoSearchResults`.
-- Recorte puro por bytes UTF-8: conserva `System` iniciales y último mensaje, quita pares viejos; 0 sin límite. `complete_trimmed` comparte el recorte y un reintento por contexto, solo con `InvalidRequest`, sin deltas ni cancelación y si quita más mensajes.
+- Recorte puro por bytes UTF-8: conserva `System` iniciales y último grupo (un `User` con todo lo que sigue), quita grupos viejos; 0 sin límite. `complete_trimmed` comparte el recorte y un reintento por contexto, solo con `InvalidRequest`, sin deltas ni cancelación y si quita más mensajes.
+- Llamadas a herramientas (modo código): cada `tool_call` recibe exactamente un `tool` con su id, validado antes de mandar (error `Config`); sin reintentos tras un pedazo de llamada. El pensamiento solo lo reenvía el modo código (`replay_reasoning`), con la llave en que llegó; el chat nunca.
 - Búsqueda fallida, cancelada o vacía no llama al modelo. `NoSearchResults` es aviso. Bloque limpio y recortado con nonce reemplaza el último `User`, nunca otro `User` ni `System`; usa la fecha guardada.
 
 Detalle: guias/06-nucleo.md

@@ -1,0 +1,11 @@
+[
+  {
+    "reasoning": "Hay que ver qué archivos Markdown existen antes de leer alguno.",
+    "tool_calls": [{"id": "call_glob", "name": "glob", "arguments": {"pattern": "*.md"}}]
+  },
+  {
+    "reasoning": "Ya sé que hay un README.md; lo leo.",
+    "tool_calls": [{"id": "call_read", "name": "read", "arguments": {"path": "README.md"}}]
+  },
+  {"content": "Listo: el README.md describe el proyecto."}
+]

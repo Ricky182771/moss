@@ -2,8 +2,10 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <cstddef>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -379,4 +381,115 @@ TEST_CASE("decode_openai_chunk: el chunk de cierre deja el pensamiento vacío",
     REQUIRE(delta.is_ok());
     CHECK_FALSE(delta.value().has_value());
     CHECK(reasoning.empty());
+}
+
+// Llamadas a herramientas (guias/18-moss-code.md, 3.3) y llave del pensamiento (3.4).
+
+TEST_CASE("decode_openai_chunk: llave del pensamiento", "[sse][pensamiento]") {
+    chatbot::ReasoningKey key = chatbot::ReasoningKey::Reasoning;
+    std::string reasoning;
+    SECTION("reasoning_content") {
+        REQUIRE(decode_openai_chunk(R"({"choices":[{"delta":{"reasoning_content":"a"}}]})",
+                                    nullptr, &reasoning, &key)
+                    .is_ok());
+        CHECK(key == chatbot::ReasoningKey::ReasoningContent);
+    }
+    SECTION("reasoning") {
+        key = chatbot::ReasoningKey::ReasoningContent;
+        REQUIRE(decode_openai_chunk(R"({"choices":[{"delta":{"reasoning":"a"}}]})", nullptr,
+                                    &reasoning, &key)
+                    .is_ok());
+        CHECK(key == chatbot::ReasoningKey::Reasoning);
+    }
+    SECTION("las dos: gana reasoning_content, como el texto") {
+        REQUIRE(decode_openai_chunk(
+                    R"({"choices":[{"delta":{"reasoning":"b","reasoning_content":"a"}}]})",
+                    nullptr, &reasoning, &key)
+                    .is_ok());
+        CHECK(key == chatbot::ReasoningKey::ReasoningContent);
+    }
+    SECTION("sin pensamiento no se toca") {
+        REQUIRE(decode_openai_chunk(R"({"choices":[{"delta":{"content":"x"}}]})", nullptr,
+                                    &reasoning, &key)
+                    .is_ok());
+        CHECK(key == chatbot::ReasoningKey::Reasoning);
+    }
+}
+
+TEST_CASE("decode_openai_chunk: pedazos de tool_calls", "[sse][herramientas]") {
+    std::vector<chatbot::sse::ToolCallChunk> calls{chatbot::sse::ToolCallChunk{}};
+    const auto delta = decode_openai_chunk(
+        R"({"choices":[{"delta":{"tool_calls":[)"
+        R"({"index":0,"id":"call_1","type":"function","function":{"name":"read","arguments":""}},)"
+        R"({"index":1,"function":{"arguments":"{\"p\":"}}]}}]})",
+        nullptr, nullptr, nullptr, &calls);
+    REQUIRE(delta.is_ok());
+    CHECK_FALSE(delta.value().has_value());
+    REQUIRE(calls.size() == 2);
+    CHECK(calls[0].index == std::optional<std::size_t>{0});
+    CHECK(calls[0].id == "call_1");
+    CHECK(calls[0].name == "read");
+    CHECK(calls[0].arguments.empty());
+    CHECK(calls[1].index == std::optional<std::size_t>{1});
+    CHECK(calls[1].id.empty());
+    CHECK(calls[1].name.empty());
+    CHECK(calls[1].arguments == "{\"p\":");
+
+    // El siguiente chunk sin tool_calls deja la lista vacía.
+    REQUIRE(decode_openai_chunk(R"({"choices":[{"delta":{},"finish_reason":"tool_calls"}]})",
+                                nullptr, nullptr, nullptr, &calls)
+                .is_ok());
+    CHECK(calls.empty());
+}
+
+TEST_CASE("decode_openai_chunk: texto, pensamiento y llamada en el mismo chunk",
+          "[sse][herramientas]") {
+    std::string reasoning;
+    std::vector<chatbot::sse::ToolCallChunk> calls;
+    const auto delta = decode_openai_chunk(
+        R"({"choices":[{"delta":{"reasoning_content":"pienso","content":"digo",)"
+        R"("tool_calls":[{"index":0,"id":"c","function":{"name":"read","arguments":"{}"}}]}}]})",
+        nullptr, &reasoning, nullptr, &calls);
+    REQUIRE(delta.is_ok());
+    CHECK(*delta.value() == "digo");
+    CHECK(reasoning == "pienso");
+    REQUIRE(calls.size() == 1);
+    CHECK(calls[0].name == "read");
+}
+
+TEST_CASE("decode_openai_chunk: tipos equivocados en tool_calls se ignoran sin error",
+          "[sse][herramientas]") {
+    std::vector<chatbot::sse::ToolCallChunk> calls;
+    SECTION("campos del pedazo") {
+        const auto delta = decode_openai_chunk(
+            R"({"choices":[{"delta":{"content":"x","tool_calls":[)"
+            R"({"index":"0","id":5,"function":{"name":["read"],"arguments":{"a":1}}},)"
+            R"({"index":-1,"function":"read"},)"
+            R"({"index":1.5},)"
+            R"(7]}}]})",
+            nullptr, nullptr, nullptr, &calls);
+        REQUIRE(delta.is_ok());
+        CHECK(*delta.value() == "x");
+        REQUIRE(calls.size() == 3); // El 7 no es objeto.
+        for (const chatbot::sse::ToolCallChunk& call : calls) {
+            CHECK_FALSE(call.index.has_value());
+            CHECK(call.id.empty());
+            CHECK(call.name.empty());
+            CHECK(call.arguments.empty());
+        }
+    }
+    SECTION("tool_calls que no es arreglo") {
+        const auto delta = decode_openai_chunk(
+            R"({"choices":[{"delta":{"content":"x","tool_calls":{"index":0}}}]})", nullptr,
+            nullptr, nullptr, &calls);
+        REQUIRE(delta.is_ok());
+        CHECK(calls.empty());
+    }
+    SECTION("tool_calls null") {
+        const auto delta = decode_openai_chunk(
+            R"({"choices":[{"delta":{"content":null,"tool_calls":null}}]})", nullptr, nullptr,
+            nullptr, &calls);
+        REQUIRE(delta.is_ok());
+        CHECK(calls.empty());
+    }
 }

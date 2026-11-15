@@ -1,13 +1,24 @@
 #include "chatbot/history.h"
 
+#include "history_bytes.h"
+
 #include <iterator>
 
 namespace chatbot {
 
+std::size_t message_bytes(const Message& message) {
+    std::size_t size = message.content.size() + message.reasoning.size() +
+                       message.tool_call_id.size();
+    for (const ToolCall& call : message.tool_calls) {
+        size += call.id.size() + call.name.size() + call.arguments.size();
+    }
+    return size;
+}
+
 TrimResult trim_history(const std::vector<Message>& messages, std::size_t limit_bytes) {
     std::size_t total = 0;
     for (const Message& message : messages) {
-        total += message.content.size();
+        total += message_bytes(message);
     }
     if (limit_bytes == 0 || total <= limit_bytes || messages.size() < 2) {
         return TrimResult{messages, 0};
@@ -19,16 +30,22 @@ TrimResult trim_history(const std::vector<Message>& messages, std::size_t limit_
         ++system_end;
     }
 
-    // Los más viejos tras el sistema salen primero. Se quita el mensaje del
-    // frente y luego todo lo que no sea User, para que el siguiente que
-    // quede (si no es el último) empiece una vuelta con User.
-    const std::size_t last = messages.size() - 1;
+    // El último grupo (desde el último User, o todo tras el sistema si no hay
+    // User) nunca se quita ni se parte, aunque solo él exceda.
+    std::size_t last_group = messages.size() - 1;
+    while (last_group > system_end && messages[last_group].role != Role::User) {
+        --last_group;
+    }
+
+    // Se quitan grupos completos, los más viejos primero: el mensaje del
+    // frente y todo lo que no sea User. Así un Tool nunca queda sin su
+    // llamada ni una llamada sin sus Tool, y tras el sistema sigue un User.
     std::size_t start = system_end;
-    while (total > limit_bytes && start < last) {
-        total -= messages[start].content.size();
+    while (total > limit_bytes && start < last_group) {
+        total -= message_bytes(messages[start]);
         ++start;
-        while (start < last && messages[start].role != Role::User) {
-            total -= messages[start].content.size();
+        while (start < last_group && messages[start].role != Role::User) {
+            total -= message_bytes(messages[start]);
             ++start;
         }
     }

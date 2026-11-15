@@ -9,6 +9,7 @@
 #include "chatbot/transport.h"
 #include "chatbot/types.h"
 
+#include <cstddef>
 #include <functional>
 #include <memory>
 #include <string>
@@ -16,19 +17,44 @@
 
 namespace chatbot {
 
-/// Un incremento del flujo: texto de la respuesta (delta.content) o
-/// pensamiento del modelo (delta.reasoning_content o delta.reasoning). El
-/// pensamiento es solo para mostrarse: nunca vuelve al modelo.
+/// Un incremento del flujo: texto de la respuesta (delta.content),
+/// pensamiento del modelo (delta.reasoning_content o delta.reasoning) o el
+/// aviso de que empezó una llamada a herramienta (ToolCallStarted, solo si
+/// la petición mandó herramientas). El pensamiento vuelve al modelo solo con
+/// RequestOptions::replay_reasoning.
 struct StreamDelta {
-    enum class Kind { Content, Reasoning };
+    enum class Kind { Content, Reasoning, ToolCallStarted };
     Kind kind = Kind::Content;
-    std::string_view text; ///< Nunca vacío; vale solo durante la llamada.
+    /// Nunca vacío; vale solo durante la llamada. En ToolCallStarted, el
+    /// nombre de la herramienta.
+    std::string_view text;
+    /// Solo ToolCallStarted: el lugar de la llamada en CompletionInfo::tool_calls.
+    std::size_t tool_index{0};
 };
 
-/// Callback de streaming: recibe cada incremento, de texto o de pensamiento,
-/// en el orden en que llegan. Devolver false cancela la petición (se
-/// devuelve ErrorKind::Cancelled).
+/// Callback de streaming: recibe cada incremento, de texto, de pensamiento
+/// o de llamada, en el orden en que llegan. Devolver false cancela la
+/// petición (se devuelve ErrorKind::Cancelled).
 using StreamDeltaCallback = std::function<bool(const StreamDelta& delta)>;
+
+/// Una herramienta que se ofrece al modelo (formato OpenAI "function").
+struct ToolSpec {
+    std::string name;
+    std::string description;
+    std::string parameters; ///< JSON Schema como texto; tiene que ser un objeto.
+};
+
+/// Opciones de la petición del modo código (guias/18-moss-code.md, 3.2 y 3.4).
+/// Por defecto, el cuerpo es el del chat, byte por byte.
+struct RequestOptions {
+    /// Con herramientas se mandan "tools" y "tool_choice": "auto"; sin
+    /// ellas, ninguna de las dos llaves. Nombre vacío o repetido, o
+    /// parameters que no es un objeto JSON: error Config sin mandar nada.
+    std::vector<ToolSpec> tools{};
+    /// true: cada asistente con reasoning lo lleva en su llave
+    /// (reasoning_key). false: el pensamiento nunca se manda.
+    bool replay_reasoning{false};
+};
 
 /// Cliente del hito 1: petición simple sin streaming, con reintentos.
 /// Las excepciones internas nunca cruzan la API pública (sección 6).
@@ -56,14 +82,22 @@ public:
 
     /// Igual que complete() pero pidiendo stream:true al servidor: entrega
     /// los incrementos de texto y de pensamiento por on_delta conforme llegan
-    /// (en un mismo chunk, primero el pensamiento) y devuelve el
-    /// resultado: en éxito, el finish_reason (CompletionInfo); el texto
-    /// completo ya pasó por el callback. Reintenta igual que complete() mientras no se haya entregado
-    /// ningún delta, de ningún tipo. Cancela si on_delta devuelve false o con cancel, igual
-    /// que complete(). Nunca lanza excepciones.
+    /// (en un mismo chunk, primero el pensamiento, luego el texto y al final
+    /// las llamadas) y devuelve el resultado: en éxito, CompletionInfo; el
+    /// texto completo ya pasó por el callback. Con herramientas en options,
+    /// cada llamada a herramienta sale una vez como ToolCallStarted en cuanto
+    /// se conoce su nombre, en orden de aparición, y completa en
+    /// CompletionInfo::tool_calls; sin herramientas, los tool_calls del
+    /// servidor se ignoran. Reintenta igual que complete() mientras no se
+    /// haya entregado ningún delta, de ningún tipo, ni llegado ningún pedazo
+    /// de llamada. Con error o cancelación, las llamadas a medias se
+    /// descartan. Cancela si on_delta devuelve false o con cancel, igual que
+    /// complete(). options: herramientas y pensamiento de regreso
+    /// (RequestOptions). Nunca lanza excepciones.
     [[nodiscard]] Result<CompletionInfo> complete_stream(const std::vector<Message>& messages,
                                                          const StreamDeltaCallback& on_delta,
-                                                         const CancelToken* cancel = nullptr);
+                                                         const CancelToken* cancel = nullptr,
+                                                         const RequestOptions& options = {});
 
     /// GET {base_url}/models: los id de modelo que da el servidor, sin el
     /// prefijo "models/" (Gemini), sin duplicados y en orden alfabético. No

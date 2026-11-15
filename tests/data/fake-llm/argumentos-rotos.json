@@ -1,0 +1,6 @@
+[
+  {
+    "tool_calls": [{"id": "call_roto", "name": "read", "arguments": "{\"path\": \"README.md"}]
+  },
+  {"content": "El argumento venía roto; no pude leer el archivo."}
+]

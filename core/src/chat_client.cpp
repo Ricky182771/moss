@@ -9,6 +9,8 @@
 #include "model_params_internal.h"
 #include "redirect.h"
 #include "sse.h"
+#include "tool_call_accumulator.h"
+#include "tool_history.h"
 
 #include <nlohmann/json.hpp>
 
@@ -21,6 +23,7 @@
 #include <fstream>
 #include <iomanip>
 #include <optional>
+#include <set>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -53,19 +56,98 @@ Result<std::string_view> role_to_string(Role role) {
         return std::string_view{"user"};
     case Role::Assistant:
         return std::string_view{"assistant"};
+    case Role::Tool:
+        return std::string_view{"tool"};
     }
     return ChatError{ErrorKind::Config, 0,
                      "Rol de mensaje inválido en el historial.", std::nullopt};
 }
 
+ChatError tool_spec_error(std::string message) {
+    return ChatError{ErrorKind::Config, 0, std::move(message), std::nullopt};
+}
+
+/// Arma "tools" en formato OpenAI. Error Config si un nombre está vacío o
+/// repetido, o si parameters no es un objeto JSON.
+std::optional<ChatError> build_tools(const std::vector<ToolSpec>& tools,
+                                     nlohmann::ordered_json& out) {
+    std::set<std::string_view> names;
+    for (const ToolSpec& tool : tools) {
+        if (tool.name.empty()) {
+            return tool_spec_error("Hay una herramienta sin nombre.");
+        }
+        if (!names.insert(std::string_view{tool.name}).second) {
+            return tool_spec_error("La herramienta «" + tool.name + "» está repetida.");
+        }
+        nlohmann::ordered_json parameters =
+            nlohmann::ordered_json::parse(tool.parameters, nullptr, false);
+        if (parameters.is_discarded()) {
+            return tool_spec_error("Los parámetros de la herramienta «" + tool.name +
+                                   "» no son JSON válido.");
+        }
+        if (!parameters.is_object()) {
+            return tool_spec_error("Los parámetros de la herramienta «" + tool.name +
+                                   "» no son un objeto JSON.");
+        }
+        out.push_back({{"type", "function"},
+                       {"function",
+                        {{"name", tool.name},
+                         {"description", tool.description},
+                         {"parameters", std::move(parameters)}}}});
+    }
+    return std::nullopt;
+}
+
+/// Un mensaje del historial en formato OpenAI. Asistente con llamadas y sin
+/// texto: "content": null. Tool: role, tool_call_id y content.
+nlohmann::ordered_json message_json(const Message& message, std::string_view role,
+                                    bool replay_reasoning) {
+    nlohmann::ordered_json out = nlohmann::ordered_json::object();
+    out["role"] = role;
+    if (message.role == Role::Tool) {
+        out["tool_call_id"] = message.tool_call_id;
+    }
+    if (message.content.empty()) {
+        out["content"] = nullptr; // Solo llega aquí un asistente con llamadas.
+    } else {
+        out["content"] = message.content;
+    }
+    if (message.role != Role::Assistant) {
+        return out;
+    }
+    if (!message.tool_calls.empty()) {
+        nlohmann::ordered_json calls = nlohmann::ordered_json::array();
+        for (const ToolCall& call : message.tool_calls) {
+            calls.push_back({{"id", call.id},
+                             {"type", "function"},
+                             {"function", {{"name", call.name}, {"arguments", call.arguments}}}});
+        }
+        out["tool_calls"] = std::move(calls);
+    }
+    if (replay_reasoning && !message.reasoning.empty()) {
+        const char* key = message.reasoning_key == ReasoningKey::Reasoning ? "reasoning"
+                                                                           : "reasoning_content";
+        out[key] = message.reasoning;
+    }
+    return out;
+}
+
 /// Construye el cuerpo JSON de la petición (sección 8), con los ajustes del
 /// modelo (request_json). stream indica si se pide respuesta por fragmentos.
+/// options agrega herramientas y el pensamiento de regreso (RequestOptions).
 Result<std::string> build_request_body(const Config& config,
                                        const std::vector<Message>& messages,
-                                       bool stream) {
+                                       bool stream, const RequestOptions& options) {
     if (messages.empty()) {
         return ChatError{ErrorKind::Config, 0,
                          "La conversación no puede estar vacía.", std::nullopt};
+    }
+    if (std::optional<ChatError> error = validate_tool_history(messages)) {
+        return *error;
+    }
+    nlohmann::ordered_json tools = nlohmann::ordered_json::array();
+    if (std::optional<ChatError> error = build_tools(options.tools, tools)) {
+        return *error;
     }
 
     nlohmann::ordered_json json_messages = nlohmann::ordered_json::array();
@@ -74,15 +156,19 @@ Result<std::string> build_request_body(const Config& config,
         if (role.is_error()) {
             return Result<std::string>{role.error()};
         }
-        if (message.content.empty()) {
+        if (message.content.empty() && message.tool_calls.empty()) {
             return ChatError{ErrorKind::Config, 0,
                              "Hay un mensaje sin contenido en el historial.", std::nullopt};
         }
-        json_messages.push_back(nlohmann::ordered_json{{"role", role.value()},
-                                                       {"content", message.content}});
+        json_messages.push_back(message_json(message, role.value(), options.replay_reasoning));
     }
-    const nlohmann::ordered_json body = request_json(
+    nlohmann::ordered_json body = request_json(
         config.model, stream, std::move(json_messages), config.provider, config.model_params);
+    if (!tools.empty()) {
+        // Después del JSON avanzado: lo que manda el núcleo no se pisa.
+        body["tools"] = std::move(tools);
+        body["tool_choice"] = "auto";
+    }
     // replace: los bytes UTF-8 inválidos se sustituyen por U+FFFD en lugar de
     // lanzar type_error 316 (las excepciones no cruzan la API pública).
     return body.dump(-1, ' ', false, nlohmann::ordered_json::error_handler_t::replace);
@@ -377,33 +463,43 @@ void append_debug_dump(const Config& config, int attempt, const HttpResponse& re
 /// Resultado de un intento de streaming ya consumido.
 struct StreamAttemptOutcome {
     Result<CompletionInfo> result{CompletionInfo{}}; ///< Éxito o error final de la petición.
-    bool delivered_any = false;   ///< Si ya se entregó al menos un delta.
+    /// Si ya se entregó al menos un delta o llegó un pedazo de llamada: no
+    /// se reintenta.
+    bool delivered_any = false;
     bool retryable = true;        ///< false si el fallo de red es permanente.
 };
 
 /// Ejecuta un intento de streaming: consume el cuerpo conforme llega con el
 /// parser SSE y entrega los deltas por on_delta. Los errores HTTP no se
 /// consumen como flujo: el cuerpo se acumula en la respuesta y se mapea al
-/// final, igual que en complete().
+/// final, igual que en complete(). with_tools: la petición mandó
+/// herramientas; si no, los tool_calls del servidor se ignoran. messages:
+/// lo enviado, para que un id generado no choque con los suyos.
 StreamAttemptOutcome run_stream_attempt(const Config& config, int attempt,
                                         const HttpRequest& request, Transport& transport,
-                                        const StreamDeltaCallback& on_delta) {
+                                        const StreamDeltaCallback& on_delta,
+                                        const std::vector<Message>& messages, bool with_tools) {
     StreamAttemptOutcome outcome;
 
     sse::Parser parser;
     std::string finish_reason; ///< Último choices[0].finish_reason no nulo.
     std::string reasoning;     ///< Pensamiento del chunk en curso.
+    ReasoningKey chunk_key = ReasoningKey::ReasoningContent; ///< Llave del pensamiento del chunk.
+    std::optional<ReasoningKey> reasoning_key; ///< Llave del primer pensamiento.
+    std::vector<sse::ToolCallChunk> tool_chunks; ///< Pedazos de llamada del chunk en curso.
+    ToolCallAccumulator calls;
     bool done = false;    ///< Se recibió data: [DONE].
     bool aborted = false; ///< Cuerpo inválido a mitad del flujo.
     std::optional<ChatError> abort_error;
 
     // Entrega el delta al callback de quien llama. Si lanza, la excepción
     // no debe llegar a libcurl (frames de C). Devuelve false para abortar.
-    const auto deliver = [&](StreamDelta::Kind kind, const std::string& text) {
+    const auto deliver = [&](StreamDelta::Kind kind, const std::string& text,
+                             std::size_t tool_index = 0) {
         outcome.delivered_any = true;
         try {
             // false: cancelación, curl aborta con status == 0.
-            return on_delta(StreamDelta{kind, text});
+            return on_delta(StreamDelta{kind, text, tool_index});
         } catch (const std::exception& e) {
             abort_error = ChatError{ErrorKind::Cancelled, 0,
                                     "El callback de streaming lanzó una excepción: " +
@@ -446,19 +542,41 @@ StreamAttemptOutcome run_stream_attempt(const Config& config, int attempt,
                 }
                 continue;
             }
-            const Result<std::optional<std::string>> delta =
-                sse::decode_openai_chunk(event.value().data, &finish_reason, &reasoning);
+            // Sin herramientas no se piden los pedazos: el chat no cambia.
+            const Result<std::optional<std::string>> delta = sse::decode_openai_chunk(
+                event.value().data, &finish_reason, &reasoning, &chunk_key,
+                with_tools ? &tool_chunks : nullptr);
             if (delta.is_error()) {
                 abort_error = delta.error();
                 aborted = true;
                 return false;
             }
-            if (!reasoning.empty() && !deliver(StreamDelta::Kind::Reasoning, reasoning)) {
-                return false;
+            if (!reasoning.empty()) {
+                if (!reasoning_key.has_value()) {
+                    reasoning_key = chunk_key;
+                }
+                if (!deliver(StreamDelta::Kind::Reasoning, reasoning)) {
+                    return false;
+                }
             }
             if (delta.value().has_value() && !delta.value()->empty() &&
                 !deliver(StreamDelta::Kind::Content, *delta.value())) {
                 return false;
+            }
+            if (!tool_chunks.empty()) {
+                // Ningún reintento después de un pedazo de llamada, aunque
+                // todavía no tenga nombre ni haya salido ToolCallStarted.
+                outcome.delivered_any = true;
+            }
+            for (const sse::ToolCallChunk& chunk : tool_chunks) {
+                calls.add(chunk);
+            }
+            while (const std::optional<ToolCallAccumulator::Started> started =
+                       calls.next_started()) {
+                if (!deliver(StreamDelta::Kind::ToolCallStarted, started->name,
+                             started->position)) {
+                    return false;
+                }
             }
         }
         return true;
@@ -517,8 +635,10 @@ StreamAttemptOutcome run_stream_attempt(const Config& config, int attempt,
         outcome.result = map_http_error(config, request, response);
         return outcome;
     }
-    // Con [DONE], o sin él pero con el flujo completo y limpio: éxito.
-    outcome.result = CompletionInfo{finish_reason};
+    // Con [DONE], o sin él pero con el flujo completo y limpio: éxito. Solo
+    // aquí salen las llamadas: con error o cancelación se descartan.
+    outcome.result = CompletionInfo{finish_reason, calls.finish(messages),
+                                    reasoning_key.value_or(ReasoningKey::ReasoningContent)};
     return outcome;
 }
 
@@ -548,7 +668,7 @@ Result<std::string> ChatClient::complete(const std::vector<Message>& messages,
         return *config_error;
     }
 
-    const Result<std::string> body = build_request_body(config_, messages, false);
+    const Result<std::string> body = build_request_body(config_, messages, false, RequestOptions{});
     if (body.is_error()) {
         return Result<std::string>{body.error()};
     }
@@ -635,12 +755,13 @@ Result<std::string> ChatClient::send_with_retries(const HttpRequest& request,
 
 Result<CompletionInfo> ChatClient::complete_stream(const std::vector<Message>& messages,
                                          const StreamDeltaCallback& on_delta,
-                                         const CancelToken* cancel) {
+                                         const CancelToken* cancel,
+                                         const RequestOptions& options) {
     if (const std::optional<ChatError> config_error = validate_config(config_)) {
         return *config_error;
     }
 
-    const Result<std::string> body = build_request_body(config_, messages, true);
+    const Result<std::string> body = build_request_body(config_, messages, true, options);
     if (body.is_error()) {
         return Result<CompletionInfo>{body.error()};
     }
@@ -656,7 +777,9 @@ Result<CompletionInfo> ChatClient::complete_stream(const std::vector<Message>& m
         if (is_cancelled(cancel)) {
             return cancelled_error();
         }
-        StreamAttemptOutcome outcome = run_stream_attempt(config_, attempt, request, *transport_, on_delta);
+        StreamAttemptOutcome outcome = run_stream_attempt(config_, attempt, request, *transport_,
+                                                          on_delta, messages,
+                                                          !options.tools.empty());
         if (is_cancelled(cancel)) {
             return cancelled_error(); // Igual que en complete(): la cancelación gana.
         }

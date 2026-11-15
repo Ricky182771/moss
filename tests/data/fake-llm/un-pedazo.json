@@ -1,0 +1,11 @@
+[
+  {
+    "variant": "single_chunk",
+    "finish_reason": "stop",
+    "tool_calls": [
+      {"id": "call_a", "name": "read", "arguments": {"path": "a.txt"}},
+      {"id": "call_b", "name": "glob", "arguments": {"pattern": "*.cpp"}}
+    ]
+  },
+  {"content": "Hecho."}
+]

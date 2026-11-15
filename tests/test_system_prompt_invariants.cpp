@@ -413,3 +413,26 @@ TEST_CASE("Extremo a extremo: el pensamiento nunca vuelve al modelo",
         CHECK(reopened.history()[i].content == reopened_plain.history()[i].content);
     }
 }
+
+TEST_CASE("Extremo a extremo: el chat nunca produce mensajes de herramienta ni pensamiento",
+          "[sistema][extremo][herramientas]") {
+    Session session{"sistema", 2000};
+    session.model->responses.front().body =
+        "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"pienso\"}}]}\n\n" +
+        sse_answer("ok");
+    const auto clean = [](const std::vector<Message>& messages) {
+        for (const Message& message : messages) {
+            CHECK(message.role != Role::Tool);
+            CHECK(message.tool_calls.empty());
+            CHECK(message.tool_call_id.empty());
+            CHECK(message.reasoning.empty());
+        }
+    };
+    for (int turn = 0; turn < 3; ++turn) {
+        const TurnOutcome outcome = session.turn("pregunta " + std::to_string(turn));
+        REQUIRE(outcome.requests == 1);
+        clean(outcome.history);
+        clean(outcome.sent);
+        clean(session.conversation.history());
+    }
+}

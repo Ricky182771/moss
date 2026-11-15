@@ -29,12 +29,19 @@ struct TrimmedCompletion {
 /// como palabra completa: sin [a-z0-9_] pegado antes ni después) una de las
 /// llaves que pusieron los ajustes del modelo (ChatClient::param_keys). Si el reintento también falla (sin cancelación
 /// ni texto), devuelve el error y el dropped del primer intento.
+/// options pasa igual a los dos intentos (RequestOptions). Con herramientas,
+/// el reintento por contexto solo ocurre si el rechazo trae estado HTTP: un
+/// error dentro del flujo pudo llegar después de un pedazo de llamada que no
+/// pasó por on_delta. Si el recorte quitó algo, los ids de
+/// CompletionInfo::tool_calls se revisan otra vez contra history completo,
+/// para que no choquen con los de un grupo recortado.
 /// La usan la interfaz (RequestRunner) y los addons. Nunca lanza excepciones.
 [[nodiscard]] TrimmedCompletion complete_trimmed(ChatClient& client,
                                                  const std::vector<Message>& history,
                                                  std::size_t limit_bytes,
                                                  const StreamDeltaCallback& on_delta,
-                                                 const CancelToken* cancel = nullptr);
+                                                 const CancelToken* cancel = nullptr,
+                                                 const RequestOptions& options = {});
 
 } // namespace chatbot
 
