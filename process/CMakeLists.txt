@@ -1,5 +1,5 @@
 # Programas externos sin shell (chatbot/child_process.h): la usan cli/ (portapapeles,
-# systemctl, el lanzador de addons) y chatbot_code (la herramienta bash). Solo
+# systemctl, el lanzador de addons) y chatbot_code (git y rg). Solo
 # depende del núcleo (CancelToken); sin FTXUI ni addons. CMake elige el .cpp por
 # plataforma: el de Windows solo trae lo mínimo para compilar.
 if(WIN32)

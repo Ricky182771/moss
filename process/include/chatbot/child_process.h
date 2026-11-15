@@ -5,19 +5,18 @@
 
 #include <chrono>
 #include <cstddef>
+#include <map>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
 
-/// Programas externos: el portapapeles (wl-copy, xclip…), systemctl,
-/// loginctl, journalctl y moss-telegram --config-version. Sin shell:
-/// posix_spawnp con los argumentos tal cual. CMake compila
-/// child_process_posix.cpp o child_process_windows.cpp (ahí solo lo mínimo
-/// para compilar: no se lanzan programas). Nunca desde el hilo de la
-/// interfaz si puede tardar. No se llama process.h: con cli/src en el
-/// include path, la pthread.h de MinGW tomaría este en lugar del <process.h>
-/// del sistema.
+/// Programas externos. Los usan cli/ (el portapapeles: wl-copy, xclip…;
+/// systemctl, loginctl, journalctl y moss-telegram --config-version) y
+/// chatbot_code (git y rg). Sin shell: posix_spawnp con los argumentos tal
+/// cual. CMake compila child_process_posix.cpp o child_process_windows.cpp
+/// (ahí solo lo mínimo para compilar: no se lanzan programas). Nunca desde el
+/// hilo de la interfaz si puede tardar.
 namespace chatbot::process {
 
 /// Tope de lo que se guarda de stdout y de stderr; el resto se lee y se tira
@@ -35,6 +34,13 @@ struct ProcessOptions {
     /// Al cancelarse: SIGTERM al hijo, unos 200 ms para que salga y después
     /// SIGKILL. Quien lo pasa lo mantiene vivo mientras corre.
     const CancelToken* cancel = nullptr;
+    /// Entorno del hijo. Con los dos vacíos (por defecto) hereda el de este
+    /// proceso tal cual. Si no, el de este proceso sin las variables cuyo
+    /// nombre empieza con alguno de env_remove_prefixes (un nombre completo
+    /// también sirve), más env_set, que reemplaza a las que ya estén. En
+    /// Windows no aplica: run_process no lanza nada.
+    std::vector<std::string> env_remove_prefixes{};
+    std::map<std::string, std::string> env_set{};
 };
 
 struct ProcessResult {

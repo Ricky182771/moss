@@ -149,6 +149,33 @@ struct SpawnSetup {
     SpawnSetup& operator=(const SpawnSetup&) = delete;
 };
 
+/// El entorno del hijo según options (ProcessOptions::env_*): punteros a las cadenas de storage,
+/// con nullptr al final.
+std::vector<char*> child_environment(const ProcessOptions& options,
+                                     std::vector<std::string>& storage) {
+    for (char** entry = environ; *entry != nullptr; ++entry) {
+        const std::string_view text{*entry};
+        const std::string name{text.substr(0, text.find('='))};
+        const bool removed =
+            options.env_set.contains(name) ||
+            std::any_of(options.env_remove_prefixes.begin(), options.env_remove_prefixes.end(),
+                        [&name](const std::string& prefix) { return name.starts_with(prefix); });
+        if (!removed) {
+            storage.emplace_back(text);
+        }
+    }
+    for (const auto& [name, value] : options.env_set) {
+        storage.push_back(name + "=" + value);
+    }
+    std::vector<char*> pointers;
+    pointers.reserve(storage.size() + 1);
+    for (std::string& variable : storage) {
+        pointers.push_back(variable.data());
+    }
+    pointers.push_back(nullptr);
+    return pointers;
+}
+
 /// Gracia entre SIGTERM y SIGKILL al cancelar.
 constexpr std::chrono::milliseconds kTerminateGrace{200};
 
@@ -240,10 +267,14 @@ ProcessResult run_process(const std::vector<std::string>& argv, const ProcessOpt
         c_args.push_back(arg.data());
     }
     c_args.push_back(nullptr);
+    std::vector<std::string> env_storage;
+    std::vector<char*> c_env;
+    if (!options.env_remove_prefixes.empty() || !options.env_set.empty()) {
+        c_env = child_environment(options, env_storage);
+    }
     pid_t pid = -1;
-    const int spawned =
-        posix_spawnp(&pid, c_args.front(), &setup.actions, &setup.attributes, c_args.data(),
-                     environ);
+    const int spawned = posix_spawnp(&pid, c_args.front(), &setup.actions, &setup.attributes,
+                                     c_args.data(), c_env.empty() ? environ : c_env.data());
     if (spawned != 0) {
         result.status = spawned == ENOENT ? ProcessResult::Status::NotFound
                                           : ProcessResult::Status::Failed;

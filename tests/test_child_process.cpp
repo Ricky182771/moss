@@ -6,6 +6,8 @@
 
 #include "chatbot/platform.h"
 
+#include "env_guard.hpp"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <chrono>
@@ -135,6 +137,40 @@ TEST_CASE("run_process: guarda hasta kMaxProcessOutput", "[process]") {
                      "/dev/zero"});
     CHECK(result.ok());
     CHECK(result.out.size() == chatbot::process::kMaxProcessOutput);
+}
+
+TEST_CASE("run_process: el entorno del hijo se puede ajustar", "[process]") {
+    const chatbot_test::EnvGuard key{"MOSS_PRUEBA_KEY", "secreto"};
+    const chatbot_test::EnvGuard other{"MOSS_PRUEBA_OTRA", "otra"};
+    const chatbot_test::EnvGuard kept{"PRUEBA_MOSS_QUEDA", "queda"};
+    const chatbot_test::EnvGuard replaced{"MOSS_PRUEBA_LC", "es_MX"};
+    const std::vector<std::string> show{
+        "/bin/sh", "-c",
+        "printf '%s|%s|%s|%s|%s' \"${MOSS_PRUEBA_KEY-x}\" \"${MOSS_PRUEBA_OTRA-x}\" "
+        "\"${PRUEBA_MOSS_QUEDA-x}\" \"${MOSS_PRUEBA_LC-x}\" \"${MOSS_PRUEBA_NUEVA-x}\""};
+
+    // Sin opciones, hereda todo como antes.
+    const ProcessResult inherited = run_process(show);
+    REQUIRE(inherited.ok());
+    CHECK(inherited.out == "secreto|otra|queda|es_MX|x");
+
+    ProcessOptions options;
+    options.env_remove_prefixes = {"MOSS_PRUEBA_"};
+    options.env_set = {{"MOSS_PRUEBA_LC", "C"}, {"MOSS_PRUEBA_NUEVA", "nueva"}};
+    const ProcessResult adjusted = run_process(show, options);
+    REQUIRE(adjusted.ok());
+    // Quitadas por prefijo (salvo las que se ponen), la de otro prefijo queda y las puestas se ven.
+    CHECK(adjusted.out == "x|x|queda|C|nueva");
+
+    // Solo poner: lo demás se hereda.
+    ProcessOptions only_set;
+    only_set.env_set = {{"MOSS_PRUEBA_NUEVA", "nueva"}};
+    const ProcessResult added = run_process(show, only_set);
+    REQUIRE(added.ok());
+    CHECK(added.out == "secreto|otra|queda|es_MX|nueva");
+
+    // PATH sigue sirviendo para buscar el programa.
+    CHECK(run_process({"true"}, options).ok());
 }
 
 TEST_CASE("find_in_path: la ruta completa del programa", "[process]") {
