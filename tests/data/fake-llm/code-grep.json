@@ -1,0 +1,7 @@
+[
+  {
+    "reasoning": "Busco la marca en el código con grep.",
+    "tool_calls": [{"id": "call_grep", "name": "grep", "arguments": {"pattern": "GRILLO-[0-9]+", "output_mode": "content"}}]
+  },
+  {"content": "La marca GRILLO-4410 está en src/util.cpp."}
+]

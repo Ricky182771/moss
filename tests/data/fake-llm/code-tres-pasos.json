@@ -1,0 +1,11 @@
+[
+  {
+    "reasoning": "Primero listo los archivos Markdown del proyecto.",
+    "tool_calls": [{"id": "call_glob", "name": "glob", "arguments": {"pattern": "*.md"}}]
+  },
+  {
+    "reasoning": "Hay un README.md; lo leo para ver qué dice.",
+    "tool_calls": [{"id": "call_read", "name": "read", "arguments": {"path": "README.md"}}]
+  },
+  {"content": "Listo: el README.md trae la clave ZORZAL-7731."}
+]

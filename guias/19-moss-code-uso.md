@@ -32,7 +32,7 @@ moss code ~/proyectos/app -p "lista los TODO que haya"      # otra carpeta
 ## Qué no puede tocar
 
 - Nada fuera de la carpeta del proyecto (la raíz), ni por `..` ni por un enlace simbólico.
-- La carpeta de configuración y la de datos de Moss (`config.json`, `credentials.json`): nunca. Si la raíz es o está dentro de una, `moss code` no arranca.
+- La carpeta de configuración y la de datos de Moss (`config.json`, `credentials.json`, y con la carpeta de datos por defecto, `…/moss` completa, no solo `conversations`): nunca. Si la raíz es o está dentro de una, `moss code` no arranca.
 - No acepta `/` ni la raíz de una unidad como raíz del proyecto.
 - En Windows no sigue enlaces simbólicos (un enlace a una ruta UNC mandaría credenciales); las uniones sí.
 

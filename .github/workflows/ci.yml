@@ -79,9 +79,15 @@ jobs:
       # cuerpo de las peticiones (tools, tool_choice, tool_call_id, sin key).
       # Sin red ni keys. No hay paso en Windows: el script es de bash y corre en el shell de MSYS2, sin
       # Python (el del runner solo se ve desde pwsh, como en check-rpc-https.ps1).
-      # La punta a punta en Windows llega en C1 con `moss code -p`.
+      # La punta a punta de `moss code -p` (Linux y Windows) es tools/check-code-e2e.py.
       - name: Sonda de tool calling
         run: tools/check-tools-probe.sh build/${{ matrix.preset }}/tools/moss-tools-probe
+
+      # moss code -p de punta a punta contra tools/fake-llm.py (tres guiones:
+      # tres pasos, grep y el límite de pasos): código de salida, stdout, stderr y
+      # las peticiones recibidas. Entorno aislado, sin red ni keys.
+      - name: Moss Code de punta a punta
+        run: python3 -I tools/check-code-e2e.py build/${{ matrix.preset }}/cli/moss
 
       # Sin CHAT_API_KEY el programa debe salir con código 1 y el error de
       # configuración, sin abrir la interfaz ni conectarse a nada.
@@ -240,6 +246,12 @@ jobs:
       - name: moss-rpc por HTTPS
         shell: pwsh
         run: tools/check-rpc-https.ps1 -Rpc build/${{ matrix.preset }}/cli/moss-rpc.exe
+
+      # moss code -p de punta a punta contra tools/fake-llm.py, con el Python
+      # del runner (solo se ve desde pwsh) y la búsqueda propia de grep. Sin red ni keys.
+      - name: Moss Code de punta a punta
+        shell: pwsh
+        run: python -I tools/check-code-e2e.py build/${{ matrix.preset }}/cli/moss.exe
 
       # Sin CHAT_API_KEY debe salir con código 1 y el error de configuración.
       # stdin es NUL: GetConsoleMode falla y no se abre la interfaz. El

@@ -41,3 +41,5 @@ petición, responde el JSON completo equivalente.
 `sonda-texto.json`: toda la secuencia de peticiones de `moss-tools-probe` para un
 modelo (cuatro escenarios y el 2 repetido sin pensamiento de regreso; 13
 respuestas, 5 en el de texto). Ver `guias/11-compilacion.md`.
+
+`code-tres-pasos.json`, `code-grep.json` y `code-limite.json`: los de `tools/check-code-e2e.py` (`moss code -p` contra `tests/data/code-project/`; con pensamiento en cada paso con llamadas).
