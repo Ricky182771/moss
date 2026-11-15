@@ -94,13 +94,24 @@ moss/
 │   │                        # protocol_stdio.h con stdio_posix.cpp o stdio_windows.cpp (CMake elige)
 │   └── tests/               # chatbot_rpc_tests: puras, Dispatcher con session_fakes.hpp y,
 │                            # solo POSIX, el ejecutable real con pipes (test_rpc_process.cpp)
+├── process/                 # chatbot::process (chatbot_process): programas externos sin shell; solo depende del núcleo
+│   ├── CMakeLists.txt       # CMake elige child_process_posix.cpp o child_process_windows.cpp
+│   ├── include/chatbot/child_process.h # run_process (salida con tope de 1 MiB, cancelación), find_in_path
+│   └── src/                 # child_process_posix.cpp (posix_spawnp, sin shell) y
+│                            # child_process_windows.cpp (lo mínimo para compilar: no lanza nada)
+├── code/                    # chatbot::code (chatbot_code, namespace chatbot::code): el motor de Moss Code
+│   │                        # (guias/18-moss-code.md), sin terminal; solo con CHATBOT_BUILD_CODE (ON)
+│   ├── CMakeLists.txt       # embebe src/system_prompt.md; project_root_posix/windows.cpp (CMake elige)
+│   ├── include/chatbot/code/ # project_root.h (ProjectRoot: resolve, walk, read_file), tool.h (Tool,
+│   │                        # ToolResult, ProcessLauncher), output_cap.h, system_prompt.h, code_session.h
+│   │                        # (CodeSession, TurnOutcome), permissions.h, code_limits.h (CodeLimits)
+│   ├── src/                 # read/glob/grep/todo_write_tool.cpp, agent_loop (interno: el ciclo del agente),
+│   │                        # tool_registry, tool_schema, glob_match, system_prompt.md
+│   └── tests/               # chatbot_code_tests
 ├── cli/
 │   ├── CMakeLists.txt       # FTXUI, chatbot_cli_lib, chatbot_cli_ui y ejecutable moss
 │   └── src/
 │       ├── addon_launcher.h/.cpp      # línea de comandos: --help, --version, moss <addon> con exec (sin FTXUI)
-│       ├── child_process.h            # programas externos: run_process (salida, tope, cancelación), find_in_path
-│       ├── child_process_posix.cpp    # posix_spawnp, sin shell; solo POSIX
-│       ├── child_process_windows.cpp  # lo mínimo para compilar (no lanza nada); solo Windows
 │       ├── service_control.h/.cpp     # systemctl --user, loginctl, journalctl; ServiceWorker (sin FTXUI)
 │       ├── addon_form.h/.cpp          # lógica de F2 → Addons: errores, sección, credenciales, estado (sin FTXUI)
 │       ├── telegram_addon.h/.cpp      # TelegramAddon: leer, revisar y guardar la sección, invitados y servicio; AddonsEnvironment (sin FTXUI; F2 y moss-rpc)
@@ -171,7 +182,8 @@ moss/
 - Biblioteca estática `chatbot_core`, namespace `moss`. Biblioteca estática `chatbot_markdown` (alias `chatbot::markdown`), namespace `chatbot::md`; las funciones de dibujo de `cli/` (`markdown_view.h`) también están en `chatbot::md`, para que el código de `chatbot::cli` siga escribiendo `md::X`.
 - `core/` no puede depender de FTXUI ni leer/escribir en la terminal (salvo `tools/`).
 - `chatbot::markdown` no depende de `core` ni de FTXUI; enlaza md4c en privado.
-- `chatbot_cli_lib` (biblioteca estática de `cli/`) solo depende de `chatbot::core`, `chatbot::markdown` y `chatbot::addon_settings` (y, en privado, de nlohmann/json), sin FTXUI, para poder probarla.
+- `chatbot_process` (`process/`) solo depende de `chatbot::core`. `chatbot_code` (`code/`) solo de `chatbot::core`, `chatbot::process` y nlohmann/json (privado): nunca FTXUI, `cli/` ni addons (lo revisan `chatbot_forbid_ui_dependencies` y `chatbot_forbid_addon_dependencies`). No calcula las carpetas de Moss: `cli/` se las pasa ya resueltas.
+- `chatbot_cli_lib` (biblioteca estática de `cli/`) solo depende de `chatbot::core`, `chatbot::markdown`, `chatbot::addon_settings`, `chatbot::process` y, si `CHATBOT_BUILD_CODE` está en ON, `chatbot::code` (y, en privado, de nlohmann/json), sin FTXUI, para poder probarla. CMake elige el `.cpp` de `moss code`: con Moss Code, el real; sin él, uno que sale con 69.
 - `chatbot_rpc_lib` (biblioteca estática de `rpc/`, todo menos `main.cpp`) y el ejecutable `moss-rpc` solo dependen de `chatbot_cli_lib` y nlohmann/json: nunca de FTXUI, de `chatbot_cli_ui` ni de los addons (lo revisan `chatbot_forbid_ui_dependencies`, con `chatbot_cli_lib` como única excepción, `chatbot_forbid_addon_dependencies` y `chatbot_include_rules`). Se compilan siempre, también en Windows y sin addons. **Lo que cambie el protocolo se documenta en `rpc/PROTOCOL.md` en el mismo PR** (su tabla de estado incluida).
 - `chatbot_cli_ui` (biblioteca estática de `cli/`) dibuja sin terminal: enlaza `chatbot_cli_lib`, `ftxui::dom` y `ftxui::screen`. La usan el ejecutable `moss`, `tools/md_preview` y `chatbot_ui_tests`. También lleva `text_edit` (el modelo de `TextArea`), que no dibuja pero mide con `ftxui::string_width` para coincidir siempre con el dibujo. El ejecutable `moss` y, como excepción autorizada, `chatbot_ui_tests` enlazan `ftxui::component`: las pruebas compilan `SettingsScreen` y `TextArea` para enviarles eventos reales y dibujar con `Screen`, sin abrir una terminal.
 - Conversaciones guardadas: una barra lateral a la izquierda (lógica en `Sidebar`, que reusa `ConversationList`; dibujo en `sidebar_view`). Ctrl+B la muestra u oculta, Ctrl+O le da el foco y Ctrl+N empieza una conversación nueva. Se muestra al arrancar con 100 columnas o más y su borde derecho es el divisor de `ResizableSplit`. Reemplaza a la lista de pantalla completa. Sus dos primeras filas son fijas: `+ Nueva` y `⚙ Configuración`. Menú por conversación (M1): `r` abre el campo de renombrar (`Sidebar::renaming`/`rename_text`; `main.cpp` lo edita con un `ftxui::Input` sin padre y le manda las teclas salvo Enter y Esc, que decide `Sidebar::handle`: Enter da `ListAction::Type::Rename` con el texto y el campo sigue abierto hasta que `Session::rename_conversation` lo acepta; el error va a la línea de estado), `e` da `Type::Export` (`Session::export_stored`, aviso largo en la línea de estado) y Supr sigue igual. El clic derecho (`Sidebar::open_menu`) agrega filas `SidebarRow::Kind::MenuItem` (Renombrar, Exportar, Borrar) debajo de la conversación, con ↑/↓, Enter, Esc y clic; Borrar es Supr (misma confirmación). Menú y campo se cierran cuando la barra pierde el foco (en su `Renderer`) y con `refresh` (el campo, solo si la conversación desapareció). No hay `⋯` al pasar el puntero: en la barra de 28 columnas le quitaría espacio al título. `Glyph::SearchMark` (`⌕`, respaldo `@`) va al final del título si `ConversationSummary::used_search` y el título conserva al menos 8 columnas; si no, se quita primero. Renombrar (`ConversationStore::rename` + `normalize_title`, que comparte `collapse_whitespace` con `make_title`) no cambia `updated_at`; exportar una guardada usa `export_conversation(StoredConversation, …)`, la misma que la abierta.

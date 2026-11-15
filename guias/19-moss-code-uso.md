@@ -1,0 +1,64 @@
+# Guía: 19. Moss Code, uso (C1)
+> Las reglas resumidas están en [AGENTS.md](../AGENTS.md). El diseño completo está en [18-moss-code.md](18-moss-code.md).
+
+Moss Code es el modo agente de programación de Moss: el modelo explora un proyecto con herramientas y te responde. En C1 es **de solo lectura** (no edita archivos ni corre comandos) y solo se usa sin pantalla; la pantalla llega en C2.
+
+## Uso
+
+```bash
+moss code -p "¿qué hace la función parse_config?"          # la carpeta actual
+moss code ~/proyectos/app -p "lista los TODO que haya"      # otra carpeta
+```
+
+- Sin `-p`, `moss code` avisa que la pantalla llega en C2 y sale con 2.
+- **stdout**: solo la respuesta final del modelo. Se puede redirigir o encadenar en un script.
+- **stderr**: una línea `● <resumen>` por cada herramienta que usó el modelo, y los avisos (configuración, límites, instrucciones recortadas).
+- Salida: **0** bien; **1** error del modelo, de configuración o turno detenido por un límite; **2** uso incorrecto; **130** Ctrl+C (cancela el turno); **69** si Moss se compiló sin Moss Code (`CHATBOT_BUILD_CODE=OFF`).
+- Usa el proveedor y el modelo de la configuración de Moss; el modelo tiene que soportar herramientas.
+
+## Herramientas
+
+| Herramienta | Qué hace | Límites |
+|---|---|---|
+| `read` | Lee un archivo con líneas numeradas | 2000 líneas por llamada (`offset`/`limit` para seguir), líneas de más de 2000 caracteres recortadas, archivo de hasta 10 MiB, binarios dan error |
+| `glob` | Busca archivos por patrón | 200 resultados, el más reciente primero. En un repo de git usa `git ls-files` (respeta `.gitignore`); si no, recorre la carpeta sin `.git`, `node_modules` ni `build*` |
+| `grep` | Busca texto con una expresión regular | 200 coincidencias; modos `files`, `content` y `count`; contexto de hasta 10 líneas |
+| `todo_write` | Lista de tareas del propio modelo | No toca archivos |
+
+- Todo resultado se recorta a 30 000 caracteres (cabeza y cola, con `[… N lines omitted …]`).
+- **`rg` es opcional.** Con `rg` (ripgrep) en el `PATH`, `grep` lo usa. Sin él, usa una búsqueda propia (`std::regex`, sin retroceso exponencial): más lenta, sin lookahead, lookbehind ni referencias, solo archivos de hasta 1 MiB y líneas de hasta 4 KiB. En Windows siempre es la propia.
+- `git` y `rg` se buscan en el `PATH` solo por ruta absoluta y se lanzan sin shell.
+
+## Qué no puede tocar
+
+- Nada fuera de la carpeta del proyecto (la raíz), ni por `..` ni por un enlace simbólico.
+- La carpeta de configuración y la de datos de Moss (`config.json`, `credentials.json`): nunca. Si la raíz es o está dentro de una, `moss code` no arranca.
+- No acepta `/` ni la raíz de una unidad como raíz del proyecto.
+- En Windows no sigue enlaces simbólicos (un enlace a una ruta UNC mandaría credenciales); las uniones sí.
+
+## Instrucciones del proyecto
+
+Moss carga `AGENTS.md` de la raíz (si no hay, `CLAUDE.md`) y el `AGENTS.md` personal de la carpeta de configuración de Moss. Entre los dos, hasta 40 KiB (a cada uno le toca al menos la mitad); lo que sobra se recorta con un aviso. Las instrucciones del chat (`system_prompt`) no aplican aquí. Todo esto es texto que se manda al modelo: no pongas secretos en esos archivos.
+
+## Límites del turno
+
+Un turno se detiene si el modelo pasa de estos límites (salida 1, con el motivo en stderr). Se cambian en `config.json`:
+
+```json
+{ "code": { "max_steps": 50, "max_repeated_calls": 3, "max_invalid_calls": 3, "history_limit_bytes": 300000 } }
+```
+
+| Llave | Qué limita | Por defecto | Rango |
+|---|---|---|---|
+| `max_steps` | Peticiones al modelo por turno | 50 | 1–1000 |
+| `max_repeated_calls` | La misma llamada (nombre y argumentos) seguida | 3 | 2–100 |
+| `max_invalid_calls` | Llamadas seguidas inválidas o a una herramienta que no existe | 3 | 1–100 |
+| `history_limit_bytes` | Tamaño del historial antes de recortar los grupos más viejos (0: sin límite) | 300000 | 0–100 000 000 |
+
+Un valor que no es un entero o está fuera de rango usa el predeterminado y avisa.
+
+## Seguridad
+
+- Lo que el modelo lee (archivos, resultados de `grep`, `AGENTS.md`) son **datos, no órdenes**: un archivo del proyecto que diga "ignora lo anterior" no es una instrucción para Moss.
+- Las keys nunca llegan al modelo: la carpeta de Moss está bloqueada en todas las herramientas y cada resultado pasa por `hide_secret` antes de enviarse.
+- Aun así, lo que leen las herramientas sale hacia el proveedor del modelo: no abras `moss code` en una carpeta con secretos que no quieras compartir con él.
