@@ -6,6 +6,7 @@ add_executable(chatbot_code_tests
     test_output_cap.cpp
     test_project_root.cpp
     test_read_tool.cpp
+    test_system_prompt.cpp
     test_tool_registry.cpp
     test_todo_write_tool.cpp
     test_tool_schema.cpp)

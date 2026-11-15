@@ -10,8 +10,29 @@ else()
     set(CHATBOT_CODE_PLATFORM_SOURCE src/project_root_posix.cpp)
 endif()
 
+# Instrucciones fijas del modo código: src/system_prompt.md, embebido como cadena cruda en un .cpp
+# generado. Un cambio en el .md vuelve a configurar y recompila.
+set(CHATBOT_CODE_PROMPT_FILE ${CMAKE_CURRENT_SOURCE_DIR}/src/system_prompt.md)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${CHATBOT_CODE_PROMPT_FILE})
+file(READ ${CHATBOT_CODE_PROMPT_FILE} CHATBOT_CODE_SYSTEM_PROMPT)
+# Sin \r: un checkout con CRLF (Windows) da el mismo texto.
+string(REPLACE "\r" "" CHATBOT_CODE_SYSTEM_PROMPT "${CHATBOT_CODE_SYSTEM_PROMPT}")
+string(FIND "${CHATBOT_CODE_SYSTEM_PROMPT}" ")moss_prompt\"" CHATBOT_CODE_PROMPT_DELIMITER)
+if(NOT CHATBOT_CODE_PROMPT_DELIMITER EQUAL -1)
+    message(FATAL_ERROR "system_prompt.md no puede contener )moss_prompt\" (cierra la cadena cruda)")
+endif()
+# 65536 caracteres: el mínimo que el estándar garantiza para un literal.
+string(LENGTH "${CHATBOT_CODE_SYSTEM_PROMPT}" CHATBOT_CODE_PROMPT_LENGTH)
+if(CHATBOT_CODE_PROMPT_LENGTH GREATER 60000)
+    message(FATAL_ERROR "system_prompt.md mide más de 60000 bytes: hay que partirlo en trozos")
+endif()
+configure_file(src/system_prompt_text.cpp.in
+    ${CMAKE_CURRENT_BINARY_DIR}/system_prompt_text.cpp @ONLY)
+
 add_library(chatbot_code STATIC
     ${CHATBOT_CODE_PLATFORM_SOURCE}
+    ${CMAKE_CURRENT_BINARY_DIR}/system_prompt_text.cpp
+    src/system_prompt.cpp
     src/output_cap.cpp
     src/project_root.cpp
     src/glob_match.cpp
