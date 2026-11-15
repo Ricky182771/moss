@@ -1,6 +1,7 @@
 # Pruebas de chatbot_code, sin red. Usan los helpers de tests/.
 add_executable(chatbot_code_tests
-    test_output_cap.cpp)
+    test_output_cap.cpp
+    test_project_root.cpp)
 target_compile_features(chatbot_code_tests PRIVATE cxx_std_20)
 target_include_directories(chatbot_code_tests PRIVATE ${PROJECT_SOURCE_DIR}/tests)
 target_link_libraries(chatbot_code_tests PRIVATE

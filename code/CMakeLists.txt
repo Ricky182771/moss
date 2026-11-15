@@ -3,8 +3,17 @@
 # de cli/, FTXUI ni addons. Se compila con CHATBOT_BUILD_CODE (ON por defecto).
 find_package(nlohmann_json 3.9 REQUIRED)
 
+# Rutas del proyecto (project_root.h): CMake elige la parte de cada sistema.
+if(WIN32)
+    set(CHATBOT_CODE_PLATFORM_SOURCE src/project_root_windows.cpp)
+else()
+    set(CHATBOT_CODE_PLATFORM_SOURCE src/project_root_posix.cpp)
+endif()
+
 add_library(chatbot_code STATIC
-    src/output_cap.cpp)
+    ${CHATBOT_CODE_PLATFORM_SOURCE}
+    src/output_cap.cpp
+    src/project_root.cpp)
 add_library(chatbot::code ALIAS chatbot_code)
 target_compile_features(chatbot_code PUBLIC cxx_std_20)
 target_include_directories(chatbot_code PUBLIC
