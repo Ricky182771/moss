@@ -460,6 +460,43 @@ TEST_CASE("complete_trimmed pasa las opciones a la petición", "[peticion][herra
     CHECK_THAT(harness.transport->requests[1].body, ContainsSubstring(kReadToolJson));
 }
 
+TEST_CASE("complete_trimmed recorta por grupos y manda un historial con herramientas válido",
+          "[peticion][herramientas][contexto]") {
+    auto harness = make_client();
+    harness.transport->responses.push_back(stream_done());
+    // Un grupo viejo con herramientas y el actual a medio turno (termina en
+    // Tool), que solo ya excede el límite: se manda entero.
+    const std::vector<chatbot::Message> history{
+        chatbot::Message{chatbot::Role::System, "s"},
+        chatbot::Message{chatbot::Role::User, std::string(200, 'u')},
+        assistant_calls("", {chatbot::ToolCall{"call_old", "read", "{}"}}),
+        tool_result("call_old", std::string(200, 'o')),
+        chatbot::Message{chatbot::Role::Assistant, "ok"},
+        chatbot::Message{chatbot::Role::User, std::string(200, 'q')},
+        assistant_calls("", {chatbot::ToolCall{"call_1", "read", "{}"},
+                             chatbot::ToolCall{"call_2", "read", "{}"}}),
+        tool_result("call_1", std::string(200, '1')),
+        tool_result("call_2", std::string(200, '2')),
+    };
+
+    const chatbot::TrimmedCompletion done = chatbot::complete_trimmed(
+        *harness.client, history, 100, [](const chatbot::StreamDelta&) { return true; }, nullptr,
+        read_tool());
+
+    REQUIRE(done.result.is_ok());
+    CHECK(done.dropped == 4);
+    REQUIRE(harness.transport->requests.size() == 1);
+    const nlohmann::json sent = nlohmann::json::parse(harness.transport->requests[0].body);
+    const nlohmann::json& messages = sent.at("messages");
+    REQUIRE(messages.size() == 5);
+    CHECK(messages[0].at("role") == "system");
+    CHECK(messages[1].at("role") == "user");
+    CHECK(messages[2].at("tool_calls").size() == 2);
+    CHECK(messages[3].at("tool_call_id") == "call_1");
+    CHECK(messages[4].at("tool_call_id") == "call_2");
+    CHECK_THAT(harness.transport->requests[0].body, !ContainsSubstring("call_old"));
+}
+
 TEST_CASE("UTF-8 inválido en un mensaje: no lanza y se sustituye por U+FFFD", "[peticion][utf8]") {
     auto harness = make_client();
     harness.transport->responses.push_back(

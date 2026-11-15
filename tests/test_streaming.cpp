@@ -978,7 +978,7 @@ TEST_CASE("complete_trimmed: el id generado no choca con el de un grupo recortad
           "[streaming][herramientas][contexto]") {
     auto harness = make_client();
     harness.transport->responses.push_back(ok_stream(tool_chunk(0, "", "read", "{}") + kToolsDone));
-    // 624 B; con límite 500 se va toda la vuelta vieja, con su call_moss_1.
+    // 652 B; con límite 500 se va toda la vuelta vieja, con su call_moss_1.
     const std::vector<chatbot::Message> history{
         chatbot::Message{chatbot::Role::System, "sistema"},
         chatbot::Message{chatbot::Role::User, std::string(300, 'u')},

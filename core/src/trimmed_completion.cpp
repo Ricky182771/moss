@@ -53,7 +53,7 @@ bool names_param_key(const ChatError& error, const std::vector<std::string>& key
 std::size_t total_bytes(const std::vector<Message>& messages) {
     std::size_t total = 0;
     for (const Message& message : messages) {
-        total += message.content.size();
+        total += message_bytes(message);
     }
     return total;
 }
