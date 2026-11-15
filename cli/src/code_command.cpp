@@ -6,8 +6,10 @@
 
 #include "chatbot/code/code_limits.h"
 #include "chatbot/code/code_session.h"
+#include "chatbot/credentials.h"
 #include "chatbot/curl_transport.h"
 #include "chatbot/markdown/markdown.h"
+#include "chatbot/platform.h"
 
 #include <algorithm>
 #include <chrono>
@@ -86,6 +88,50 @@ private:
     std::deque<Task> tasks_;
 };
 
+/// Lo que no debe llegar al modelo: la key del modelo, las del entorno y todas las de
+/// credentials.json (búsqueda, Telegram, otros proveedores). Sin vacíos ni repetidos.
+std::vector<std::string> secrets_of(const Config& config, const CodeEnvironment& environment) {
+    std::vector<std::string> secrets;
+    const auto add = [&secrets](const std::string& secret) {
+        if (!secret.empty() && std::find(secrets.begin(), secrets.end(), secret) == secrets.end()) {
+            secrets.push_back(secret);
+        }
+    };
+    add(config.api_key);
+    for (const std::string& secret : environment.env_secrets) {
+        add(secret);
+    }
+    if (environment.credentials_path.has_value()) {
+        // Ilegible o con permisos abiertos: sin esas keys (la app tampoco las usa).
+        const Result<Credentials> stored = load_credentials(*environment.credentials_path);
+        if (!stored.is_error()) {
+            for (const auto& [name, key] : stored.value().keys) {
+                add(key);
+            }
+        }
+    }
+    return secrets;
+}
+
+/// La carpeta de datos de la app por defecto, sin CHAT_DATA_DIR: el padre de las conversaciones.
+std::optional<std::string> default_app_data_dir() {
+    const auto env = [](const char* name) -> std::optional<std::string> {
+        const std::string_view value = process_env(name);
+        return value.empty() ? std::nullopt : std::optional<std::string>{std::string{value}};
+    };
+    const std::optional<std::string> conversations =
+        current_os() == Os::Windows
+            ? resolve_windows_data_dir(std::nullopt, process_portable_data_dir(),
+                                       known_folder(KnownFolder::LocalAppData),
+                                       env("LOCALAPPDATA"))
+            : resolve_data_dir(std::nullopt, process_portable_data_dir(), env("XDG_DATA_HOME"),
+                               env("HOME"));
+    if (!conversations.has_value()) {
+        return std::nullopt;
+    }
+    return utf8_of(path_of(*conversations).parent_path());
+}
+
 // "●" (U+25CF); no está en la tabla de símbolos de glyphs.cpp y esta salida va a stderr, sin
 // pantalla ni modo Sencillos. Escapado porque test_glyphs prohíbe ese carácter en cli/src.
 constexpr const char* kToolMark = "\u25CF ";
@@ -128,21 +174,10 @@ int run_code(const CommandLine& line, CodeEnvironment& environment) {
             blocked.push_back(utf8_of(path_of(*file).parent_path()));
         }
     }
-    for (const std::optional<std::string>& dir : {environment.data_dir, environment.portable_dir}) {
+    for (const std::optional<std::string>& dir :
+         {environment.data_dir, environment.app_data_dir, environment.portable_dir}) {
         if (dir.has_value()) {
             blocked.push_back(*dir);
-        }
-    }
-    // La de conversaciones por defecto es <datos>/moss/conversations: la carpeta de datos de Moss
-    // es su padre (con CHAT_DATA_DIR es una carpeta cualquiera y se bloquea tal cual).
-    if (environment.data_dir.has_value()) {
-        fs::path conversations = path_of(*environment.data_dir).lexically_normal();
-        if (!conversations.has_filename()) {
-            conversations = conversations.parent_path();
-        }
-        if (conversations.filename() == "conversations" &&
-            conversations.parent_path().filename() == std::string{kAppName}) {
-            blocked.push_back(utf8_of(conversations.parent_path()));
         }
     }
     const Result<code::ProjectRoot> root = code::ProjectRoot::open(folder, blocked);
@@ -190,14 +225,16 @@ int run_code(const CommandLine& line, CodeEnvironment& environment) {
         .root = root.value(),
         .client = environment.make_client(config),
         .prompt_options = std::move(prompt_options),
-        .secrets = config.api_key.empty() ? std::vector<std::string>{}
-                                          : std::vector<std::string>{config.api_key},
+        .secrets = secrets_of(config, environment),
         .limits = limits,
         .interactive = false,
     };
     code::CodeSession session{std::move(session_environment),
                               [&queue](code::CodeSession::Task task) { queue.post(std::move(task)); },
                               std::move(observer)};
+    if (session.instructions().instructions_truncated) {
+        err << "Aviso: AGENTS.md o CLAUDE.md es demasiado largo y se recortó.\n";
+    }
     if (!session.send(*line.prompt)) {
         err << "[Config] No se pudo empezar el turno.\n";
         return kExitCodeError;
@@ -243,8 +280,11 @@ int run_code_command(const CommandLine& line) {
         .config_path = default_config_path(),
         .credentials_path = default_credentials_path(),
         .data_dir = default_data_dir(),
+        .app_data_dir = default_app_data_dir(),
         .portable_dir = process_portable_data_dir(),
         .home = std::string{process_env("HOME")},
+        .env_secrets = {std::string{process_env("CHAT_SEARCH_API_KEY")},
+                        std::string{process_env("CHAT_TELEGRAM_TOKEN")}},
         .make_client =
             [](const Config& config) {
                 return std::make_unique<ChatClient>(config, std::make_unique<CurlTransport>());

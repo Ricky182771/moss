@@ -15,7 +15,9 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <memory>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -105,7 +107,8 @@ struct Outcome {
 
 Outcome run(const Layout& layout, const std::vector<std::string>& args, MakeClient make_client,
             Config config = chatbot_test::test_config(),
-            std::function<bool()> interrupted = [] { return false; }) {
+            std::function<bool()> interrupted = [] { return false; },
+            const std::function<void(CodeEnvironment&)>& tweak = {}) {
     std::ostringstream out;
     std::ostringstream err;
     CodeEnvironment environment{
@@ -115,12 +118,17 @@ Outcome run(const Layout& layout, const std::vector<std::string>& args, MakeClie
         .config_path = (layout.config_dir / "config.json").string(),
         .credentials_path = (layout.config_dir / "credentials.json").string(),
         .data_dir = layout.data_dir.string(),
+        .app_data_dir = std::nullopt,
         .portable_dir = std::nullopt,
         .home = {},
+        .env_secrets = {},
         .make_client = std::move(make_client),
         .interrupted = std::move(interrupted),
         .now = [] { return std::time_t{1700000000}; },
     };
+    if (tweak) {
+        tweak(environment);
+    }
     std::vector<std::string> full{"code"};
     full.insert(full.end(), args.begin(), args.end());
     const int code = chatbot::cli::run_code(parse_command_line(full), environment);
@@ -234,8 +242,10 @@ TEST_CASE("moss code -p: la carpeta tiene que existir y no ser de Moss", "[code]
             .config_path = (layout.config_dir / "config.json").string(),
             .credentials_path = std::nullopt,
             .data_dir = std::nullopt,
+            .app_data_dir = std::nullopt,
             .portable_dir = std::nullopt,
             .home = layout.project.string(),
+            .env_secrets = {},
             .make_client = scripted({ok(answer_flow("Hecho."))}),
             .interrupted = [] { return false; },
             .now = [] { return std::time_t{1700000000}; },
@@ -248,28 +258,109 @@ TEST_CASE("moss code -p: la carpeta tiene que existir y no ser de Moss", "[code]
     }
 }
 
-TEST_CASE("moss code -p: la carpeta de datos por defecto bloquea todo <datos>/moss", "[code][cli]") {
+TEST_CASE("moss code -p: bloquea la carpeta de datos de la app y la de conversaciones vigente",
+          "[code][cli]") {
     Layout layout;
-    const fs::path outer = layout.project / "moss";
-    fs::create_directories(outer / "conversations");
-    write_file(outer / "otro.txt", "hermano\n");
-    const auto read_of = [&](const char* path) {
+    const fs::path app = layout.project / "moss";
+    fs::create_directories(app / "conversations");
+    fs::create_directories(layout.project / "otras");
+    write_file(app / "otro.txt", "hermano\n");
+    write_file(layout.project / "otras" / "c.txt", "conversaciones\n");
+    const auto read_of = [&](const char* path, const std::optional<std::string>& app_dir) {
         return run(layout, prompt_in(layout),
                    scripted({ok(call_flow("read", std::string{R"({"path":")"} + path + R"("})")),
-                             ok(answer_flow("Listo."))}));
+                             ok(answer_flow("Listo."))}),
+                   chatbot_test::test_config(), [] { return false; },
+                   [&](CodeEnvironment& environment) { environment.app_data_dir = app_dir; });
     };
-    SECTION("la de por defecto (.../moss/conversations): su padre no se puede leer") {
-        layout.data_dir = outer / "conversations";
-        const Outcome result = read_of("moss/otro.txt");
+    SECTION("la de por defecto: <datos>/moss entero") {
+        layout.data_dir = app / "conversations";
+        const Outcome result = read_of("moss/otro.txt", app.string());
         CHECK(result.code == 0);
         CHECK(result.err.find("[error]") != std::string::npos);
-        CHECK(read_of("a.txt").err.find("[error]") == std::string::npos);
+        CHECK(read_of("a.txt", app.string()).err.find("[error]") == std::string::npos);
     }
-    SECTION("tipo CHAT_DATA_DIR: su padre sí") {
-        layout.data_dir = layout.project / "x" / "conversations";
-        fs::create_directories(layout.data_dir);
-        write_file(layout.project / "x" / "otro.txt", "hermano\n");
-        CHECK(read_of("x/otro.txt").err.find("[error]") == std::string::npos);
+    SECTION("con CHAT_DATA_DIR: esa carpeta y también la de por defecto") {
+        layout.data_dir = layout.project / "otras";
+        CHECK(read_of("otras/c.txt", app.string()).err.find("[error]") != std::string::npos);
+        CHECK(read_of("moss/otro.txt", app.string()).err.find("[error]") != std::string::npos);
+        // Sin la de por defecto, solo queda la vigente.
+        CHECK(read_of("moss/otro.txt", std::nullopt).err.find("[error]") == std::string::npos);
+    }
+    SECTION("como carpeta del proyecto") {
+        const MakeClient never = scripted({ok(answer_flow("no"))});
+        const auto in = [&](const fs::path& folder) {
+            return run(layout, {folder.string(), "-p", "hola"}, never, chatbot_test::test_config(),
+                       [] { return false; },
+                       [&](CodeEnvironment& environment) {
+                           environment.app_data_dir = app.string();
+                       });
+        };
+        layout.data_dir = layout.project / "otras";
+        CHECK(in(app).code == 1);
+        CHECK(in(app / "conversations").code == 1);
+        CHECK(in(layout.project / "otras").code == 1);
+    }
+}
+
+TEST_CASE("moss code -p: avisa si AGENTS.md se recortó", "[code][cli]") {
+    const Layout layout;
+    const MakeClient answer = scripted({ok(answer_flow("Hecho."))});
+    SECTION("recortado") {
+        write_file(layout.project / "AGENTS.md",
+                   std::string(40 * 1024 + 100, 'x')); // Más que kMaxInstructionsBytes.
+        const Outcome result = run(layout, prompt_in(layout), answer);
+        CHECK(result.code == 0);
+        CHECK(result.err.find("se recortó") != std::string::npos);
+    }
+    SECTION("corto: sin aviso") {
+        write_file(layout.project / "AGENTS.md", "Usa tabuladores.\n");
+        const Outcome result = run(layout, prompt_in(layout), answer);
+        CHECK(result.code == 0);
+        CHECK(result.err.find("se recortó") == std::string::npos);
+    }
+}
+
+TEST_CASE("moss code -p: las keys guardadas y las del entorno llegan tapadas al modelo",
+          "[code][cli]") {
+    const Layout layout;
+    write_file(layout.project / "secretos.txt",
+               "tavily tvly-GUARDADA-1\ntelegram 123456:TOKEN-GUARDADO\nproveedor otra-key-9\n"
+               "busqueda del entorno ENV-BUSQUEDA\ntoken del entorno ENV-TELEGRAM\n"
+               "modelo " + chatbot_test::test_config().api_key + "\npublico visible\n");
+    const fs::path credentials = layout.config_dir / "credentials.json";
+    write_file(credentials,
+               R"({"version":1,"keys":{"search:tavily":"tvly-GUARDADA-1","telegram":)"
+               R"("123456:TOKEN-GUARDADO","custom:x":"otra-key-9","vacia":""}})");
+#ifndef _WIN32
+    fs::permissions(credentials, fs::perms::owner_read | fs::perms::owner_write);
+#endif
+    std::vector<std::string> bodies;
+    const std::vector<HttpResponse> responses{
+        ok(call_flow("read", R"({"path":"secretos.txt"})")), ok(answer_flow("Listo."))};
+    const MakeClient recording = [&bodies, responses](const Config& config) {
+        auto transport = std::make_unique<chatbot_test::FakeTransport>();
+        transport->responses = responses;
+        chatbot_test::FakeTransport* raw = transport.get();
+        transport->on_send = [raw, &bodies] { bodies.push_back(raw->requests.back().body); };
+        return std::make_unique<chatbot::ChatClient>(config, std::move(transport),
+                                                     std::make_unique<chatbot_test::FakeSleeper>());
+    };
+    const Outcome result = run(layout, prompt_in(layout), recording, chatbot_test::test_config(),
+                               [] { return false; }, [](CodeEnvironment& environment) {
+                                   environment.env_secrets = {"ENV-BUSQUEDA", "", "ENV-TELEGRAM",
+                                                              "ENV-BUSQUEDA"};
+                               });
+    CHECK(result.code == 0);
+    REQUIRE(bodies.size() == 2);
+    // La segunda petición lleva el resultado de read, con lo secreto tapado y lo demás intacto.
+    CHECK(bodies[1].find("publico visible") != std::string::npos);
+    for (const std::string& secret : std::vector<std::string>{"tvly-GUARDADA-1", "123456:TOKEN-GUARDADO", "otra-key-9", "ENV-BUSQUEDA", "ENV-TELEGRAM",
+          chatbot_test::test_config().api_key}) {
+        INFO(secret.size());
+        CHECK(bodies[1].find(secret) == std::string::npos);
+        CHECK(result.err.find(secret) == std::string::npos);
+        CHECK(result.out.find(secret) == std::string::npos);
     }
 }
 
@@ -304,8 +395,10 @@ TEST_CASE("moss code -p: Ctrl+C con una herramienta pendiente sale con 130", "[c
         .config_path = (layout.config_dir / "config.json").string(),
         .credentials_path = std::nullopt,
         .data_dir = std::nullopt,
+        .app_data_dir = std::nullopt,
         .portable_dir = std::nullopt,
         .home = {},
+        .env_secrets = {},
         .make_client = scripted({ok(call_flow("read", R"({"path":"a.txt"})")),
                                  ok(answer_flow("No debería llegar."))}),
         .interrupted = [&err] { return err.str().find(kMark) != std::string::npos; },

@@ -13,6 +13,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
 /// moss code (guias/18-moss-code.md): el modo código. En C1 solo existe la
 /// forma sin pantalla, moss code [carpeta] -p <texto>. Sin FTXUI.
@@ -32,8 +33,14 @@ struct CodeEnvironment {
     std::optional<std::string> config_path;      ///< default_config_path().
     std::optional<std::string> credentials_path; ///< default_credentials_path().
     std::optional<std::string> data_dir;         ///< default_data_dir() (resolve_data_dir).
+    /// La carpeta de datos de la app por defecto (<datos>/moss, el padre de las conversaciones
+    /// por defecto), aunque CHAT_DATA_DIR mande data_dir a otra parte: ninguna se puede abrir.
+    std::optional<std::string> app_data_dir;
     std::optional<std::string> portable_dir;     ///< process_portable_data_dir().
     std::string home;                            ///< La carpeta personal; vacía si no se sabe.
+    /// Secretos del entorno (CHAT_SEARCH_API_KEY, CHAT_TELEGRAM_TOKEN): se suman a la key del
+    /// modelo y a las de credentials.json para taparlos en lo que va al modelo. Nunca se imprimen.
+    std::vector<std::string> env_secrets;
     std::function<std::unique_ptr<ChatClient>(const Config&)> make_client;
     /// true cuando el usuario pidió interrumpir (Ctrl+C). Se consulta desde el hilo principal.
     std::function<bool()> interrupted;
