@@ -53,6 +53,8 @@ Result<std::string_view> role_to_string(Role role) {
         return std::string_view{"user"};
     case Role::Assistant:
         return std::string_view{"assistant"};
+    case Role::Tool:
+        return std::string_view{"tool"};
     }
     return ChatError{ErrorKind::Config, 0,
                      "Rol de mensaje inválido en el historial.", std::nullopt};
