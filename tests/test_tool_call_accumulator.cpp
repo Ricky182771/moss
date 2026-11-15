@@ -79,6 +79,34 @@ TEST_CASE("Acumulador: sin index, un id nuevo abre llamada y sin id se suma a la
     CHECK(same(calls.finish({}), {{"call_a", "read", "{}"}, {"call_b", "glob", R"({"p":"*"})"}}));
 }
 
+TEST_CASE("Acumulador: sin index ni id, un name sobre una llamada con name abre otra",
+          "[herramientas][acumulador]") {
+    ToolCallAccumulator calls;
+    calls.add(piece(std::nullopt, "", "read", R"({"path":"a"})"));
+    calls.add(piece(std::nullopt, "", "glob", R"({"p":)"));
+    calls.add(piece(std::nullopt, "", "", R"("*"})"));
+    CHECK(announced(calls) == Announced{{0, "read"}, {1, "glob"}});
+    CHECK(same(calls.finish({}), {{"call_moss_1", "read", R"({"path":"a"})"},
+                                  {"call_moss_2", "glob", R"({"p":"*"})"}}));
+    // Si la última aún no tiene name, el name es suyo.
+    ToolCallAccumulator late;
+    late.add(piece(std::nullopt, "", "", "{"));
+    late.add(piece(std::nullopt, "", "read", "}"));
+    CHECK(same(late.finish({}), {{"call_moss_1", "read", "{}"}}));
+}
+
+TEST_CASE("Acumulador: mismo index con otro id abre otra llamada", "[herramientas][acumulador]") {
+    ToolCallAccumulator calls;
+    calls.add(piece(0, "call_a", "read", ""));
+    calls.add(piece(0, "call_a", "", R"({"path":)")); // Repite su id: la misma llamada.
+    calls.add(piece(0, "", "", R"("a"})"));
+    calls.add(piece(0, "call_b", "glob", R"({"p":)")); // Otro id con index 0: otra llamada.
+    calls.add(piece(0, "", "", R"("*"})"));            // Sin id: a la más reciente de index 0.
+    CHECK(announced(calls) == Announced{{0, "read"}, {1, "glob"}});
+    CHECK(same(calls.finish({}),
+               {{"call_a", "read", R"({"path":"a"})"}, {"call_b", "glob", R"({"p":"*"})"}}));
+}
+
 TEST_CASE("Acumulador: arguments vacío al terminar queda {}", "[herramientas][acumulador]") {
     ToolCallAccumulator calls;
     calls.add(piece(0, "call_1", "list", ""));

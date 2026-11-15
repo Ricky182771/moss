@@ -15,10 +15,6 @@ struct TrimResult {
     std::size_t dropped = 0;
 };
 
-/// Bytes que cuenta el recorte: content y, si los hay, el pensamiento, el id
-/// del resultado y cada llamada. Sin esos campos es solo content.size().
-[[nodiscard]] std::size_t message_bytes(const Message& message);
-
 /// Recorta el historial para que el total de bytes UTF-8 (content, reasoning,
 /// tool_call_id y el id, name y arguments de cada tool_calls; aproximadamente
 /// caracteres) no pase de limit_bytes. Función pura: el núcleo no guarda el

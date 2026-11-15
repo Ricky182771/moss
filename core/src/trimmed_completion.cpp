@@ -2,6 +2,7 @@
 
 #include "chatbot/error.h"
 #include "chatbot/history.h"
+#include "history_bytes.h"
 #include "tool_call_accumulator.h"
 
 #include <algorithm>

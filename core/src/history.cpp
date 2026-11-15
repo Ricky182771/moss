@@ -1,5 +1,7 @@
 #include "chatbot/history.h"
 
+#include "history_bytes.h"
+
 #include <iterator>
 
 namespace chatbot {

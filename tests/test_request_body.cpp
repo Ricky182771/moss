@@ -388,8 +388,9 @@ TEST_CASE("Historial con herramientas válido y chat normal pasan la validación
                     {chatbot::Message{chatbot::Role::User, "Lee"},
                      assistant_calls("", {chatbot::ToolCall{"a", "read", "{}"},
                                           chatbot::ToolCall{"b", "read", "{}"}}),
-                     tool_result("b", "2"), chatbot::Message{chatbot::Role::System, "s"},
-                     tool_result("a", "1"), chatbot::Message{chatbot::Role::Assistant, "Ya."}})
+                     tool_result("b", "2"), tool_result("a", "1"),
+                     chatbot::Message{chatbot::Role::System, "s"},
+                     chatbot::Message{chatbot::Role::Assistant, "Ya."}})
                     .has_value());
 }
 
@@ -435,6 +436,17 @@ TEST_CASE("Validación del historial: un error por regla, con su id", "[peticion
         CHECK_THAT(history_error({user, assistant_calls("", {call_a}),
                                   chatbot::Message{chatbot::Role::User, "¿Y?"}}),
                    ContainsSubstring("«call_a» no tiene su resultado antes del siguiente mensaje"));
+    }
+    SECTION("System entre la llamada y su resultado") {
+        const chatbot::Message system{chatbot::Role::System, "s"};
+        CHECK_THAT(history_error({user, assistant_calls("", {call_a}), system,
+                                  tool_result("call_a", "1")}),
+                   ContainsSubstring("«call_a» no tiene su resultado antes del siguiente mensaje"));
+        // También entre dos resultados del mismo asistente.
+        CHECK_THAT(history_error({user,
+                                  assistant_calls("", {call_a, chatbot::ToolCall{"call_b", "glob", "{}"}}),
+                                  tool_result("call_a", "1"), system, tool_result("call_b", "2")}),
+                   ContainsSubstring("«call_b» no tiene su resultado antes del siguiente mensaje"));
     }
     SECTION("llamada sin resultado al final") {
         CHECK_THAT(history_error({user, assistant_calls("", {call_a})}),

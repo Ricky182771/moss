@@ -12,15 +12,23 @@ void ToolCallAccumulator::add(const sse::ToolCallChunk& chunk) {
         return; // Sin nada: no abre una llamada fantasma.
     }
     Entry* entry = nullptr;
-    if (has_index || !chunk.id.empty()) {
-        const auto it = std::find_if(calls_.begin(), calls_.end(), [&](const Entry& e) {
-            return has_index ? e.index == chunk.index : e.call.id == chunk.id;
-        });
+    if (has_index) {
+        // Hay servidores que mandan todas las llamadas con index 0: un id
+        // distinto del que ya tiene la más reciente de ese index es otra.
+        const auto it = std::find_if(calls_.rbegin(), calls_.rend(),
+                                     [&](const Entry& e) { return e.index == chunk.index; });
+        if (it != calls_.rend() &&
+            (chunk.id.empty() || it->call.id.empty() || it->call.id == chunk.id)) {
+            entry = &*it;
+        }
+    } else if (!chunk.id.empty()) {
+        const auto it = std::find_if(calls_.begin(), calls_.end(),
+                                     [&](const Entry& e) { return e.call.id == chunk.id; });
         if (it != calls_.end()) {
             entry = &*it;
         }
-    } else if (!calls_.empty()) {
-        entry = &calls_.back();
+    } else if (!calls_.empty() && (chunk.name.empty() || calls_.back().call.name.empty())) {
+        entry = &calls_.back(); // Un name sobre una llamada que ya tiene el suyo abre otra.
     }
     if (entry == nullptr) {
         entry = &calls_.emplace_back(Entry{chunk.index, ToolCall{}});

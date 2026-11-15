@@ -41,9 +41,8 @@ std::optional<ChatError> validate_tool_history(const std::vector<Message>& messa
             return history_error("El resultado de herramienta " + quote_id(id) +
                                  " no corresponde a ninguna llamada pendiente del asistente.");
         }
-        if (message.role == Role::System) {
-            continue; // Solo User y Assistant cierran las llamadas pendientes.
-        }
+        // La API pide los Tool justo después de su asistente: nada, ni un
+        // System, puede ir en medio.
         if (!pending.empty()) {
             return history_error("La llamada a herramienta " + quote_id(pending.front()) +
                                  " no tiene su resultado antes del siguiente mensaje.");

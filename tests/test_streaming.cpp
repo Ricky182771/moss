@@ -743,6 +743,39 @@ TEST_CASE("complete_stream: texto y dos llamadas, en orden", "[streaming][herram
     CHECK(calls[1].arguments == "{\"p\":\"*\"}");
 }
 
+TEST_CASE("complete_stream: dos llamadas con el mismo index y distinto id",
+          "[streaming][herramientas]") {
+    auto harness = make_client();
+    std::string flow = tool_chunk(0, "call_1", "read", "");
+    flow += tool_chunk(0, "", "", "{\"path\":\"a\"}");
+    flow += tool_chunk(0, "call_2", "glob", "{\"p\":");
+    flow += tool_chunk(0, "", "", "\"*\"}");
+    flow += kToolsDone;
+    harness.transport->responses.push_back(ok_stream(flow));
+    harness.transport->chunk_size = 7;
+
+    std::vector<Got> got;
+    const auto response = harness.client->complete_stream(
+        sample_messages(),
+        [&](const chatbot::StreamDelta& d) {
+            got.push_back(Got{d.kind, std::string{d.text}, d.tool_index});
+            return true;
+        },
+        nullptr, read_tool());
+
+    REQUIRE(response.is_ok());
+    CHECK(got == std::vector<Got>{{Kind::ToolCallStarted, "read", 0},
+                                  {Kind::ToolCallStarted, "glob", 1}});
+    const std::vector<chatbot::ToolCall>& calls = response.value().tool_calls;
+    REQUIRE(calls.size() == 2);
+    CHECK(calls[0].id == "call_1");
+    CHECK(calls[0].name == "read");
+    CHECK(calls[0].arguments == "{\"path\":\"a\"}");
+    CHECK(calls[1].id == "call_2");
+    CHECK(calls[1].name == "glob");
+    CHECK(calls[1].arguments == "{\"p\":\"*\"}");
+}
+
 TEST_CASE("complete_stream: pensamiento, texto y llamada en un chunk con finish_reason stop",
           "[streaming][herramientas]") {
     auto harness = make_client();

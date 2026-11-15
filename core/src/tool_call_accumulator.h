@@ -13,10 +13,14 @@ namespace chatbot {
 
 /// Junta los pedazos de delta.tool_calls de una respuesta en llamadas
 /// completas (guias/18-moss-code.md, 3.3). Pura: sin E/S ni estado global.
-/// Cada pedazo va a la llamada de su index; sin index, un id que no se ha
-/// visto abre otra llamada y sin id se suma a la última. De cada llamada se
-/// toman el primer id y el primer name no vacíos, y los arguments se
-/// concatenan sin validarlos. Un pedazo sin nada se ignora.
+/// Con index, cada pedazo va a la llamada más reciente de ese index, salvo
+/// que traiga un id distinto del que esa llamada ya tiene: entonces abre otra
+/// (hay servidores que mandan todas con index 0). Sin index, un id que no se
+/// ha visto abre otra llamada y uno visto va a la suya; sin index ni id se
+/// suma a la última, salvo que traiga name y la última ya tenga el suyo:
+/// entonces abre otra. De cada llamada se toman el primer id y el primer name
+/// no vacíos, y los arguments se concatenan sin validarlos. Un pedazo sin
+/// nada se ignora.
 class ToolCallAccumulator {
 public:
     /// Una llamada que ya se puede anunciar (StreamDelta::Kind::ToolCallStarted).
