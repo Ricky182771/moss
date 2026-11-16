@@ -166,7 +166,8 @@ public:
     [[nodiscard]] bool send(const std::string& text);
     /// Esc: cancela la petición o la herramienta en curso; el turno termina limpio.
     void cancel();
-    /// true desde send() hasta el fin del turno: F2, /model y clear() esperan.
+    /// true desde send() hasta que se procesa el fin del turno (on_turn_end), aunque el motor ya
+    /// esté en Idle: F2, /model, clear() y otro send() esperan.
     [[nodiscard]] bool busy() const;
     [[nodiscard]] code::LoopState state() const;
     /// /clear: sesión nueva en la misma carpeta, con las instrucciones recalculadas y las
@@ -220,6 +221,9 @@ private:
     std::optional<std::size_t> answer_;     ///< Entrada del asistente que sigue llegando.
     std::optional<std::size_t> user_entry_; ///< Entrada del mensaje del turno en curso.
     std::size_t turn_start_ = 0;            ///< Primera entrada del turno en curso.
+    /// De send() a on_turn_end. El motor pasa a Idle antes de que llegue su on_turn_end (va por
+    /// post): en ese hueco una tecla ya en la cola no debe ver el turno cerrado.
+    bool turn_open_ = false;
     /// El proveedor y el modelo del cliente (Session::model) de la última config_changed o
     /// del arranque.
     std::string shown_provider_;
@@ -231,13 +235,16 @@ private:
 /// open_code_mode: el modo o por qué no se pudo abrir.
 struct OpenedCodeMode {
     std::unique_ptr<CodeMode> mode;
-    std::optional<ChatError> error; ///< load_startup_config u open_code_project.
+    /// load_startup_config, open_code_project o, con require_complete, validate_config.
+    std::optional<ChatError> error;
 };
 
 /// El modo código con el sistema real: load_startup_config, app_code_mode_environment y
-/// open_code_project con folder (vacía: la actual).
+/// open_code_project con folder (vacía: la actual). require_complete (sin terminal no hay F2):
+/// que falte la key o el modelo es error, antes de crear la CodeSession.
 [[nodiscard]] OpenedCodeMode open_code_mode(const std::string& folder, CodeMode::Post post,
-                                            CodeMode::OnFinished on_finished);
+                                            CodeMode::OnFinished on_finished,
+                                            bool require_complete);
 
 } // namespace chatbot::cli
 

@@ -244,6 +244,51 @@ TEST_CASE("CodeMode: cancelar durante la petición devuelve el texto", "[code_mo
     CHECK(valid_history(h.mode->history()));
 }
 
+TEST_CASE("CodeMode: sigue ocupado entre el Idle del motor y su on_turn_end",
+          "[code_mode][cancelar]") {
+    // El motor pasa a Idle y manda on_state y on_turn_end por post: en FTXUI una tecla que ya
+    // estaba en la cola se atiende antes que ellos y no debe ver el turno cerrado.
+    using Type = chatbot::cli::SubmitOutcome::Type;
+    Harness h;
+    chatbot_test::BlockingTransport* blocking = nullptr;
+    h.fakes.block(blocking);
+    h.start();
+    REQUIRE(h.mode->send("hola"));
+    REQUIRE(h.queue.run_until([&h] {
+        return h.entries().back().kind == EntryKind::Assistant;
+    }));
+    h.mode->cancel();
+    // De una tarea en una, hasta la que deja el motor en Idle: el on_turn_end sigue en la cola.
+    REQUIRE(h.queue.run_until([&h] { return h.mode->state() == LoopState::Idle; }));
+    REQUIRE(h.finished.empty());
+    CHECK(h.mode->busy());
+    CHECK(h.mode->command_context().busy);
+    CHECK_FALSE(h.mode->send("otra"));
+    CHECK(h.mode->submit("otra").type == Type::Ignored);
+    const chatbot::cli::SubmitOutcome cleared = h.mode->submit("/clear");
+    CHECK(cleared.type == Type::Status);
+    CHECK(cleared.status == chatbot::cli::kWaitOrCancel);
+    CHECK_FALSE(h.mode->clear());
+    CHECK_FALSE(h.mode->config_changed());
+    CHECK(h.kinds() ==
+          std::vector<EntryKind>{EntryKind::Notice, EntryKind::User, EntryKind::Assistant});
+
+    REQUIRE(h.wait_turn(0));
+    CHECK(h.finished == std::vector<std::optional<std::string>>{"hola"});
+    CHECK(h.kinds() == std::vector<EntryKind>{EntryKind::Notice, EntryKind::Assistant});
+    CHECK_FALSE(h.mode->busy());
+    CHECK_FALSE(has_user(h.mode->history()));
+    CHECK(valid_history(h.mode->history()));
+
+    // Ya cerrado, el siguiente turno sí empieza y termina limpio.
+    REQUIRE(h.mode->send("otra"));
+    CHECK(h.kinds().back() == EntryKind::User);
+    h.mode->cancel();
+    REQUIRE(h.wait_turn(1));
+    CHECK(h.finished.back() == std::optional<std::string>{"otra"});
+    CHECK(valid_history(h.mode->history()));
+}
+
 TEST_CASE("CodeMode: cancelar a la mitad de una herramienta lenta", "[code_mode][cancelar]") {
     if (!chatbot::process::find_in_path("git").has_value()) {
         SKIP("Sin git en el PATH: glob no usa run_process.");

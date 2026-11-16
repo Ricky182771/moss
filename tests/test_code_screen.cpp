@@ -8,6 +8,8 @@
 #include "code_mode_fakes.hpp"
 #include "fake_transport.hpp"
 
+#include "chatbot/credentials.h"
+
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 
@@ -287,6 +289,33 @@ TEST_CASE("pantalla de Moss Code: con un turno en curso F2 no se abre", "[code_s
     // Sin turno, F2 sí abre.
     CHECK(h.event(ftxui::Event::F2));
     CHECK(h.screen->settings().is_open());
+}
+
+TEST_CASE("pantalla de Moss Code: cerrar F2 recalcula los secretos que se tapan",
+          "[code_screen][f2]") {
+    // F2 → Addons guarda el token en credentials.json sin on_saved: cerrar F2 lo recoge.
+    const std::string token = "tg-token-secreto-de-prueba-5678";
+    ScreenHarness h;
+    chatbot_test::write_file(h.code.project / "s.txt", "token=" + token + "\n");
+    h.code.fakes.responses = {calls({{"read", R"({"path":"s.txt"})"}}), answer("Listo.")};
+    h.open();
+    CHECK(h.event(ftxui::Event::F2));
+    REQUIRE(h.screen->settings().is_open());
+    chatbot::Credentials credentials;
+    credentials.keys["telegram"] = token;
+    REQUIRE_FALSE(
+        chatbot::save_credentials(h.code.fakes.credentials_path(), credentials).has_value());
+    CHECK(h.event(ftxui::Event::F2));
+    REQUIRE_FALSE(h.screen->settings().is_open());
+
+    h.type_and_send("lee s.txt");
+    REQUIRE(h.code.wait_turn(0));
+    CHECK(h.code.entries().back().text == "Listo.");
+    REQUIRE(h.code.fakes.chat != nullptr);
+    REQUIRE(h.code.fakes.chat->requests.size() == 2);
+    const std::string& body = h.code.fakes.chat->requests.back().body;
+    CHECK(body.find("token=") != std::string::npos); // El resultado de read sí va.
+    CHECK(body.find(token) == std::string::npos);
 }
 
 TEST_CASE("pantalla de Moss Code: el menú de / muestra solo los comandos del modo código",

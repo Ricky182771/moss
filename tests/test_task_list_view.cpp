@@ -91,6 +91,20 @@ TEST_CASE("tareas: tope de 3 filas con \"… N más\"", "[tareas]") {
     CHECK(wider[2] == "☐ Tarea 7  ☐ Tarea 8  ☐ Tarea 9  … 2 más");
 }
 
+TEST_CASE("tareas: en filas angostas \"… N más\" tampoco pasa del ancho", "[tareas]") {
+    // Una tarea por fila: la tercera sale y el aviso queda solo en su fila.
+    for (const int width : {10, 6, 3}) {
+        CAPTURE(width);
+        ftxui::Element element =
+            chatbot::cli::render_task_list(numbered(12), width, chatbot::cli::terminal_palette());
+        element->ComputeRequirement();
+        CHECK(element->requirement().min_x <= width);
+        const std::vector<std::string> shown = rows(numbered(12), width);
+        REQUIRE(shown.size() == 3);
+        CHECK(shown[2].starts_with("…"));
+    }
+}
+
 TEST_CASE("tareas: un texto más ancho que la fila se recorta con …", "[tareas]") {
     const std::vector<std::string> shown =
         rows({{TaskState::Pending, std::string(60, 'x'), {}}, {TaskState::Done, "corta", {}}}, 20);

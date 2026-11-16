@@ -435,6 +435,7 @@ void CodeMode::on_turn_end(const code::TurnOutcome& outcome) {
     tool_entries_.clear();
     current_tool_.clear();
     state_ = code::LoopState::Idle;
+    turn_open_ = false;
     std::optional<std::string> restored;
     if (!outcome.unsent_input.empty()) {
         // No llegó nada al modelo: el mensaje sale de la pantalla y vuelve a la caja.
@@ -540,9 +541,10 @@ CommandContext CodeMode::command_context() const {
 }
 
 bool CodeMode::send(const std::string& text) {
-    if (!configured() || !code_->send(text)) {
+    if (!configured() || busy() || !code_->send(text)) {
         return false;
     }
+    turn_open_ = true;
     tasks_ = tasks_for_new_turn(std::move(tasks_));
     turn_start_ = entries_.size();
     add_entry(EntryKind::User, text);
@@ -555,7 +557,7 @@ void CodeMode::cancel() {
 }
 
 bool CodeMode::busy() const {
-    return code_->busy();
+    return turn_open_ || code_->busy();
 }
 
 code::LoopState CodeMode::state() const {
@@ -615,7 +617,7 @@ const code::CodeSystemPrompt& CodeMode::instructions() const {
 }
 
 OpenedCodeMode open_code_mode(const std::string& folder, CodeMode::Post post,
-                              CodeMode::OnFinished on_finished) {
+                              CodeMode::OnFinished on_finished, bool require_complete) {
     // Primero la configuración: prepara el modo portable, del que dependen las rutas.
     const Result<Config> config = load_startup_config();
     if (config.is_error()) {
@@ -626,6 +628,12 @@ OpenedCodeMode open_code_mode(const std::string& folder, CodeMode::Post post,
         open_code_project(folder, code_paths(environment), environment.session.now);
     if (project.is_error()) {
         return {nullptr, project.error()};
+    }
+    // Antes de crear la CodeSession, que corre git.
+    if (require_complete) {
+        if (std::optional<ChatError> incomplete = validate_config(config.value())) {
+            return {nullptr, std::move(incomplete)};
+        }
     }
     return {std::make_unique<CodeMode>(std::move(environment), config.value(), project.value(),
                                        std::move(post), std::move(on_finished)),

@@ -87,6 +87,7 @@ ftxui::Element render_task_list(const std::vector<TaskItem>& tasks, int width,
             last.pop_back();
             ++hidden;
         }
+        more = fit_width(more, width); // Sola en una fila muy angosta tampoco se pasa.
     }
 
     const ftxui::Decorator notice = palette.ink(&Theme::notice);

@@ -77,6 +77,9 @@ CodeScreen::CodeScreen(CodeScreenContext context)
                         .on_open = [this] { right_tab_ = 1; },
                         .on_close =
                             [this] {
+                                // F2 → Addons guarda keys en credentials.json sin on_saved: los
+                                // secretos que se tapan se recalculan al cerrar.
+                                (void)mode_.config_changed();
                                 right_tab_ = 0;
                                 input_area_->TakeFocus();
                             }},
@@ -352,22 +355,20 @@ int run_code_screen(const std::string& folder) {
     ftxui::App app = ftxui::App::Fullscreen();
     const RequestRunner::Post post = screen_post(app);
     CodeScreen* shown = nullptr; ///< La pantalla, para el OnFinished de CodeMode.
-    OpenedCodeMode opened =
-        open_code_mode(folder, post, [&shown](std::optional<std::string> restored) {
+    // Sin terminal no hay F2 que abrir: que falte la key o el modelo es error, como en el chat.
+    OpenedCodeMode opened = open_code_mode(
+        folder, post,
+        [&shown](std::optional<std::string> restored) {
             if (shown != nullptr) {
                 shown->finished(std::move(restored));
             }
-        });
+        },
+        !stdio_is_terminal());
     // Por stderr, antes de abrir la pantalla completa (app_startup.h).
     if (opened.error.has_value()) {
         return report_startup_error(*opened.error);
     }
     CodeMode& mode = *opened.mode;
-    // Sin terminal no hay F2 que abrir: que falte la key o el modelo es error, como en el chat.
-    if (const std::optional<ChatError> incomplete = validate_config(mode.session().config());
-        incomplete.has_value() && !stdio_is_terminal()) {
-        return report_startup_error(*incomplete);
-    }
 
     const StartupAppearance startup = load_startup_appearance();
     Appearance appearance = startup.appearance;
