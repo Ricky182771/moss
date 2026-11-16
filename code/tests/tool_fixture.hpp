@@ -5,8 +5,10 @@
 // carpeta de Moss dentro de la raíz, y el registro listo para ejecutar.
 
 #include "chatbot/cancel_token.h"
+#include "chatbot/child_process.h"
 #include "chatbot/code/tool.h"
 
+#include "env_guard.hpp"
 #include "project_root_fixture.hpp"
 
 #include <catch2/catch_test_macros.hpp>
@@ -75,6 +77,54 @@ private:
         fs::create_directories(moss_inside);
         project_root_test::write_file(moss_inside / "credentials.json", "{\"k\": \"secreto\"}");
         return project_root_test::open_root(project.proy, {project.moss, moss_inside});
+    }
+};
+
+/// Repo de git real cuyo .git/config tiene un filtro clean que crea `marker` (fuera del repo)
+/// cada vez que git lo corre, aplicado por .gitattributes a a.txt, que está confirmado y luego
+/// modificado. Sin la configuración global ni la del sistema de la máquina. Quien lo usa salta
+/// antes si no hay git (o en Windows) y revisa `ready`.
+struct CleanFilterRepo {
+    chatbot_test::EnvGuard global{"GIT_CONFIG_GLOBAL", "/dev/null"};
+    chatbot_test::EnvGuard no_system{"GIT_CONFIG_NOSYSTEM", "1"};
+    ToolFixture fixture;
+    fs::path marker = fixture.project.temp.path() / "filtro-corrio";
+    bool ready = setup();
+
+    /// Control positivo: git status sí corre el filtro (si no, el montaje no prueba nada).
+    void check_status_runs_filter() const {
+        REQUIRE_FALSE(fs::exists(marker));
+        REQUIRE(git({"status", "--porcelain"}));
+        CHECK(fs::exists(marker));
+    }
+
+private:
+    [[nodiscard]] bool git(std::vector<std::string> args) const {
+        args.insert(args.begin(), {"git", "-C", project_root_test::utf8(fixture.project.proy)});
+        return chatbot::process::run_process(args).ok();
+    }
+
+    bool setup() {
+        if (!git({"init", "-q"})) {
+            return false;
+        }
+        fixture.file("a.txt", "contenido-uno\n");
+        REQUIRE(git({"add", "a.txt"}));
+        REQUIRE(git({"-c", "user.name=prueba", "-c", "user.email=prueba@example.invalid", "commit",
+                     "-q", "-m", "inicio"}));
+        // Después del commit, porque git add sí corre el filtro clean.
+        const std::string marker_path = project_root_test::utf8(marker);
+        REQUIRE(marker_path.find('\'') == std::string::npos);
+        REQUIRE(git({"config", "filter.marca.clean", "touch '" + marker_path + "'; cat"}));
+        fixture.file(".gitattributes", "a.txt filter=marca\n");
+        // Solo git lo oculta: si glob o grep no pasaran por git ls-files, saldría en su resultado.
+        fixture.file(".gitignore", "ignorado.txt\n");
+        fixture.file("ignorado.txt", "contenido-dos\n");
+        // Mismo tamaño y otro contenido: con otro tamaño git status ya sabe que cambió sin leerlo
+        // y no corre el filtro; así tiene que comparar el contenido (el control lo confirma).
+        fixture.file("a.txt", "contenido-dos\n");
+        REQUIRE_FALSE(fs::exists(marker));
+        return true;
     }
 };
 

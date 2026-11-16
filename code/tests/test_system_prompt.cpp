@@ -522,3 +522,22 @@ TEST_CASE("system prompt con git real", "[system_prompt][git]") {
         CHECK_FALSE(contains(prompt.text, "- Git:"));
     }
 }
+
+TEST_CASE("system prompt con git real: el filtro clean del .git/config no corre",
+          "[system_prompt][git][filtro]") {
+    if (chatbot::current_os() == chatbot::Os::Windows ||
+        !chatbot::process::find_in_path("git").has_value()) {
+        SKIP("sin git en el PATH (o Windows, donde no se lanzan programas)");
+    }
+    tool_test::CleanFilterRepo repo;
+    if (!repo.ready) {
+        SKIP("git init falló");
+    }
+    SystemPromptOptions options;
+    options.now = [] { return kNow; };
+    const CodeSystemPrompt prompt = build(repo.fixture, options);
+    CHECK(contains(prompt.text, "- Git: repository status not read, because the repository's "
+                                "git configuration defines clean/process filters.\n"));
+    CHECK_FALSE(fs::exists(repo.marker));
+    repo.check_status_runs_filter();
+}

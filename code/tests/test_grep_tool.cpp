@@ -291,6 +291,21 @@ TEST_CASE("grep respeta .gitignore", "[grep][git]") {
     CHECK(grep(fixture, rg, R"({"pattern": "clave"})").text == "a.txt");
 }
 
+TEST_CASE("grep con la lista de git no corre el filtro clean del .git/config",
+          "[grep][git][filtro]") {
+    if (chatbot::current_os() == chatbot::Os::Windows ||
+        !chatbot::process::find_in_path("git").has_value()) {
+        SKIP("sin git en el PATH (o Windows, donde no se lanzan programas)");
+    }
+    tool_test::CleanFilterRepo repo;
+    if (!repo.ready) {
+        SKIP("git init falló");
+    }
+    CHECK(grep(repo.fixture, std::nullopt, R"({"pattern": "contenido-dos"})").text == "a.txt");
+    CHECK_FALSE(fs::exists(repo.marker));
+    repo.check_status_runs_filter();
+}
+
 // ---- Solo la búsqueda propia ---------------------------------------------------------------
 
 TEST_CASE("grep propio: salta las líneas de más de 4 KiB", "[grep]") {

@@ -289,3 +289,19 @@ TEST_CASE("glob con git real respeta .gitignore", "[glob][git]") {
     CHECK(result.status == ToolStatus::Ok);
     CHECK(sorted_lines(result.text) == std::vector<std::string>{"a.txt", "src/a.txt", "sub/b.txt"});
 }
+
+TEST_CASE("glob con git real no corre el filtro clean del .git/config", "[glob][git][filtro]") {
+    if (chatbot::current_os() == chatbot::Os::Windows ||
+        !chatbot::process::find_in_path("git").has_value()) {
+        SKIP("sin git en el PATH (o Windows, donde no se lanzan programas)");
+    }
+    tool_test::CleanFilterRepo repo;
+    if (!repo.ready) {
+        SKIP("git init falló");
+    }
+    const ToolResult result = repo.fixture.run("glob", R"({"pattern": "**/*.txt"})");
+    CHECK(result.status == ToolStatus::Ok);
+    CHECK(sorted_lines(result.text) == std::vector<std::string>{"a.txt", "src/a.txt"});
+    CHECK_FALSE(fs::exists(repo.marker));
+    repo.check_status_runs_filter();
+}
