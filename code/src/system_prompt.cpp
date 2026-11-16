@@ -204,9 +204,12 @@ std::string git_section(const ProjectRoot& root, const SystemPromptOptions& opti
             left <= std::chrono::milliseconds::zero()) {
             return {};
         }
+        // Sin submódulos: sus filtros vienen de otra configuración que la consulta de arriba no ve.
         const process::ProcessResult result =
             run_git(options.run_process, *git, root,
-                    {"-c", "color.status=false", "status", "--short", "--branch"}, left, cancel);
+                    {"-c", "color.status=false", "status", "--short", "--branch",
+                     "--ignore-submodules=all"},
+                    left, cancel);
         if (!result.ok()) {
             return {};
         }

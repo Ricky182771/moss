@@ -324,9 +324,10 @@ TEST_CASE("system prompt: git con rama y estado", "[system_prompt]") {
         CHECK(contains(prompt.text, "<git_status>\n M src/a.cpp\n?? nuevo.txt\n</git_status>"));
         // Por ruta absoluta, sin shell, en la raíz, con tiempo límite corto y cancelable.
         // Sin fsmonitor ni hooks del .git/config del proyecto, y sin las keys en el entorno.
+        // Sin entrar a submódulos: sus filtros no los ve la consulta de config.
         CHECK(git.argv == tool_test::git_argv("/fake/git", fixture.root,
                                               {"-c", "color.status=false", "status", "--short",
-                                               "--branch"}));
+                                               "--branch", "--ignore-submodules=all"}));
         tool_test::check_helper_environment(git.options);
         CHECK(git.options.timeout <= std::chrono::milliseconds{5000});
         CHECK(git.options.timeout > std::chrono::milliseconds::zero());
