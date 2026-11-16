@@ -6,6 +6,7 @@
 #include "code_mode.h"
 
 #include "blocking_transport.hpp"
+#include "code_mode_fakes.hpp"
 #include "fake_transport.hpp"
 #include "session_fakes.hpp"
 #include "temp_dir.hpp"
@@ -36,175 +37,20 @@ namespace {
 
 using chatbot::HttpResponse;
 using chatbot::Role;
-using chatbot::cli::CodeMode;
-using chatbot::cli::CodeModeEnvironment;
-using chatbot::cli::CodeProject;
 using chatbot::cli::Entry;
 using chatbot::cli::EntryKind;
 using chatbot::cli::TaskItem;
 using chatbot::cli::TaskState;
 using chatbot::cli::ToolState;
 using chatbot::code::LoopState;
+using chatbot_test::answer;
+using chatbot_test::calls;
+using chatbot_test::kNvidiaKey;
+using chatbot_test::utf8;
+using chatbot_test::write_file;
+using Harness = chatbot_test::CodeModeHarness;
 using json = nlohmann::json;
 namespace fs = std::filesystem;
-
-// --- Guiones SSE (los de test_code_command.cpp, que no se toca, más varias llamadas) ---
-
-std::string chunk(json delta) {
-    json choice = json::object();
-    choice["delta"] = std::move(delta);
-    json body = json::object();
-    body["choices"] = json::array({choice});
-    return "data: " + body.dump() + "\n\n";
-}
-
-const std::string kDone = "data: [DONE]\n\n";
-
-HttpResponse ok(std::string body) {
-    return HttpResponse{200, std::move(body), std::nullopt, false, ""};
-}
-
-HttpResponse answer(const std::string& text) {
-    return ok(chunk({{"content", text}}) + kDone);
-}
-
-struct Call {
-    std::string name;
-    std::string arguments;
-};
-
-/// Una respuesta con texto opcional antes y estas llamadas, cada una en su pedazo.
-HttpResponse calls(const std::vector<Call>& list, const std::string& text = {}) {
-    std::string flow = text.empty() ? std::string{} : chunk({{"content", text}});
-    for (std::size_t index = 0; index < list.size(); ++index) {
-        json function = json::object();
-        function["name"] = list[index].name;
-        function["arguments"] = list[index].arguments;
-        json call = json::object();
-        call["index"] = index;
-        call["id"] = "call_" + std::to_string(index) + "_" + list[index].name;
-        call["type"] = "function";
-        call["function"] = function;
-        flow += chunk({{"tool_calls", json::array({call})}});
-    }
-    return ok(flow + "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\n" +
-              kDone);
-}
-
-void write_file(const fs::path& path, const std::string& text) {
-    std::ofstream{path, std::ios::binary} << text;
-}
-
-std::string utf8(const fs::path& path) {
-    const std::u8string text = path.u8string();
-    return {text.begin(), text.end()};
-}
-
-constexpr const char* kNvidiaKey = "sk-clave-secreta-de-prueba-1234";
-
-/// Lo que comparte run_process con la prueba (corre en el hilo de trabajo).
-struct GitProbe {
-    bool block = false;           ///< ls-files espera la cancelación (si no, git "no existe").
-    chatbot::CancelToken listing; ///< Aviso: glob pidió la lista a git.
-};
-
-/// Un CodeMode sobre un proyecto temporal; la configuración y las conversaciones en otra
-/// carpeta (SessionFakes).
-struct Harness {
-    chatbot_test::SessionFakes fakes;
-    chatbot_test::ScopedTempDir projects;
-    fs::path project = projects.path() / "proy";
-    chatbot_test::TaskQueue queue;
-    std::shared_ptr<GitProbe> git = std::make_shared<GitProbe>();
-    std::string home;     ///< CodeModeEnvironment::home (el aviso).
-    std::string display;  ///< SessionEnvironment::home (el título).
-    std::vector<std::optional<std::string>> finished; ///< Lo de cada OnFinished.
-    std::unique_ptr<CodeMode> mode;
-
-    Harness() {
-        fs::create_directories(project);
-        write_file(project / "a.txt", "alfa\nbeta\n");
-        write_file(project / "b.txt", "gamma\n");
-    }
-
-    CodeModeEnvironment environment() {
-        chatbot::cli::SessionEnvironment session = fakes.environment();
-        session.home = display;
-        return CodeModeEnvironment{
-            .session = std::move(session),
-            .app_data_dir = std::nullopt,
-            .portable_dir = std::nullopt,
-            .home = home,
-        };
-    }
-
-    /// Como la pantalla: open_code_project y luego CodeMode. git no existe, salvo con
-    /// git->block: entonces el ls-files de glob espera hasta que lo cancelan.
-    void start(const chatbot::Config& config) {
-        CodeModeEnvironment env = environment();
-        const chatbot::Result<CodeProject> opened = chatbot::cli::open_code_project(
-            utf8(project), chatbot::cli::code_paths(env), [] { return std::time_t{1700000000}; });
-        REQUIRE(opened.is_ok());
-        CodeProject value = opened.value();
-        value.prompt_options.git_path = "/fake/git";
-        value.prompt_options.run_process = [probe = git](
-                                               const std::vector<std::string>& argv,
-                                               const chatbot::process::ProcessOptions& options) {
-            chatbot::process::ProcessResult result;
-            result.status = chatbot::process::ProcessResult::Status::NotFound;
-            if (!probe->block || std::find(argv.begin(), argv.end(), "ls-files") == argv.end()) {
-                return result;
-            }
-            probe->listing.cancel();
-            const auto deadline =
-                std::chrono::steady_clock::now() + 2 * chatbot_test::kThreadTimeout;
-            while (options.cancel != nullptr &&
-                   !options.cancel->wait_for(std::chrono::milliseconds{20}) &&
-                   std::chrono::steady_clock::now() < deadline) {
-            }
-            result.status = chatbot::process::ProcessResult::Status::Cancelled;
-            return result;
-        };
-        mode = std::make_unique<CodeMode>(
-            std::move(env), config, std::move(value),
-            [this](std::function<void()> task) { queue.post(std::move(task)); },
-            [this](std::optional<std::string> restored) { finished.push_back(std::move(restored)); });
-    }
-
-    void start() { start(chatbot_test::test_config()); }
-
-    /// Vacía la cola hasta el fin del turno número count + 1.
-    bool wait_turn(std::size_t count) {
-        return queue.run_until([this, count] { return finished.size() > count; });
-    }
-
-    void run_turn(const std::string& text) {
-        const std::size_t count = finished.size();
-        REQUIRE(mode->send(text));
-        REQUIRE(wait_turn(count));
-    }
-
-    [[nodiscard]] const std::vector<Entry>& entries() const { return mode->entries(); }
-
-    [[nodiscard]] std::vector<EntryKind> kinds() const {
-        std::vector<EntryKind> result;
-        for (const Entry& entry : entries()) {
-            result.push_back(entry.kind);
-        }
-        return result;
-    }
-
-    /// Con key de NVIDIA guardada y config.json en nvidia/m1 (como test_session).
-    void save_nvidia() const {
-        chatbot::Credentials credentials;
-        credentials.keys["nvidia"] = kNvidiaKey;
-        REQUIRE_FALSE(chatbot::save_credentials(fakes.credentials_path(), credentials).has_value());
-        REQUIRE_FALSE(chatbot::save_config_file(fakes.config_path(),
-                                                {"nvidia", "https://integrate.api.nvidia.com/v1",
-                                                 "m1"})
-                          .has_value());
-    }
-};
 
 /// El historial que se puede mandar: ningún User al final ni dos seguidos, y cada llamada con
 /// su resultado justo después.

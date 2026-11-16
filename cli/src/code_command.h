@@ -15,8 +15,8 @@
 #include <string>
 #include <vector>
 
-/// moss code (guias/18-moss-code.md): el modo código. En C1 solo existe la
-/// forma sin pantalla, moss code [carpeta] -p <texto>. Sin FTXUI.
+/// moss code (guias/18-moss-code.md): el modo código. Aquí, la forma sin pantalla,
+/// moss code [carpeta] -p <texto>; la pantalla es code_screen.h. Sin FTXUI.
 namespace chatbot::cli {
 
 /// Códigos de salida de moss code -p (los de sysexits.h donde aplica).
@@ -47,15 +47,20 @@ struct CodeEnvironment {
     std::function<std::time_t()> now;
 };
 
-/// Corre moss code (line.kind == Code) y devuelve el código de salida: 0 respuesta final; 1 error
-/// del modelo, de configuración o un límite del turno; 2 sin -p (todavía no hay pantalla);
-/// 130 interrumpido. Carpeta: line.folder o la actual. Sin Moss Code en la compilación
-/// (CHATBOT_BUILD_CODE=OFF) esta función no existe: solo run_code_command.
+/// Corre moss code -p (line.kind == Code, con line.prompt) y devuelve el código de salida:
+/// 0 respuesta final; 1 error del modelo, de configuración o un límite del turno (también sin
+/// prompt, que no debe llegar aquí); 130 interrumpido. Carpeta: line.folder o la actual. Sin Moss
+/// Code en la compilación (CHATBOT_BUILD_CODE=OFF) esta función no existe: solo run_code_command.
 [[nodiscard]] int run_code(const CommandLine& line, CodeEnvironment& environment);
 
 /// run_code con el sistema real (flujos estándar, configuración de la app y Ctrl+C). Con
 /// CHATBOT_BUILD_CODE=OFF dice "Moss Code no está incluido en esta compilación." y devuelve 69.
 [[nodiscard]] int run_code_command(const CommandLine& line);
+
+/// moss code [carpeta] sin -p: la pantalla de Moss Code (code_screen.cpp, en el ejecutable moss).
+/// Errores de arranque por stderr antes de abrirla (salida 1); al cerrarla, 0. Con
+/// CHATBOT_BUILD_CODE=OFF, lo mismo que run_code_command (69).
+[[nodiscard]] int run_code_screen(const std::string& folder);
 
 } // namespace chatbot::cli
 

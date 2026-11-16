@@ -12,6 +12,7 @@
 #include "chatbot/child_process.h"
 #include "block_actions.h"
 #include "clipboard.h"
+#include "code_command.h"
 #include "command_menu.h"
 #include "command_menu_view.h"
 #include "model_picker.h"
@@ -68,7 +69,6 @@
 #include <cstddef>
 #include <cstdlib>
 #include <ctime>
-#include <iostream>
 #include <iterator>
 #include <memory>
 #include <optional>
@@ -95,8 +95,8 @@ int main(int argc, char** argv) {
     const chatbot::ConsoleUtf8Scope console_utf8;
     // moss --help y moss <addon> [argumentos] (este se reemplaza por
     // el addon): antes de tocar la consola, la configuración o la pantalla.
-    if (const std::optional<int> code =
-            chatbot::cli::run_command_line(std::vector<std::string>(argv + 1, argv + argc))) {
+    const std::vector<std::string> args(argv + 1, argv + argc);
+    if (const std::optional<int> code = chatbot::cli::run_command_line(args)) {
         return *code;
     }
     // Windows: sin ENABLE_PROCESSED_INPUT, Ctrl+C llega como tecla y sale por
@@ -105,6 +105,11 @@ int main(int argc, char** argv) {
     // después de que el runner cancela y hace join, así que Ctrl+C durante
     // ese join tampoco mata el proceso.
     const chatbot::ConsoleInputScope console_input;
+    // moss code [carpeta] sin -p: la pantalla de Moss Code (code_command.h).
+    if (const chatbot::cli::CommandLine line = chatbot::cli::parse_command_line(args);
+        line.kind == chatbot::cli::CommandLine::Kind::Code) {
+        return chatbot::cli::run_code_screen(line.folder);
+    }
 
     // Modo portable y configuración (app_startup.h), antes de tocar la
     // terminal: si fallan, el error sale por stderr sin abrir la pantalla

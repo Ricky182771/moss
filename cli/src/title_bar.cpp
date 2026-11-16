@@ -19,7 +19,7 @@ ftxui::Element title_bar(std::string_view title, int width, const Palette& palet
     const int title_width = ftxui::string_width(clean);
     const int button_width = ftxui::string_width(std::string{kExportLabel});
     // El botón, con un espacio de separación, solo si cabe junto al título entero.
-    const bool show_button = title_width + 1 + button_width <= width;
+    const bool show_button = button.shown && title_width + 1 + button_width <= width;
     const int used = title_width + (show_button ? 1 + button_width : 0);
     std::string_view help = help_text.full;
     if (used + 1 + ftxui::string_width(help) > width) {

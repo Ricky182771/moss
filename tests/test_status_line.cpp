@@ -83,3 +83,94 @@ TEST_CASE("estado: sin partes mide una fila", "[estado]") {
     element->ComputeRequirement();
     CHECK(element->requirement().min_y == 1);
 }
+
+namespace {
+
+using chatbot::cli::StatusZones;
+
+std::string draw_zones(const StatusZones& zones, int width) {
+    ftxui::Screen screen(width, 1);
+    ftxui::Render(screen, chatbot::cli::zoned_status_line(zones, width));
+    std::string text;
+    for (int x = 0; x < width; ++x) {
+        const std::string& character = screen.CellAt(x, 0).character;
+        text += character.empty() ? std::string{" "} : character;
+    }
+    text.erase(text.find_last_not_of(' ') + 1);
+    return text;
+}
+
+/// Modo (12 columnas), "Pensando…" (9) con su pista (20) y el modelo (16): 63 en total.
+StatusZones thinking() {
+    StatusZones zones;
+    zones.left = {"Solo lectura"};
+    zones.activity = "Pensando…";
+    zones.hint = " (Esc para cancelar)";
+    zones.right = {"modelo-de-prueba"};
+    return zones;
+}
+
+} // namespace
+
+TEST_CASE("estado en zonas: el modo a la izquierda, la actividad y el modelo a la derecha",
+          "[estado][zonas]") {
+    const int width = GENERATE(63, 80, 100);
+    INFO(width << " columnas");
+    const std::string row = draw_zones(thinking(), width);
+    CHECK(row.starts_with("Solo lectura   Pensando… (Esc para cancelar)"));
+    CHECK(row.ends_with("modelo-de-prueba"));
+    CHECK(ftxui::string_width(row) == width); // El modelo pegado al borde derecho.
+}
+
+TEST_CASE("estado en zonas: en angosto se quita la pista, luego el modelo y luego el modo",
+          "[estado][zonas]") {
+    // 62: sin la pista; 12 + 3 + 9 + 3 + 16 = 43 todavía con el modelo.
+    for (const int width : {62, 43}) {
+        INFO(width << " columnas");
+        const std::string row = draw_zones(thinking(), width);
+        CHECK(row.starts_with("Solo lectura   Pensando…"));
+        CHECK(row.find("(Esc") == std::string::npos);
+        CHECK(row.ends_with("   modelo-de-prueba"));
+    }
+    // 42: sin el modelo; 12 + 3 + 9 = 24 todavía con el modo.
+    CHECK(draw_zones(thinking(), 42) == "Solo lectura   Pensando…");
+    CHECK(draw_zones(thinking(), 24) == "Solo lectura   Pensando…");
+    // 23: solo la actividad, que nunca se quita.
+    CHECK(draw_zones(thinking(), 23) == "Pensando…");
+    CHECK(draw_zones(thinking(), 5).starts_with("Pensa"));
+}
+
+TEST_CASE("estado en zonas: sin turno, el modo y el modelo", "[estado][zonas]") {
+    StatusZones zones = thinking();
+    zones.activity.clear(); // La pista sola no aparece.
+    CHECK(draw_zones(zones, 31) == "Solo lectura   modelo-de-prueba");
+    CHECK(draw_zones(zones, 40).ends_with("modelo-de-prueba"));
+    CHECK(draw_zones(zones, 40).find("(Esc") == std::string::npos);
+    CHECK(draw_zones(zones, 30) == "Solo lectura");
+    CHECK(draw_zones(zones, 11).empty()); // Solo el centro (vacío) en la última opción.
+}
+
+TEST_CASE("estado en zonas: un aviso largo quita los lados y se recorta; los indicadores no",
+          "[estado][zonas]") {
+    StatusZones zones = thinking();
+    const std::string notice(60, 'a');
+    zones.center = {{notice, ftxui::bold}, {"↓ Hay más abajo (End)", ftxui::bold, true}};
+    // 9 + 3 + 60 + 3 + 21 = 96 > 80: sin modo ni modelo; el aviso usa lo que sobra.
+    const std::string row = draw_zones(zones, 80);
+    CHECK(row.starts_with("Pensando…   aaa"));
+    CHECK(row.find("…   ↓ Hay más abajo (End)") != std::string::npos);
+    CHECK(row.find("Solo lectura") == std::string::npos);
+    CHECK(row.find("modelo-de-prueba") == std::string::npos);
+    // Si cabe todo, conviven (y la pista va con la actividad).
+    zones.center = {{"Guardado.", ftxui::bold}, {"↓ Hay más abajo (End)", ftxui::bold, true}};
+    const std::string wide = draw_zones(zones, 120);
+    CHECK(wide.starts_with(
+        "Solo lectura   Pensando… (Esc para cancelar)   Guardado.   ↓ Hay más abajo (End)"));
+    CHECK(wide.ends_with("modelo-de-prueba"));
+}
+
+TEST_CASE("estado en zonas: sin partes mide una fila", "[estado][zonas]") {
+    ftxui::Element element = chatbot::cli::zoned_status_line(StatusZones{}, 40);
+    element->ComputeRequirement();
+    CHECK(element->requirement().min_y == 1);
+}

@@ -10,7 +10,7 @@
 # - Modo portable (moss.portable): no busca en el PATH → 69, "junto a
 #   moss." sin "ni en el PATH".
 # - Sin addon: 69 con el mensaje. Argumento desconocido: 2 con el uso.
-# - moss code sin -p o con -p sin texto: 2 (BUILD_CODE=ON; sin Moss Code, el primero da 69).
+# - moss code sin -p y sin terminal ni configuración: 1 (sin Moss Code, 69); con -p sin texto: 2.
 # - Windows: 1 con "Los addons todavía no están disponibles en Windows.".
 
 foreach(variable CHATBOT WORK)
@@ -132,13 +132,14 @@ expect("argumento desconocido" 2)
 expect_text("argumento desconocido" "${err}" "argumento desconocido: --nada")
 expect_text("argumento desconocido" "${err}" "Uso:")
 
-# moss code: sin red ni configuración. Sin -p, la pantalla llega en C2; -p sin texto es uso
-# incorrecto. Sin Moss Code en la compilación, 69.
+# moss code: sin red ni configuración. Sin -p es la pantalla: sin terminal y sin key ni modelo,
+# el error de configuración antes de abrirla (1), como el chat; -p sin texto es uso incorrecto.
+# Sin Moss Code en la compilación, 69.
 copy_chatbot(code moss)
 run("${moss}" "${empty_path}" code)
 if(BUILD_CODE)
-    expect("code sin -p" 2)
-    expect_text("code sin -p" "${err}" "La pantalla de Moss Code llega en C2")
+    expect("code sin -p" 1)
+    expect_text("code sin -p" "${err}" "[error de configuración]")
 else()
     expect("code sin Moss Code" 69)
     expect_text("code sin Moss Code" "${err}" "Moss Code no está incluido en esta compilación.")

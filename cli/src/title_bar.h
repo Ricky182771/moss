@@ -15,6 +15,7 @@ struct ExportButton {
     /// (input_placeholder) y sin acción.
     bool enabled = false;
     bool hovered = false; ///< El puntero está encima (con enabled, en el color de selección).
+    bool shown = true;    ///< false: sin botón (el modo código no exporta).
 };
 
 /// Etiqueta del botón de exportar.
@@ -26,8 +27,8 @@ struct TitleHelp {
     std::string_view short_form;
 };
 
-/// Título a la izquierda; [Exportar] y la ayuda de teclas (help) a la
-/// derecha. El título ocupa primero el ancho, luego el botón y al final la
+/// Título a la izquierda; [Exportar] (si button.shown) y la ayuda de teclas
+/// (help) a la derecha. El título ocupa primero el ancho, luego el botón y al final la
 /// ayuda: la ayuda se acorta o desaparece antes que el botón, y el botón
 /// desaparece antes de recortar el título con puntos suspensivos. box queda
 /// con la caja del botón al dibujar la barra (con reflect), o vacía si no cupo.

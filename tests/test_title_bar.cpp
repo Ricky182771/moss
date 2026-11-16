@@ -159,3 +159,16 @@ TEST_CASE("barra de título: la ayuda larga y la corta llegan como dato", "[titu
     CHECK(empty.ends_with("[Exportar]"));
     CHECK(empty.find("Ctrl") == std::string::npos);
 }
+
+TEST_CASE("barra de título: sin [Exportar] (modo código), la ayuda usa su lugar", "[titulo]") {
+    const chatbot::cli::TitleHelp help{"Ctrl+O salida completa", "Ctrl+O"};
+    const chatbot::cli::ExportButton hidden{.shown = false};
+    // 9 + 1 + 22 = 32: con el botón no cabría la larga.
+    const Drawn wide = draw_bar("Moss Code", 32, hidden, chatbot::cli::terminal_palette(), help);
+    CHECK(wide.text.ends_with("Moss Code Ctrl+O salida completa"));
+    CHECK(wide.text.find("[Exportar]") == std::string::npos);
+    CHECK(wide.box.x_max < wide.box.x_min); // Sin caja que pulsar.
+    const Drawn narrow = draw_bar("Moss Code", 20, hidden, chatbot::cli::terminal_palette(), help);
+    CHECK(narrow.text.ends_with("Ctrl+O"));
+    CHECK(narrow.text.find("[Exportar]") == std::string::npos);
+}

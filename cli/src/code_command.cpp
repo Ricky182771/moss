@@ -91,10 +91,6 @@ constexpr std::chrono::milliseconds kPollInterval{50};
 
 int run_code(const CommandLine& line, CodeEnvironment& environment) {
     std::ostream& err = environment.err;
-    if (!line.prompt.has_value()) {
-        err << "La pantalla de Moss Code llega en C2; por ahora usa: moss code -p \"…\"\n";
-        return kExitUsage;
-    }
 
     // Configuración, como la app (también en portable): sin key o sin modelo, el error Config.
     const Result<Config> loaded = environment.load_config();
@@ -159,7 +155,7 @@ int run_code(const CommandLine& line, CodeEnvironment& environment) {
     if (session.instructions().instructions_truncated) {
         err << kInstructionsTruncated << '\n';
     }
-    if (!session.send(*line.prompt)) {
+    if (!session.send(line.prompt.value_or(std::string{}))) {
         err << "[Config] No se pudo empezar el turno.\n";
         return kExitCodeError;
     }

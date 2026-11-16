@@ -425,11 +425,3 @@ TEST_CASE("moss code -p: Ctrl+C con una herramienta pendiente sale con 130", "[c
     CHECK(out.str().empty());
 }
 
-TEST_CASE("moss code sin -p: la pantalla llega en C2", "[code][cli]") {
-    const Layout layout;
-    const Outcome result = run(layout, {layout.project.string()}, scripted({}));
-    CHECK(result.code == 2);
-    CHECK(result.out.empty());
-    CHECK(result.err ==
-          "La pantalla de Moss Code llega en C2; por ahora usa: moss code -p \"…\"\n");
-}

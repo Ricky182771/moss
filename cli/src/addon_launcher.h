@@ -68,9 +68,9 @@ using AddonLocator =
 /// (locate). En Windows no busca: dice que los addons no están disponibles.
 [[nodiscard]] std::string usage_text(Os os, bool portable, const AddonLocator& locate);
 
-/// Atiende la línea de comandos: nullopt si hay que abrir la interfaz; si
-/// no, el código de salida (la ayuda, un error de uso, un addon que no está,
-/// moss code). Con un addon que sí está, no regresa: el proceso se reemplaza por él.
+/// Atiende la línea de comandos: nullopt si hay que abrir una pantalla (el
+/// chat o, con moss code sin -p, la de Moss Code); si no, el código de salida
+/// (la ayuda, un error de uso, un addon que no está, moss code -p). Con un addon que sí está, no regresa: el proceso se reemplaza por él.
 [[nodiscard]] std::optional<int> run_command_line(const std::vector<std::string>& args);
 
 } // namespace chatbot::cli

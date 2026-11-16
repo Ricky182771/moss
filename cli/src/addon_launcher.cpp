@@ -113,6 +113,7 @@ std::string usage_text(Os os, bool portable, const AddonLocator& locate) {
         "Uso:\n"
         "  moss                       abre el chat\n"
         "  moss <addon> [argumentos]  arranca un addon\n"
+        "  moss code [carpeta]        Moss Code: el modo de programación (solo lectura)\n"
         "  moss code [carpeta] -p <texto>  Moss Code sin pantalla: imprime la respuesta\n"
         "  moss --help                esta ayuda\n"
         "  moss --version             la versión\n"
@@ -153,7 +154,8 @@ std::optional<int> run_command_line(const std::vector<std::string>& args) {
                   << usage_text(current_os(), portable, locate_addon);
         return kExitUsage;
     case CommandLine::Kind::Code:
-        return run_code_command(line);
+        // Sin -p, la pantalla: la abre main.cpp (run_code_screen).
+        return line.prompt.has_value() ? std::optional<int>{run_code_command(line)} : std::nullopt;
     case CommandLine::Kind::Addon:
         break;
     }

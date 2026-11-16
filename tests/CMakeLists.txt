@@ -121,6 +121,14 @@ target_link_libraries(chatbot_ui_tests PRIVATE
 # Archivos de tests/data (solo lectura).
 target_compile_definitions(chatbot_ui_tests PRIVATE
     CHATBOT_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
+# La pantalla de Moss Code (code_screen.h) con CodeMode y clientes falsos: solo con Moss Code.
+if(CHATBOT_BUILD_CODE)
+    target_sources(chatbot_ui_tests PRIVATE
+        ${PROJECT_SOURCE_DIR}/cli/src/code_screen.cpp
+        ${PROJECT_SOURCE_DIR}/cli/src/settings_binding.cpp
+        test_code_screen.cpp)
+    target_link_libraries(chatbot_ui_tests PRIVATE chatbot::code)
+endif()
 chatbot_set_warnings(chatbot_ui_tests)
 chatbot_windows_manifest(chatbot_ui_tests)
 add_test(NAME chatbot_ui_tests COMMAND chatbot_ui_tests)

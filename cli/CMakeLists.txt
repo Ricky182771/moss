@@ -133,6 +133,12 @@ chatbot_set_warnings(chatbot_cli_ui)
 add_executable(moss src/main.cpp src/addons_panel.cpp src/key_events.cpp src/prompt_menus.cpp
     src/screen_input.cpp src/settings_binding.cpp src/settings_screen.cpp src/text_area.cpp)
 target_link_libraries(moss PRIVATE chatbot_cli_lib chatbot_cli_ui ftxui::component)
+# La pantalla de Moss Code (moss code sin -p); sin CHATBOT_BUILD_CODE, run_code_screen es el
+# aviso de code_command_stub.cpp.
+if(CHATBOT_BUILD_CODE)
+    target_sources(moss PRIVATE src/code_screen.cpp)
+    target_link_libraries(moss PRIVATE chatbot::code)
+endif()
 chatbot_set_warnings(moss)
 chatbot_windows_manifest(moss)
 chatbot_windows_version(moss "Moss — terminal" ICON)

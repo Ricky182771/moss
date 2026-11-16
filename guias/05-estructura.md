@@ -159,15 +159,16 @@ moss/
 │       ├── sidebar_view.h/.cpp        # dibujo de la barra de conversaciones (chatbot_cli_ui)
 │       ├── command_menu_view.h/.cpp   # dibujo del menú de comandos (chatbot_cli_ui)
 │       ├── model_picker_view.h/.cpp   # dibujo del selector de /model, en el lugar del menú de comandos (chatbot_cli_ui)
-│       ├── title_bar.h/.cpp           # barra de título con [Exportar]; la ayuda de teclas (TitleHelp) llega como dato (chatbot_cli_ui)
+│       ├── title_bar.h/.cpp           # barra de título con [Exportar] (opcional); la ayuda de teclas (TitleHelp) llega como dato (chatbot_cli_ui)
 │       ├── scroll.h/.cpp              # Scroll: posición del historial en pantalla (chatbot_cli_ui)
 │       ├── appearance_startup.h/.cpp  # load_startup_appearance: tema, fondo, símbolos y su aviso al arrancar (chatbot_cli_ui)
 │       ├── key_events.h/.cpp          # ftxui::Event → ListKey, PasteKey y KeyLogEvent (ejecutable moss, ftxui::component)
 │       ├── screen_input.h/.cpp        # de las dos pantallas: screen_post, ScreenControl (loop, Ctrl+C, Ctrl+Z), ScreenInput (pegado, registro de teclas), teclas de la caja, del historial y rueda (ejecutable moss y chatbot_ui_tests, ftxui::component)
 │       ├── prompt_menus.h/.cpp        # de las dos pantallas: menú de "/" y selector de /model sobre la caja, teclas y ratón (ejecutable moss, ftxui::component)
 │       ├── settings_binding.h/.cpp    # de las dos pantallas: SettingsScreen cableada contra una Session (guardados, open_settings) (ejecutable moss, ftxui::component)
+│       ├── code_screen.h/.cpp         # pantalla de Moss Code (moss code sin -p): CodeScreen sin la terminal y run_code_screen; solo con CHATBOT_BUILD_CODE (ejecutable moss y chatbot_ui_tests, ftxui::component)
 │       ├── command_mode.h             # CommandMode (chat, código, ambos) de cada comando de kCommands (sin FTXUI)
-│       ├── status_line.h/.cpp         # línea de estado: indicadores reservados, avisos recortados con … (chatbot_cli_ui)
+│       ├── status_line.h/.cpp         # línea de estado: indicadores reservados, avisos recortados con …; zoned_status_line, la de tres zonas del modo código (chatbot_cli_ui)
 │       └── main.cpp             # interfaz FTXUI (ejecutable moss)
 └── tests/                   # chatbot_tests (sin FTXUI), chatbot_markdown_tests (solo
     │                        # chatbot::markdown: test_markdown.cpp y test_source_blocks.cpp)
@@ -175,7 +176,8 @@ moss/
     │                        # contra la dirección de las dependencias (cmake -P, siempre)
     │                        # temp_dir.hpp, env_guard.hpp y posix_permissions.hpp: helpers
     │                        # portables; session_fakes.hpp: Session sin red (test_session.cpp
-    │                        # y chatbot_rpc_tests); test_platform.cpp: capa de plataforma;
+    │                        # y chatbot_rpc_tests); code_mode_fakes.hpp: CodeMode sin red
+    │                        # (test_code_mode.cpp y test_code_screen.cpp); test_platform.cpp: capa de plataforma;
     │                        # test_glyphs.cpp: tabla, detección y recorrido de cli/src;
     │                        # test_text_edit.cpp (modelo, propiedades, incremental = completa,
     │                        # rendimiento) y test_text_area.cpp (componente): ajuste de línea;

@@ -26,6 +26,20 @@ struct StatusItem {
 /// siempre una fila.
 [[nodiscard]] ftxui::Element status_line(const std::vector<StatusItem>& items, int width);
 
+/// La línea de estado de tres zonas del modo código.
+struct StatusZones {
+    StatusItem left;     ///< El modo, a la izquierda (reserved no cuenta).
+    std::string activity; ///< "Pensando…", primero en el centro; vacío sin turno. Nunca se recorta.
+    std::string hint;    ///< Va pegado a activity (" (Esc para cancelar)") solo si cabe todo.
+    std::vector<StatusItem> center; ///< Después de activity: avisos e indicadores (status_line).
+    StatusItem right;    ///< El modelo, a la derecha (reserved no cuenta).
+};
+
+/// left, el centro y right separados por tres espacios, right pegado al borde derecho. Si no
+/// cabe todo a su ancho natural, se quita primero hint, luego right y luego left; con lo que
+/// queda, el centro es status_line (recorta los avisos y, al final, quita indicadores).
+[[nodiscard]] ftxui::Element zoned_status_line(const StatusZones& zones, int width);
+
 } // namespace chatbot::cli
 
 #endif // CHATBOT_CLI_STATUS_LINE_H
