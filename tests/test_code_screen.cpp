@@ -9,6 +9,7 @@
 #include "fake_transport.hpp"
 
 #include "chatbot/credentials.h"
+#include "chatbot/platform.h"
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
@@ -160,8 +161,13 @@ TEST_CASE("pantalla de Moss Code: tres pasos con tareas, a 100 y 80 columnas",
 
     const std::vector<std::string> rows = h.draw();
     // Título sin [Exportar], con la ayuda del modo código.
-    CHECK(rows[0].starts_with("Moss Code — ~/proy — modelo-de-prueba"));
-    CHECK(rows[0].ends_with("Ctrl+O salida completa"));
+    if (chatbot::current_os() == chatbot::Os::Windows) {
+        // En Windows la carpeta va completa y, tan larga, puede no dejar lugar a la ayuda.
+        CHECK(rows[0].starts_with("Moss Code — "));
+    } else {
+        CHECK(rows[0].starts_with("Moss Code — ~/proy — modelo-de-prueba"));
+        CHECK(rows[0].ends_with("Ctrl+O salida completa"));
+    }
     CHECK(rows[0].find("[Exportar]") == std::string::npos);
     // Historial: el arranque, el mensaje, las líneas de herramienta y la respuesta.
     CHECK(shows(rows, "Sin AGENTS.md en esta carpeta"));

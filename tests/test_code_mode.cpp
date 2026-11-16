@@ -13,6 +13,7 @@
 
 #include "chatbot/child_process.h"
 #include "chatbot/credentials.h"
+#include "chatbot/platform.h"
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
@@ -490,7 +491,13 @@ TEST_CASE("code_title abrevia la carpeta personal con ~", "[code_mode]") {
     Harness h;
     h.display = utf8(fs::canonical(h.projects.path()));
     h.start();
-    CHECK(h.mode->title() == "Moss Code — ~/proy — modelo-de-prueba");
+    if (chatbot::current_os() == chatbot::Os::Windows) {
+        // En Windows las rutas van completas, como en el chat.
+        CHECK(h.mode->title().starts_with("Moss Code — "));
+        CHECK(h.mode->title().ends_with("proy — modelo-de-prueba"));
+    } else {
+        CHECK(h.mode->title() == "Moss Code — ~/proy — modelo-de-prueba");
+    }
 }
 
 TEST_CASE("code_status: modo, actividad y modelo", "[code_mode]") {
