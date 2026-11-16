@@ -116,6 +116,7 @@ add_library(chatbot_cli_ui STATIC
     src/list_style.cpp
     src/sidebar_view.cpp
     src/status_line.cpp
+    src/task_list_view.cpp
     src/markdown_view.cpp
     src/scroll.cpp
     src/text_edit.cpp

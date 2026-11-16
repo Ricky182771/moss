@@ -33,6 +33,7 @@ $faltan = @(
     0x26A0, # Warning
     0x2611, # TaskDone
     0x2610, # TaskOpen
+    0x25D0, # TaskActive
     0x25B4, # DropdownOpen
     0x25BE, # DropdownClosed
     0x258D, # HeadingMark
@@ -41,6 +42,7 @@ $faltan = @(
     0x25AA, # BulletLevel3
     0x25B8, # ReasoningClosed
     0x2315, # SearchMark
+    0x23BF, # ToolResult
     0x256D, # RoundedTopLeft
     0x256E, # RoundedTopRight
     0x2570, # RoundedBottomLeft

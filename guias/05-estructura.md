@@ -150,6 +150,7 @@ moss/
 │       ├── settings_screen.h/.cpp     # pantalla de configuración (ejecutable moss, ftxui::component)
 │       ├── markdown_view.h/.cpp       # árbol de markdown → ftxui::Element (chatbot_cli_ui; namespace chatbot::md)
 │       ├── history_view.h/.cpp        # entradas de la conversación, con caché (chatbot_cli_ui)
+│       ├── task_list_view.h/.cpp      # lista de tareas del modo código, arriba de la caja (chatbot_cli_ui)
 │       ├── input_style.h/.cpp         # estilo de los campos de una línea de F2 (ftxui::Input), sin invertido (chatbot_cli_ui)
 │       ├── theme.h/.cpp               # tabla de temas, Palette, contraste WCAG (chatbot_cli_ui)
 │       ├── list_style.h/.cpp          # cursor, elegido, etiquetas y botones con foco (chatbot_cli_ui)

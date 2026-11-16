@@ -13,10 +13,12 @@
 
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -37,10 +39,22 @@ struct ButtonHit {
     /// Si es la línea "▸ Pensamiento" y no un botón: el índice de su entrada
     /// (Session::toggle_reasoning); block y action no cuentan.
     std::optional<std::size_t> reasoning;
+    /// Si es la línea "●" de una herramienta: el índice de su entrada (para
+    /// plegar o desplegar su salida); block y action no cuentan.
+    std::optional<std::size_t> tool;
 };
 
 /// Filas del pensamiento que se ven mientras llega sin texto todavía.
 inline constexpr int kLiveReasoningRows = 6;
+
+/// Cómo se ven el usuario y el asistente.
+enum class HistoryStyle : std::uint8_t {
+    Chat, ///< "Tú:" y "Asistente:" arriba de cada mensaje.
+    Code, ///< Modo código: "> texto" y el asistente sin etiqueta.
+};
+
+/// Pista de la línea "⎿" de la última herramienta con salida, plegada.
+inline constexpr std::string_view kToolOutputHint = "(Ctrl+O: salida completa)";
 
 /// Dibuja las entradas de la conversación. Las respuestas del asistente se
 /// muestran como markdown (también mientras llegan); las del usuario, los
@@ -67,6 +81,12 @@ inline constexpr int kLiveReasoningRows = 6;
 /// [✓]) hasta que el puntero sale del botón o pasan kCopiedFor, revisado en
 /// el siguiente cuadro (sin hilos ni temporizadores). Ni el puntero encima
 /// (hover) ni ese aviso vuelven a dibujar ninguna entrada.
+///
+/// Herramientas (EntryKind::Tool, solo en el modo código): "● resumen" en una
+/// fila (recortado con "…"), debajo "  ⎿ resultado" (o "corriendo…") y, si
+/// está desplegada, la salida completa como texto plano. Dos herramientas
+/// seguidas van sin la fila vacía entre ellas. La última con salida, plegada,
+/// lleva kToolOutputHint si cabe.
 ///
 /// Se usa solo desde el hilo de la interfaz.
 class HistoryView {
@@ -103,6 +123,8 @@ public:
     void show_copied(int block);
     /// true (por defecto) dibuja los botones de los bloques.
     void set_buttons_visible(bool visible) { buttons_visible_ = visible; }
+    /// HistoryStyle::Chat por defecto; cambiarlo vuelve a dibujar todo.
+    void set_style(HistoryStyle style) { style_ = style; }
 
     /// Bloques de código de la entrada i en el último render (vacío si no
     /// tiene o si se dibujó sin números).
@@ -116,6 +138,14 @@ public:
 private:
     class Picture;
 
+    /// Filas de la entrada que se pulsan: la línea del pensamiento o la "●"
+    /// de una herramienta (rows = 0: ninguna).
+    struct Toggle {
+        int top = 0;
+        int rows = 0;
+        bool tool = false;
+    };
+
     struct Cached {
         // Árbol de markdown (solo entradas del asistente).
         bool parsed = false;
@@ -126,6 +156,8 @@ private:
         int width = 0;
         std::string palette_key; ///< Palette::key() con que se dibujó.
         int first_code = 0;      ///< Número del primer bloque de código (0: sin números).
+        HistoryStyle style = HistoryStyle::Chat;
+        bool hint = false; ///< Con kToolOutputHint (si cupo).
         Entry drawn;
         /// Marcos de los bloques de código (md::render los llena al dibujar).
         std::vector<ftxui::Box> code_boxes;
@@ -138,15 +170,15 @@ private:
         std::shared_ptr<const ftxui::Screen> reasoning_image; ///< Ya dibujado, sin la sangría.
         int reasoning_width = 0;
         std::string reasoning_palette; ///< Palette::key() con que se dibujó.
-        /// Filas de la línea "▸ Pensamiento" en la entrada (0 si no hay).
-        int reasoning_rows = 0;
+        /// Lo que se pulsa en la entrada.
+        Toggle toggle;
     };
 
     const md::Document& document_for(Cached& cached, const std::string& text);
     ftxui::Element reasoning_element(Cached& cached, const Entry& entry, int width,
                                      const Palette& palette);
     ftxui::Element entry_element(Cached& cached, const Entry& entry, int width,
-                                 const Palette& palette, int first_code);
+                                 const Palette& palette, int first_code, bool hint);
 
     std::vector<Cached> cache_;
     Palette palette_; ///< La del último render, para los botones.
@@ -154,6 +186,7 @@ private:
     /// Botones del último cuadro: render() lo vacía y Picture::Render lo llena.
     std::vector<ButtonHit> hits_;
     bool buttons_visible_ = true;
+    HistoryStyle style_ = HistoryStyle::Chat;
     Clock clock_;
     int copied_block_ = 0; ///< Bloque con [✓ Copiado], o 0.
     std::chrono::steady_clock::time_point copied_at_;

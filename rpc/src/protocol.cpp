@@ -119,11 +119,21 @@ std::string_view entry_kind_name(cli::EntryKind kind) {
         return "notice";
     case cli::EntryKind::Sources:
         return "sources";
+    case cli::EntryKind::Tool:
+        break; // No sale del modo código: ver encode_entry.
     }
     return "notice";
 }
 
 Json encode_entry(const cli::Entry& entry) {
+    if (entry.kind == cli::EntryKind::Tool) {
+        // El chat nunca la produce. Si aun así llegara, va como un aviso
+        // vacío: conserva los índices de las demás y no expone nada de la
+        // herramienta (resumen, resultado ni salida).
+        cli::Entry hidden;
+        hidden.kind = cli::EntryKind::Notice;
+        return encode_entry(hidden);
+    }
     Json json{{"kind", std::string{entry_kind_name(entry.kind)}},
                         {"text", entry.text},
                         {"in_progress", entry.in_progress},

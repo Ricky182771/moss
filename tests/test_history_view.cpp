@@ -1140,3 +1140,337 @@ TEST_CASE("historial: pensamiento de 100 KB", "[historial][desempeno][pensamient
         CHECK(open_streaming < 50.0);
     }
 }
+
+// Modo código (C2): líneas de herramienta y estilo de los mensajes.
+
+namespace {
+
+using chatbot::cli::HistoryStyle;
+using chatbot::cli::ToolState;
+
+Entry tool(std::string summary, ToolState state, std::string result = {},
+           std::string output = {}, bool expanded = false) {
+    Entry entry;
+    entry.kind = EntryKind::Tool;
+    entry.tool.summary = std::move(summary);
+    entry.tool.state = state;
+    entry.tool.result = std::move(result);
+    entry.tool.output = std::move(output);
+    entry.tool.expanded = expanded;
+    return entry;
+}
+
+ftxui::Screen draw_screen(HistoryView& view, const std::vector<Entry>& entries, int width,
+                          const chatbot::cli::Palette& palette = chatbot::cli::terminal_palette()) {
+    ftxui::Element element = view.render(entries, width, palette);
+    ftxui::Screen screen = ftxui::Screen::Create(ftxui::Dimension::Fixed(width),
+                                                 ftxui::Dimension::Fit(element, true));
+    ftxui::Render(screen, element);
+    return screen;
+}
+
+std::vector<std::string> draw_rows(HistoryView& view, const std::vector<Entry>& entries,
+                                   int width,
+                                   const chatbot::cli::Palette& palette =
+                                       chatbot::cli::terminal_palette()) {
+    return rows_of(screen_text(draw_screen(view, entries, width, palette)));
+}
+
+} // namespace
+
+TEST_CASE("herramienta: corriendo, terminada, con error y desplegada", "[historial][code]") {
+    HistoryView view;
+    SECTION("corriendo: sin resultado todavía, \"corriendo…\"") {
+        CHECK(draw_rows(view, {tool("Leer cli/src/main.cpp (1–200)", ToolState::Running)}, 80) ==
+              std::vector<std::string>{"● Leer cli/src/main.cpp (1–200)", "  ⎿ corriendo…"});
+    }
+    SECTION("terminada sin salida: sin la pista") {
+        CHECK(draw_rows(view, {tool("Leer a.cpp (1–180)", ToolState::Done, "180 líneas")}, 80) ==
+              std::vector<std::string>{"● Leer a.cpp (1–180)", "  ⎿ 180 líneas"});
+    }
+    SECTION("terminada con salida: la pista de Ctrl+O si cabe") {
+        const Entry done = tool("Buscar \"trim_history\" en tests/", ToolState::Done,
+                                "3 archivos", "tests/a.cpp\ntests/b.cpp\ntests/c.cpp");
+        CHECK(draw_rows(view, {done}, 80) ==
+              std::vector<std::string>{"● Buscar \"trim_history\" en tests/",
+                                       "  ⎿ 3 archivos   (Ctrl+O: salida completa)"});
+        CHECK(draw_rows(view, {done}, 30)[1] == "  ⎿ 3 archivos");
+    }
+    SECTION("error: el texto en el color de error") {
+        const ftxui::Screen screen =
+            draw_screen(view, {tool("Leer x.cpp", ToolState::Failed, "No existe el archivo.")}, 80);
+        const std::vector<std::string> rows = rows_of(screen_text(screen));
+        CHECK(rows == std::vector<std::string>{"● Leer x.cpp", "  ⎿ No existe el archivo."});
+        const ftxui::Color error =
+            chatbot::cli::to_ftxui(chatbot::cli::terminal_palette().theme().error);
+        CHECK(screen.CellAt(4, 1).foreground_color == error);
+        CHECK(screen.CellAt(0, 0).foreground_color == error); // La "●" también.
+    }
+    SECTION("desplegada: la salida completa, filtrada y sin markdown, sin la pista") {
+        const std::vector<std::string> rows = draw_rows(
+            view,
+            {tool("Tareas", ToolState::Done, "3 líneas", "uno **no**\n\x1b[2Jdos\n  tres", true)},
+            40);
+        CHECK(rows == std::vector<std::string>{"● Tareas", "  ⎿ ▾ 3 líneas", "    uno **no**",
+                                               "    \xEF\xBF\xBD[2Jdos", "      tres"});
+    }
+    SECTION("resumen, resultado y salida que no son texto confiable") {
+        const std::string text = screen_text(draw_screen(
+            view,
+            {tool("Leer a\x1b[31m\nb", ToolState::Done, "x\x07y", "z\x9b", true)}, 40));
+        CHECK(text.find('\x1b') == std::string::npos);
+        CHECK(text.find('\x07') == std::string::npos);
+        CHECK(text.find("\xC2\x9B") == std::string::npos);
+    }
+}
+
+TEST_CASE("herramienta: un resumen largo es una sola fila con …", "[historial][code]") {
+    HistoryView view;
+    const std::string path =
+        "cli/src/una/carpeta/muy/profunda/con/nombres/largos/y/mas/carpetas/archivo_final.cpp";
+    const std::vector<std::string> rows = draw_rows(
+        view, {tool("Leer " + path + " (1–200)", ToolState::Done, "200 líneas")}, 80);
+    REQUIRE(rows.size() == 2);
+    CHECK(rows[0].rfind("● Leer cli/src/una/", 0) == 0);
+    CHECK(ftxui::string_width(rows[0]) == 80);
+    CHECK(rows[0].substr(rows[0].size() - std::string{"…"}.size()) == "…");
+    CHECK(rows[1] == "  ⎿ 200 líneas");
+    // Un resultado largo tampoco pasa de una fila.
+    const std::vector<std::string> long_result =
+        draw_rows(view, {tool("Ejecutar", ToolState::Failed, std::string(200, 'e'))}, 40);
+    CHECK(long_result.size() == 2);
+}
+
+TEST_CASE("herramienta: con símbolos Sencillos", "[historial][code][simbolos]") {
+    HistoryView view;
+    const chatbot::cli::Palette simple{chatbot::cli::default_theme(),
+                                       chatbot::cli::BackgroundMode::FromTheme,
+                                       chatbot::cli::Symbols::Simple};
+    CHECK(draw_rows(view, {tool("Leer a.cpp", ToolState::Done, "3 líneas")}, 40, simple) ==
+          std::vector<std::string>{"• Leer a.cpp", "  └ 3 líneas"});
+    CHECK(draw_rows(view, {tool("Leer a.cpp", ToolState::Done, "3 líneas", "x", true)}, 40,
+                    simple) == std::vector<std::string>{"• Leer a.cpp", "  └ v 3 líneas", "    x"});
+}
+
+TEST_CASE("herramienta: seguidas sin fila vacía, y la pista solo en la última con salida",
+          "[historial][code]") {
+    HistoryView view;
+    view.set_style(HistoryStyle::Code);
+    const std::vector<Entry> entries{
+        make(EntryKind::Assistant, "Voy a ver."),
+        tool("Buscar \"x\" en tests/", ToolState::Done, "3 archivos", "a\nb\nc"),
+        tool("Leer tests/a.cpp (1–180)", ToolState::Done, "180 líneas", "contenido"),
+        tool("Tareas", ToolState::Done, "2 tareas"),
+    };
+    CHECK(draw_rows(view, entries, 80) ==
+          std::vector<std::string>{"Voy a ver.", "", "● Buscar \"x\" en tests/", "  ⎿ 3 archivos",
+                                   "● Leer tests/a.cpp (1–180)",
+                                   "  ⎿ 180 líneas   (Ctrl+O: salida completa)", "● Tareas",
+                                   "  ⎿ 2 tareas"});
+}
+
+TEST_CASE("herramienta: la caché solo vuelve a dibujar la entrada que cambió",
+          "[historial][code]") {
+    HistoryView view;
+    std::vector<Entry> entries{make(EntryKind::User, "hola"),
+                               tool("Leer a.cpp", ToolState::Running),
+                               tool("Leer b.cpp", ToolState::Done, "2 líneas", "uno\ndos")};
+    (void)draw_rows(view, entries, 60);
+    CHECK(view.draw_count() == 3);
+    (void)draw_rows(view, entries, 60);
+    CHECK(view.draw_count() == 3);
+    entries[1].tool.state = ToolState::Done;
+    entries[1].tool.result = "1 línea";
+    (void)draw_rows(view, entries, 60);
+    CHECK(view.draw_count() == 4);
+    entries[2].tool.expanded = true;
+    CHECK(draw_rows(view, entries, 60).back() == "    dos");
+    CHECK(view.draw_count() == 5);
+    (void)draw_rows(view, entries, 60);
+    CHECK(view.draw_count() == 5);
+    // Otro estilo: todo de nuevo.
+    view.set_style(HistoryStyle::Code);
+    (void)draw_rows(view, entries, 60);
+    CHECK(view.draw_count() == 8);
+}
+
+TEST_CASE("herramienta: clic en la línea ●", "[historial][code]") {
+    HistoryView view;
+    const std::vector<Entry> entries{make(EntryKind::User, "hola"),
+                                     tool("Leer a.cpp", ToolState::Done, "2 líneas", "uno\ndos"),
+                                     tool("Leer b.cpp", ToolState::Done, "1 línea")};
+    std::vector<std::string> rows = draw_rows(view, entries, 40);
+    // "Tú:", "hola", "", "● Leer a.cpp", "  ⎿ ...", "● Leer b.cpp", "  ⎿ ...".
+    REQUIRE(rows.size() == 7);
+    REQUIRE(rows[3] == "● Leer a.cpp");
+    for (const int x : {0, 5, 39}) {
+        const std::optional<chatbot::cli::ButtonHit> hit = view.hit_test(x, 3);
+        REQUIRE(hit.has_value());
+        REQUIRE(hit->tool.has_value());
+        CHECK(*hit->tool == 1);
+        CHECK_FALSE(hit->reasoning.has_value());
+    }
+    REQUIRE(view.hit_test(2, 5).has_value());
+    CHECK(view.hit_test(2, 5)->tool == std::optional<std::size_t>{2});
+    for (const int y : {0, 1, 2, 4, 6}) {
+        CHECK_FALSE(view.hit_test(2, y).has_value());
+    }
+    // En estilo código, sin "Tú:": la línea sube.
+    view.set_style(HistoryStyle::Code);
+    rows = draw_rows(view, entries, 40);
+    REQUIRE(rows[2] == "● Leer a.cpp");
+    REQUIRE(view.hit_test(1, 2).has_value());
+    CHECK(view.hit_test(1, 2)->tool == std::optional<std::size_t>{1});
+    CHECK_FALSE(view.hit_test(1, 1).has_value());
+}
+
+TEST_CASE("estilo código: \"> \" para el usuario y el asistente sin etiqueta", "[historial][code]") {
+    HistoryView view;
+    view.set_style(HistoryStyle::Code);
+    Entry answer = make(EntryKind::Assistant, "Voy a ver **esto**.");
+    answer.reasoning = "pienso algo";
+    const std::vector<Entry> entries{
+        make(EntryKind::User, "Agrega una prueba\nde dos líneas"), answer,
+        tool("Buscar \"trim_history\" en tests/", ToolState::Done, "3 archivos"),
+        make(EntryKind::Assistant, "Listo."), make(EntryKind::Notice, "Respuesta cancelada.")};
+    CHECK(draw_rows(view, entries, 60) ==
+          std::vector<std::string>{"> Agrega una prueba", "  de dos líneas", "",
+                                   "▸ Pensamiento · 2 palabras", "Voy a ver esto.", "",
+                                   "● Buscar \"trim_history\" en tests/", "  ⎿ 3 archivos", "",
+                                   "Listo.", "", "Respuesta cancelada."});
+    // La línea del pensamiento se pulsa en su fila (sin "Asistente:" arriba).
+    const std::optional<chatbot::cli::ButtonHit> hit = view.hit_test(1, 3);
+    REQUIRE(hit.has_value());
+    CHECK(hit->reasoning == std::optional<std::size_t>{1});
+    CHECK_FALSE(view.hit_test(1, 4).has_value());
+}
+
+TEST_CASE("estilo chat: se dibuja exactamente como antes", "[historial][code]") {
+    Entry answer = make(EntryKind::Assistant, "Hola");
+    answer.reasoning = "pienso";
+    const std::vector<Entry> entries{make(EntryKind::User, "hola"), answer,
+                                     make(EntryKind::Notice, "aviso")};
+    HistoryView view;
+    const std::string before = draw(view, entries, 40);
+    CHECK(rows_of(before) == std::vector<std::string>{"Tú:", "hola", "", "Asistente:",
+                                                      "▸ Pensamiento · 1 palabra", "Hola", "",
+                                                      "aviso"});
+    view.set_style(HistoryStyle::Code);
+    CHECK(draw(view, entries, 40) != before);
+    view.set_style(HistoryStyle::Chat);
+    CHECK(draw(view, entries, 40) == before);
+    HistoryView fresh;
+    fresh.set_style(HistoryStyle::Chat);
+    CHECK(draw(fresh, entries, 40) == before);
+}
+
+TEST_CASE("herramienta: nunca sale del modo código", "[historial][code]") {
+    // Conversation (el chat) no tiene cómo crear una entrada Tool: después
+    // de todos sus mutadores, ninguna lo es, y lo que se guarda tampoco.
+    chatbot::cli::Conversation conversation{"sistema"};
+    REQUIRE(conversation.submit("uno").has_value());
+    conversation.append_reasoning("pienso");
+    conversation.append_delta("respuesta");
+    conversation.toggle_reasoning(1);
+    conversation.toggle_all_reasoning();
+    REQUIRE_FALSE(conversation.finish_success("stop", "m").has_value());
+    REQUIRE(conversation.submit("dos").has_value());
+    conversation.append_delta("parcial");
+    (void)conversation.finish_error(
+        chatbot::ChatError{chatbot::ErrorKind::Server, 500, "caído", std::nullopt});
+    REQUIRE(conversation.submit("tres").has_value());
+    (void)conversation.finish_error(
+        chatbot::ChatError{chatbot::ErrorKind::Cancelled, 0, "", std::nullopt});
+    REQUIRE(conversation.submit("cuatro").has_value());
+    REQUIRE(conversation.attach_search({}, "2026-11-15", "bloque"));
+    (void)conversation.finish_error(
+        chatbot::ChatError{chatbot::ErrorKind::NoSearchResults, 0, "", std::nullopt});
+    conversation.add_error("error");
+    conversation.add_notice("aviso");
+    REQUIRE(conversation.set_system_prompt("otro"));
+    const auto no_tools = [](const std::vector<Entry>& entries) {
+        return std::none_of(entries.begin(), entries.end(),
+                            [](const Entry& e) { return e.kind == EntryKind::Tool; });
+    };
+    CHECK(conversation.entries().size() > 5);
+    CHECK(no_tools(conversation.entries()));
+    const chatbot::cli::StoredConversation stored =
+        conversation.to_stored("2026-11-15T10:00:00-06:00");
+    REQUIRE(stored.messages.size() == 2); // Solo el par terminado.
+    CHECK(stored.messages[0].role == chatbot::Role::User);
+    CHECK(stored.messages[1].role == chatbot::Role::Assistant);
+    const chatbot::cli::Conversation reopened =
+        chatbot::cli::Conversation::from_stored(stored, "sistema");
+    CHECK(no_tools(reopened.entries()));
+}
+
+namespace {
+
+/// Un cuadro como en la interfaz: el historial dentro de un frame vertical
+/// de 40 filas, con el scroll en position (0: arriba, 1: abajo). Devuelve ms.
+double timed_frame(HistoryView& view, const std::vector<Entry>& entries, float position) {
+    const auto start = std::chrono::steady_clock::now();
+    ftxui::Element element = view.render(entries, 100, chatbot::cli::terminal_palette()) |
+                             ftxui::focusPositionRelative(0.F, position) | ftxui::yframe;
+    ftxui::Screen screen =
+        ftxui::Screen::Create(ftxui::Dimension::Fixed(100), ftxui::Dimension::Fixed(40));
+    ftxui::Render(screen, element);
+    return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start)
+        .count();
+}
+
+} // namespace
+
+TEST_CASE("herramienta: 50 líneas y una salida de 30 000 caracteres desplegada",
+          "[historial][code][desempeno]") {
+    std::string big;
+    for (int i = 0; big.size() < 30000; ++i) {
+        big += "línea " + std::to_string(i) + ": salida de un comando con texto de relleno\n";
+    }
+    big.resize(30000);
+    const auto session = [&](bool with_big) {
+        std::vector<Entry> entries{make(EntryKind::User, "una tarea larga")};
+        for (int i = 0; i < 50; ++i) {
+            entries.push_back(make(EntryKind::Assistant, "Ahora el archivo " + std::to_string(i)));
+            entries.push_back(tool("Leer cli/src/archivo_" + std::to_string(i) + ".cpp (1–200)",
+                                   ToolState::Done, "200 líneas",
+                                   with_big && i == 25 ? big : "uno\ndos\ntres", with_big && i == 25));
+        }
+        Entry answer = make(EntryKind::Assistant, "Listo");
+        answer.in_progress = true;
+        entries.push_back(answer);
+        return entries;
+    };
+    for (const bool with_big : {false, true}) {
+        std::vector<Entry> entries = session(with_big);
+        HistoryView view;
+        view.set_style(HistoryStyle::Code);
+        const double first = timed_frame(view, entries, 1.F);
+        constexpr int kFrames = 5;
+        // Llega texto a la última entrada: solo ella se vuelve a dibujar.
+        double streaming = 0;
+        for (int i = 0; i < kFrames; ++i) {
+            const std::size_t draws = view.draw_count();
+            entries.back().text += " y más";
+            streaming += timed_frame(view, entries, 1.F);
+            CHECK(view.draw_count() == draws + 1);
+        }
+        streaming /= kFrames;
+        // Scroll sin cambios: nada se vuelve a dibujar.
+        double scroll = 0;
+        const std::size_t draws = view.draw_count();
+        for (int i = 0; i < kFrames; ++i) {
+            scroll += timed_frame(view, entries, 0.1F * static_cast<float>(i + 3));
+        }
+        scroll /= kFrames;
+        CHECK(view.draw_count() == draws);
+        WARN((with_big ? "50 herramientas y una salida de 30 000 caracteres desplegada"
+                       : "50 herramientas")
+             << ": primer cuadro " << first << " ms; con la última entrada cambiando "
+             << streaming << " ms; tras mover el scroll " << scroll << " ms");
+        if (chatbot_test::strict_performance()) {
+            CHECK(streaming < 50.0);
+            CHECK(scroll < 50.0);
+        }
+    }
+}
