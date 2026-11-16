@@ -125,6 +125,7 @@ target_compile_definitions(chatbot_ui_tests PRIVATE
 if(CHATBOT_BUILD_CODE)
     target_sources(chatbot_ui_tests PRIVATE
         ${PROJECT_SOURCE_DIR}/cli/src/code_screen.cpp
+        ${PROJECT_SOURCE_DIR}/cli/src/prompt_menus.cpp
         ${PROJECT_SOURCE_DIR}/cli/src/settings_binding.cpp
         test_code_screen.cpp)
     target_link_libraries(chatbot_ui_tests PRIVATE chatbot::code)

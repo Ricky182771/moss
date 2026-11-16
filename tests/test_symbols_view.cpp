@@ -128,7 +128,7 @@ TEST_CASE("símbolos sencillos: barra lateral", "[simbolos][barra]") {
 
 TEST_CASE("símbolos sencillos: menú de comandos", "[simbolos][menu]") {
     chatbot::cli::CommandMenu menu;
-    menu.update("/", true);
+    menu.update("/", true, chatbot::cli::CommandMode::Chat);
     const auto availability = chatbot::cli::command_availability(
         chatbot::cli::CommandContext{true, true, true, true, false, false});
     check_all_palettes([&](const Palette& palette) {

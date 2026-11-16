@@ -43,10 +43,12 @@ ftxui::Element render_command_menu(const CommandMenu& menu,
     width = std::max(width, 1);
     const int indent = ftxui::string_width(kIndent);
     const int gap = ftxui::string_width(kGap);
-    // Alineado al más largo del registro: las columnas no saltan al filtrar.
+    // Alineado al más largo del modo en el registro: las columnas no saltan al filtrar.
     int usage_width = 0;
     for (const CommandInfo& command : kCommands) {
-        usage_width = std::max(usage_width, ftxui::string_width(usage_of(command)));
+        if (command_in_mode(command.mode, menu.mode())) {
+            usage_width = std::max(usage_width, ftxui::string_width(usage_of(command)));
+        }
     }
     const int description_width = width - indent - usage_width - gap;
     const bool show_description = description_width >= kMenuMinDescription;

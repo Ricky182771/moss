@@ -464,3 +464,126 @@ TEST_CASE("code_status: modo, actividad y modelo", "[code_mode]") {
     CHECK(status.activity == "Leyendo…");
     CHECK(status.model == "m1");
 }
+
+// --- Comandos con "/" (CodeMode::submit) ---
+
+TEST_CASE("CodeMode::submit: /clear, también con un turno en curso", "[code_mode][comandos]") {
+    using Type = chatbot::cli::SubmitOutcome::Type;
+    Harness h;
+    SECTION("sin turno: sesión nueva y la caja se vacía") {
+        h.fakes.responses = {answer("Hecho.")};
+        h.start();
+        h.run_turn("hola");
+        REQUIRE(has_user(h.mode->history()));
+        const chatbot::cli::SubmitOutcome outcome = h.mode->submit("/clear");
+        CHECK(outcome.type == Type::Done);
+        CHECK(outcome.clear);
+        CHECK(h.kinds() == std::vector<EntryKind>{EntryKind::Notice});
+        CHECK_FALSE(has_user(h.mode->history()));
+        CHECK(h.mode->submit("/clear ya").status == chatbot::cli::kClearUsage);
+    }
+    SECTION("con un turno en curso: nada, y el aviso del chat") {
+        chatbot_test::BlockingTransport* blocking = nullptr;
+        h.fakes.block(blocking);
+        h.start();
+        REQUIRE(h.mode->send("hola"));
+        CHECK(h.mode->command_context().busy);
+        const chatbot::cli::SubmitOutcome outcome = h.mode->submit("/clear");
+        CHECK(outcome.type == Type::Status);
+        CHECK(outcome.status == chatbot::cli::kWaitOrCancel);
+        CHECK_FALSE(outcome.clear);
+        CHECK(h.mode->busy());
+        // /model tampoco se abre.
+        CHECK(h.mode->submit("/model").status == chatbot::cli::kWaitOrCancel);
+        h.mode->cancel();
+        REQUIRE(h.wait_turn(0));
+    }
+}
+
+TEST_CASE("CodeMode::submit: /ayuda deja las teclas y los comandos del modo código",
+          "[code_mode][comandos]") {
+    Harness h;
+    h.start();
+    const chatbot::cli::SubmitOutcome outcome = h.mode->submit("/ayuda");
+    CHECK(outcome.type == chatbot::cli::SubmitOutcome::Type::Done);
+    CHECK(outcome.clear);
+    REQUIRE(h.entries().back().kind == EntryKind::Notice);
+    const std::string& text = h.entries().back().text;
+    CHECK(text == chatbot::cli::code_help_text());
+    CHECK(text.find("Ctrl+O · abre o cierra la salida completa de la última herramienta") !=
+          std::string::npos);
+    for (const char* shown : {"/model [proveedor] [modelo]", "/clear", "/ayuda", "Esc", "Ctrl+T",
+                              "F2", "PgUp/PgDn", "Ctrl+C", "Alt+Enter"}) {
+        INFO(shown);
+        CHECK(text.find(shown) != std::string::npos);
+    }
+    for (const char* hidden : {"Shift+Tab", "/buscar", "/copiar", "/guardar", "/exportar"}) {
+        INFO(hidden);
+        CHECK(text.find(hidden) == std::string::npos);
+    }
+    CHECK(h.mode->submit("/ayuda ya").status == chatbot::cli::kHelpUsage);
+    CHECK_FALSE(has_user(h.mode->history())); // Nada fue al modelo.
+}
+
+TEST_CASE("CodeMode::submit: /model proveedor modelo cambia, avisa y el turno usa el nuevo",
+          "[code_mode][comandos]") {
+    using Type = chatbot::cli::SubmitOutcome::Type;
+    Harness h;
+    h.save_nvidia();
+    h.fakes.responses = {answer("Hecho.")};
+    h.start(h.fakes.load());
+    const int clients = h.fakes.clients;
+    const chatbot::cli::SubmitOutcome outcome = h.mode->submit("/model nvidia m2");
+    CHECK(outcome.type == Type::Done);
+    CHECK(outcome.clear);
+    CHECK(h.fakes.clients == clients + 2); // El de la Session y el del modo código (config_changed).
+    REQUIRE(h.entries().back().kind == EntryKind::Notice);
+    CHECK(h.entries().back().text == "Ahora se usa m2 de NVIDIA NIM.");
+    CHECK(h.mode->status().model == "m2");
+    // El mismo: sin cambio ni aviso nuevo.
+    const std::size_t entries = h.entries().size();
+    CHECK(h.mode->submit("/model m2").type == Type::Status);
+    CHECK(h.entries().size() == entries);
+    // Sin modelo: el selector.
+    const chatbot::cli::SubmitOutcome picker = h.mode->submit("/model nvidia");
+    CHECK(picker.type == Type::OpenModelPicker);
+    CHECK(picker.picker_provider == "nvidia");
+    CHECK(h.mode->submit("/model a b c").status == chatbot::cli::kModelUsage);
+
+    h.run_turn("hola");
+    REQUIRE(h.fakes.chat != nullptr);
+    REQUIRE_FALSE(h.fakes.chat->requests.empty());
+    CHECK(json::parse(h.fakes.chat->requests.back().body)["model"] == "m2");
+}
+
+TEST_CASE("CodeMode::submit: /model con CHAT_MODEL fijado avisa", "[code_mode][comandos]") {
+    Harness h;
+    h.save_nvidia();
+    h.fakes.env.values["CHAT_MODEL"] = "modelo-del-entorno";
+    h.start(h.fakes.load());
+    CHECK(h.mode->command_context().model_locked);
+    for (const char* text : {"/model", "/model m2"}) {
+        INFO(text);
+        const chatbot::cli::SubmitOutcome outcome = h.mode->submit(text);
+        CHECK(outcome.type == chatbot::cli::SubmitOutcome::Type::Status);
+        CHECK(outcome.status == "El modelo está fijado por CHAT_MODEL.");
+    }
+}
+
+TEST_CASE("CodeMode::submit: un comando del chat va al modelo como texto",
+          "[code_mode][comandos]") {
+    Harness h;
+    h.fakes.responses = {answer("No busco en la web.")};
+    h.start();
+    const std::size_t count = h.finished.size();
+    const chatbot::cli::SubmitOutcome outcome = h.mode->submit("/buscar algo");
+    CHECK(outcome.type == chatbot::cli::SubmitOutcome::Type::Started);
+    CHECK(outcome.command == chatbot::cli::ParsedCommand::Type::Normal);
+    CHECK(outcome.clear);
+    REQUIRE(h.wait_turn(count));
+    CHECK(h.entries()[1].kind == EntryKind::User);
+    CHECK(h.entries()[1].text == "/buscar algo");
+    CHECK(h.entries().back().text == "No busco en la web.");
+    // Caja vacía: nada.
+    CHECK(h.mode->submit("  ").type == chatbot::cli::SubmitOutcome::Type::Ignored);
+}

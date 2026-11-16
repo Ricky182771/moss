@@ -71,6 +71,13 @@ struct ScreenHarness {
             .palette = palette,
             .detected_symbols = chatbot::cli::Symbols::Unicode,
             .post = post,
+            // La lista del selector de /model: un modelo, sin red.
+            .picker_transport =
+                [] {
+                    auto transport = std::make_unique<chatbot_test::FakeTransport>();
+                    transport->responses.push_back(ok(R"({"data":[{"id":"modelo-elegido"}]})"));
+                    return transport;
+                },
             .app = nullptr,
             .size = [this] { return ftxui::Dimensions{width, height}; }});
         screen->start("");
@@ -280,4 +287,91 @@ TEST_CASE("pantalla de Moss Code: con un turno en curso F2 no se abre", "[code_s
     // Sin turno, F2 sí abre.
     CHECK(h.event(ftxui::Event::F2));
     CHECK(h.screen->settings().is_open());
+}
+
+TEST_CASE("pantalla de Moss Code: el menú de / muestra solo los comandos del modo código",
+          "[code_screen][comandos]") {
+    ScreenHarness h;
+    h.open();
+    h.screen->input().set_text("/");
+    const std::vector<std::string> rows = h.draw();
+    REQUIRE(h.screen->command_menu().is_open());
+    CHECK(h.screen->command_menu().matches().size() == 3);
+    const int model = row_with(rows, "/model [proveedor] [modelo]");
+    REQUIRE(model >= 0);
+    CHECK(rows[static_cast<std::size_t>(model) + 1].starts_with("  /clear"));
+    CHECK(rows[static_cast<std::size_t>(model) + 2].starts_with("  /ayuda"));
+    for (const char* chat : {"/buscar", "/copiar", "/guardar", "/exportar"}) {
+        INFO(chat);
+        CHECK_FALSE(shows(rows, chat));
+    }
+    // El menú va entre la línea de estado y la caja.
+    CHECK(rows[static_cast<std::size_t>(h.height - 1)].starts_with("> /"));
+    CHECK(rows[static_cast<std::size_t>(model) - 2].starts_with("Solo lectura"));
+}
+
+TEST_CASE("pantalla de Moss Code: Esc cierra el menú sin detener el turno; el segundo, sí",
+          "[code_screen][comandos][cancelar]") {
+    ScreenHarness h;
+    chatbot_test::BlockingTransport* blocking = nullptr;
+    h.code.fakes.block(blocking);
+    h.open();
+    h.type_and_send("hola");
+    REQUIRE(h.code.mode->busy());
+    h.screen->input().set_text("/");
+    (void)h.draw();
+    REQUIRE(h.screen->command_menu().is_open());
+    CHECK(h.event(ftxui::Event::Escape));
+    CHECK_FALSE(h.screen->command_menu().is_open());
+    CHECK(h.code.mode->busy());
+    CHECK(h.code.finished.empty());
+    CHECK(h.event(ftxui::Event::Escape));
+    REQUIRE(h.code.wait_turn(0));
+    CHECK_FALSE(h.code.mode->busy());
+}
+
+TEST_CASE("pantalla de Moss Code: /ayuda y Enter deja la ayuda en el historial",
+          "[code_screen][comandos]") {
+    ScreenHarness h;
+    h.open();
+    h.type_and_send("/ayuda"); // Enter con el menú abierto lo envía (no lleva argumentos).
+    CHECK(h.screen->input().text().empty());
+    REQUIRE(h.code.entries().back().kind == EntryKind::Notice);
+    CHECK(h.code.entries().back().text == chatbot::cli::code_help_text());
+    CHECK(shows(h.draw(), "Ctrl+O · abre o cierra la salida completa de la última herramienta"));
+}
+
+TEST_CASE("pantalla de Moss Code: /model abre el selector y elegir cambia el modelo",
+          "[code_screen][comandos]") {
+    ScreenHarness h;
+    h.code.save_nvidia();
+    h.code.fakes.responses = {answer("Hecho.")};
+    h.open(h.code.fakes.load());
+    h.type_and_send("/model nvidia");
+    REQUIRE(h.screen->model_picker().is_open());
+    CHECK(h.screen->input().text().empty());
+    REQUIRE(h.code.queue.run_until([&h] {
+        return h.screen->model_picker().models_state() == chatbot::cli::ModelsState::Loaded;
+    }));
+    CHECK(shows(h.draw(), "modelo-elegido"));
+    CHECK(h.event(ftxui::Event::Return));
+    CHECK_FALSE(h.screen->model_picker().is_open());
+    REQUIRE(h.code.entries().back().kind == EntryKind::Notice);
+    CHECK(h.code.entries().back().text == "Ahora se usa modelo-elegido de NVIDIA NIM.");
+    CHECK(h.code.mode->status().model == "modelo-elegido");
+    // El siguiente turno usa el cliente nuevo.
+    h.type_and_send("hola");
+    REQUIRE(h.code.wait_turn(0));
+    REQUIRE(h.code.fakes.chat != nullptr);
+    CHECK(h.code.fakes.chat->requests.back().body.find("\"modelo-elegido\"") != std::string::npos);
+}
+
+TEST_CASE("pantalla de Moss Code: Esc cierra el selector de /model", "[code_screen][comandos]") {
+    ScreenHarness h;
+    h.code.save_nvidia();
+    h.open(h.code.fakes.load());
+    h.type_and_send("/model");
+    REQUIRE(h.screen->model_picker().is_open());
+    CHECK(h.event(ftxui::Event::Escape));
+    CHECK_FALSE(h.screen->model_picker().is_open());
 }

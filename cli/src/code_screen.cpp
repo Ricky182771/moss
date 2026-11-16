@@ -4,7 +4,9 @@
 #include "appearance_startup.h"
 #include "clipboard.h"
 #include "code_command.h"
+#include "command_menu_view.h"
 #include "input_edit.h"
+#include "model_picker_view.h"
 #include "status_line.h"
 #include "task_list_view.h"
 #include "terminal_reply.h"
@@ -44,6 +46,24 @@ CodeScreen::CodeScreen(CodeScreenContext context)
                    return mode_.configured() ? std::string{input_placeholder(columns)}
                                              : mode_.setup_problem() + " (F2)";
                }})),
+      model_picker_(
+          [this](std::string_view provider) { return mode_.session().models_config(provider); },
+          std::move(context.picker_transport), context.post),
+      menus_{.command_menu = command_menu_,
+             .model_picker = model_picker_,
+             .session = context.mode.session(),
+             .input = *input_area_,
+             .scroll = scroll_,
+             .flash = flash_,
+             .send = [this] { send(); },
+             .mode = CommandMode::Code,
+             // El cliente del siguiente turno y el aviso "Ahora se usa …".
+             .on_switch =
+                 [this](const ModelSwitch& change) {
+                     if (change.status == ModelSwitch::Status::Switched) {
+                         (void)mode_.config_changed();
+                     }
+                 }},
       settings_context_{.session = context.mode.session(),
                         .appearance = context.appearance,
                         .palette = context.palette,
@@ -115,16 +135,33 @@ void CodeScreen::run() {
 }
 
 void CodeScreen::send() {
-    // shortcut: /model, /clear y /ayuda todavía no existen aquí (un "/" se envía como texto);
-    // llegan con PromptMenus{..., mode = CommandMode::Code} en la tarea siguiente.
-    if (!mode_.configured()) {
-        flash_ = mode_.setup_problem(); // El texto se queda en la caja.
-        return;
-    }
-    if (!mode_.send(input_area_->text())) {
+    using Type = SubmitOutcome::Type;
+    const SubmitOutcome outcome = mode_.submit(input_area_->text());
+    if (outcome.type == Type::Ignored) {
         return; // Turno en curso o caja vacía: el texto se queda.
     }
-    input_area_->set_text("");
+    if (outcome.type == Type::Status) {
+        flash_ = outcome.status; // El texto se queda en la caja.
+        return;
+    }
+    if (outcome.type == Type::OpenModelPicker) {
+        // Como el chat (main.cpp): los proveedores de la Session de apoyo.
+        Session& session = mode_.session();
+        const Result<std::vector<ProviderChoice>> choices = session.provider_choices();
+        if (choices.is_error()) {
+            flash_ = choices.error().message;
+            return;
+        }
+        const ModelPickerAction opened =
+            model_picker_.open(choices.value(), outcome.picker_provider, session.model());
+        if (opened.type == ModelPickerAction::Type::Status) {
+            flash_ = opened.text;
+            return;
+        }
+    }
+    if (outcome.clear) {
+        input_area_->set_text("");
+    }
     scroll_.to_bottom();
 }
 
@@ -161,6 +198,36 @@ ftxui::Element CodeScreen::render() {
     }
     zones.right = {md::sanitize(status.model), palette_.ink(&Theme::notice)};
 
+    // El selector de /model o el menú de "/", como en el chat (main.cpp): mientras el selector
+    // está abierto, lo escrito es su filtro y el menú de "/" no se abre.
+    if (settings_.is_open()) {
+        model_picker_.close();
+    }
+    model_picker_.update(input_area_->text());
+    if (model_picker_.is_open() && !model_picker_.models_error().empty()) {
+        zones.center.push_back({md::sanitize(model_picker_.models_error()), ftxui::bold});
+    }
+    command_menu_.update(input_area_->text(), input_area_->Focused() && !model_picker_.is_open(),
+                         CommandMode::Code);
+    ftxui::Element menu = ftxui::emptyElement();
+    if (model_picker_.is_open()) {
+        menu_boxes_.model_picker_first = model_picker_.first();
+        menu = render_model_picker(model_picker_, width, palette_,
+                                   &menu_boxes_.model_picker_rows) |
+               ftxui::reflect(menu_boxes_.model_picker);
+    } else {
+        menu_boxes_.model_picker_rows.clear();
+        menu_boxes_.model_picker = ftxui::Box{};
+    }
+    if (command_menu_.is_open()) {
+        menu = render_command_menu(command_menu_, command_availability(mode_.command_context()),
+                                   width, palette_, &menu_boxes_.command_menu_rows) |
+               ftxui::reflect(menu_boxes_.command_menu);
+    } else {
+        menu_boxes_.command_menu_rows.clear();
+        menu_boxes_.command_menu = ftxui::Box{};
+    }
+
     input_area_->set_max_rows(input_max_rows(size.dimy));
     return ftxui::vbox({
         title_bar(mode_.title(), width, palette_, ExportButton{.shown = false}, kCodeTitleHelp,
@@ -169,6 +236,7 @@ ftxui::Element CodeScreen::render() {
         ftxui::separator() | palette_.ink(&Theme::border),
         zoned_status_line(zones, width),
         render_task_list(mode_.tasks(), width, palette_),
+        std::move(menu),
         ftxui::hbox({ftxui::text("> ") | ftxui::bold | palette_.ink(&Theme::user_label),
                      input_area_->Render()}),
     });
@@ -179,6 +247,10 @@ bool CodeScreen::handle_mouse(ftxui::Event event) {
         return false;
     }
     const ftxui::Mouse& mouse = event.mouse();
+    // Sobre un menú abierto, nada llega al historial (prompt_menus.h).
+    if (menus_mouse(menus_, menu_boxes_, mouse)) {
+        return true;
+    }
     if (mouse.button == ftxui::Mouse::Left && mouse.motion == ftxui::Mouse::Pressed) {
         // La línea "●" de una herramienta o la del pensamiento (del último cuadro).
         if (const std::optional<ButtonHit> hit = history_.hit_test(mouse.x, mouse.y)) {
@@ -257,6 +329,11 @@ bool CodeScreen::handle_event(ftxui::Event event) {
     if (event == ftxui::Event::TabReverse) {
         return true; // Shift+Tab cambiará el modo de permiso (C3); en C2 no hay otro.
     }
+    // Con el selector o el menú de "/" abierto, ↑/↓, Tab, Enter y Esc son suyos: el primer Esc
+    // los cierra y solo el siguiente detiene el turno.
+    if (menus_key(menus_, event)) {
+        return true;
+    }
     // "\" + Enter, Alt+Enter, flechas y Tab (screen_input.h).
     if (input_key(event, *input_area_)) {
         return true;
@@ -302,6 +379,7 @@ int run_code_screen(const std::string& folder) {
                        .palette = palette,
                        .detected_symbols = startup.detected_symbols,
                        .post = post,
+                       .picker_transport = [] { return std::make_unique<CurlTransport>(); },
                        .app = &app,
                        .size = ftxui::Terminal::Size});
     shown = &screen;

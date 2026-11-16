@@ -143,7 +143,30 @@ ftxui::Element zoned_status_line(const StatusZones& zones, int width) {
         if (left) {
             row.push_back(styled(zones.left));
         }
-        if (center > 0 || !layout.left) {
+        if (layout.left && !zones.activity.empty()) {
+            // Todo cabe: los avisos siguen junto a left y la actividad va centrada en el ancho,
+            // o lo más cerca del centro sin tocar los avisos ni right.
+            const std::string activity = items.front().text;
+            const int activity_width = width_of(activity);
+            int used = left ? width_of(zones.left.text) : 0;
+            // Ancho natural de los avisos (el centro sin la actividad).
+            const int notices =
+                center - activity_width - (center > activity_width ? kSeparatorWidth : 0);
+            if (notices > 0) {
+                if (left) {
+                    row.push_back(ftxui::text(std::string{kSeparator}));
+                    used += kSeparatorWidth;
+                }
+                row.push_back(status_line(zones.center, notices));
+                used += notices;
+            }
+            const int lowest = used + (used > 0 ? kSeparatorWidth : 0);
+            const int highest =
+                width - activity_width - (right ? width_of(zones.right.text) + kSeparatorWidth : 0);
+            const int start = std::max(lowest, std::min((width - activity_width) / 2, highest));
+            row.push_back(ftxui::text(std::string(static_cast<std::size_t>(start - used), ' ')));
+            row.push_back(ftxui::text(activity));
+        } else if (center > 0 || !layout.left) {
             if (left) {
                 row.push_back(ftxui::text(std::string{kSeparator}));
             }

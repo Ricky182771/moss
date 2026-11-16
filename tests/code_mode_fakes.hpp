@@ -1,6 +1,6 @@
 // Lo falso para armar un chatbot::cli::CodeMode sin red: guiones SSE con llamadas a herramientas,
 // un proyecto temporal y el Harness (SessionFakes, una cola como hilo de la interfaz y git
-// falso). Lo usan test_code_mode.cpp y test_code_screen.cpp.
+// falso). Lo usan test_code_mode.cpp, test_code_screen.cpp y test_code_command.cpp.
 
 #ifndef CHATBOT_TEST_CODE_MODE_FAKES_HPP
 #define CHATBOT_TEST_CODE_MODE_FAKES_HPP
@@ -33,7 +33,7 @@
 
 namespace chatbot_test {
 
-// --- Guiones SSE (los de test_code_command.cpp, que no se toca, más varias llamadas) ---
+// --- Guiones SSE (también los de test_code_command.cpp) ---
 
 inline std::string chunk(nlohmann::json delta) {
     nlohmann::json choice = nlohmann::json::object();

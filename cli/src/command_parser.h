@@ -24,6 +24,10 @@ struct ParsedCommand {
         ExportUsage, ///< /exportar con argumentos (error de uso).
         Model,       ///< /model [proveedor] [modelo].
         ModelUsage,  ///< /model mal formado (error de uso; el aviso va en text).
+        Clear,       ///< /clear (modo código).
+        ClearUsage,  ///< /clear con argumentos (error de uso).
+        Help,        ///< /ayuda (modo código).
+        HelpUsage,   ///< /ayuda con argumentos (error de uso).
     };
 
     Type type = Type::Normal;
@@ -47,6 +51,8 @@ inline constexpr std::string_view kCopyUsage = "Uso: /copiar [número de bloque]
 inline constexpr std::string_view kSaveUsage = "Uso: /guardar [número de bloque [nombre]]";
 inline constexpr std::string_view kExportUsage = "Uso: /exportar (sin argumentos)";
 inline constexpr std::string_view kModelUsage = "Uso: /model [proveedor] [modelo]";
+inline constexpr std::string_view kClearUsage = "Uso: /clear (sin argumentos)";
+inline constexpr std::string_view kHelpUsage = "Uso: /ayuda (sin argumentos)";
 
 /// "Proveedor desconocido: <word>. Escribe /model para ver la lista."
 [[nodiscard]] std::string unknown_provider_message(std::string_view word);
@@ -65,14 +71,16 @@ inline constexpr std::string_view kModelUsage = "Uso: /model [proveedor] [modelo
 ///   modelo. provider queda en minúsculas, y el id de un endpoint solo, como
 ///   "custom:<id>". Con dos, la primera tiene que ser un proveedor; si no, o
 ///   con tres o más, ModelUsage con el aviso en text.
+/// - `/clear` y `/ayuda` (solo del modo código): Clear y Help; con argumentos,
+///   ClearUsage y HelpUsage.
 /// - Cualquier otro texto (incluido `/buscarx`, `/copiarx` u otros comandos): devuelve Normal.
 /// is_endpoint: si hay un endpoint guardado con ese id (en minúsculas); se
 /// llama solo con /model. Vacío: ninguno.
 /// mode: solo cuentan los comandos de ese modo (commands.h); el nombre de uno
-/// de otro modo es texto normal.
+/// de otro modo es texto normal. Sin valor por defecto: cada pantalla dice el suyo.
 using EndpointLookup = std::function<bool(std::string_view id)>;
-ParsedCommand parse_command(std::string_view input, const EndpointLookup& is_endpoint = {},
-                            CommandMode mode = CommandMode::Chat);
+ParsedCommand parse_command(std::string_view input, const EndpointLookup& is_endpoint,
+                            CommandMode mode);
 
 }  // namespace chatbot::cli
 

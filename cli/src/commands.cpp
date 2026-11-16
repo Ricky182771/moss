@@ -32,6 +32,8 @@ CommandAvailability availability_of(std::string_view name, const CommandContext&
         note = context.model_locked ? kModelLocked
                : context.busy       ? kBusy
                                     : std::string_view{};
+    } else if (name == kClearCommand) {
+        note = context.busy ? kBusy : std::string_view{};
     }
     return CommandAvailability{note.empty(), note};
 }
@@ -67,6 +69,12 @@ std::string_view command_name(ParsedCommand::Type type) {
     case Type::Model:
     case Type::ModelUsage:
         return kModelCommand;
+    case Type::Clear:
+    case Type::ClearUsage:
+        return kClearCommand;
+    case Type::Help:
+    case Type::HelpUsage:
+        return kHelpCommand;
     }
     return {};
 }

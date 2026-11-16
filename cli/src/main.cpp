@@ -515,7 +515,8 @@ int main(int argc, char** argv) {
         if (model_picker.is_open() && !model_picker.models_error().empty()) {
             status.push_back({chatbot::md::sanitize(model_picker.models_error()), notice});
         }
-        command_menu.update(input_area->text(), input->Focused() && !model_picker.is_open());
+        command_menu.update(input_area->text(), input->Focused() && !model_picker.is_open(),
+                            chatbot::cli::CommandMode::Chat);
         ftxui::Element menu = ftxui::emptyElement();
         if (model_picker.is_open()) {
             menu_boxes.model_picker_first = model_picker.first();

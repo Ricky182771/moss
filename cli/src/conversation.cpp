@@ -119,10 +119,18 @@ void Conversation::append_reasoning(std::string_view text) {
 }
 
 void Conversation::toggle_reasoning(std::size_t index) {
-    if (index >= entries_.size()) {
+    chatbot::cli::toggle_reasoning(entries_, index);
+}
+
+void Conversation::toggle_all_reasoning() {
+    chatbot::cli::toggle_all_reasoning(entries_);
+}
+
+void toggle_reasoning(std::vector<Entry>& entries, std::size_t index) {
+    if (index >= entries.size()) {
         return;
     }
-    Entry& entry = entries_[index];
+    Entry& entry = entries[index];
     const ReasoningView view = reasoning_view(entry);
     if (view != ReasoningView::None) {
         entry.reasoning_fold =
@@ -130,13 +138,13 @@ void Conversation::toggle_reasoning(std::size_t index) {
     }
 }
 
-void Conversation::toggle_all_reasoning() {
+void toggle_all_reasoning(std::vector<Entry>& entries) {
     bool all_open = true;
-    for (const Entry& entry : entries_) {
+    for (const Entry& entry : entries) {
         const ReasoningView view = reasoning_view(entry);
         all_open = all_open && (view == ReasoningView::None || view == ReasoningView::Open);
     }
-    for (Entry& entry : entries_) {
+    for (Entry& entry : entries) {
         if (reasoning_view(entry) != ReasoningView::None) {
             entry.reasoning_fold = all_open ? ReasoningFold::Closed : ReasoningFold::Open;
         }

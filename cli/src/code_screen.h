@@ -2,10 +2,13 @@
 #define CHATBOT_CLI_CODE_SCREEN_H
 
 #include "code_mode.h"
+#include "command_menu.h"
 #include "glyphs.h"
 #include "history_view.h"
 #include "key_log.h"
+#include "model_picker.h"
 #include "models_loader.h"
+#include "prompt_menus.h"
 #include "request_runner.h"
 #include "screen_input.h"
 #include "scroll.h"
@@ -46,7 +49,9 @@ struct CodeScreenContext {
     Appearance& appearance;      ///< La vigente; cambia al guardar la apariencia en F2.
     Palette& palette;            ///< Con lo que se dibuja todo; cambia con la apariencia.
     Symbols detected_symbols = Symbols::Unicode; ///< StartupAppearance::detected_symbols.
-    RequestRunner::Post post;                    ///< screen_post: F2 → Addons.
+    RequestRunner::Post post; ///< screen_post: F2 → Addons y la lista del selector de /model.
+    /// El transporte de la lista del selector de /model (curl; falso en las pruebas).
+    ModelsLoader::TransportFactory picker_transport;
     /// La terminal (run_code_screen): Ctrl+C, Ctrl+Z, el pegado y el loop. nullptr en las
     /// pruebas: entonces esas teclas no hacen nada.
     ftxui::App* app = nullptr;
@@ -79,6 +84,8 @@ public:
     [[nodiscard]] const SettingsScreen& settings() const { return settings_; }
     /// El aviso de la línea de estado (dura hasta la siguiente tecla).
     [[nodiscard]] const std::string& flash() const { return flash_; }
+    [[nodiscard]] const CommandMenu& command_menu() const { return command_menu_; }
+    [[nodiscard]] const ModelPicker& model_picker() const { return model_picker_; }
 
 private:
     void send();
@@ -98,6 +105,12 @@ private:
     std::string flash_;
     int right_tab_ = 0; ///< 0: el modo código; 1: la configuración.
     std::shared_ptr<TextArea> input_area_;
+    // El menú de "/" y el selector de /model sobre la caja (prompt_menus.h). El selector se
+    // destruye antes que el CodeMode (cancela y une su hilo).
+    CommandMenu command_menu_;
+    ModelPicker model_picker_;
+    MenuBoxes menu_boxes_;
+    PromptMenus menus_;
     SettingsContext settings_context_;
     SettingsScreen settings_;
     ScreenInput screen_input_;

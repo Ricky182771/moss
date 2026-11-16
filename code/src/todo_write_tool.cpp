@@ -83,16 +83,12 @@ ToolResult run_todo_write(const json& arguments, ToolContext& context) {
                       std::move(display), ToolStatus::Ok};
 }
 
-std::string summarize_todo_write(const json& arguments) {
-    return "(" + std::to_string(arguments.at("todos").size()) + ")";
-}
-
 } // namespace
 
 std::shared_ptr<const Tool> make_todo_write_tool() {
+    // El resumen es solo "Tareas": la cuenta ya va en la línea del resultado ("3 tareas · …").
     return std::make_shared<const Tool>(Tool{"todo_write", std::string{kDescription},
-                                             json::parse(kSchema), "Lista de tareas",
-                                             summarize_todo_write, run_todo_write});
+                                             json::parse(kSchema), "Tareas", {}, run_todo_write});
 }
 
 } // namespace chatbot::code

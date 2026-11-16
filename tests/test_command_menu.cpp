@@ -13,6 +13,8 @@ using chatbot::cli::ListKey;
 
 namespace {
 
+constexpr chatbot::cli::CommandMode kChat = chatbot::cli::CommandMode::Chat;
+
 /// Nombres de los comandos que se ven, en orden.
 std::vector<std::string> shown(const CommandMenu& menu) {
     std::vector<std::string> names;
@@ -37,56 +39,56 @@ TEST_CASE("El menú se abre mientras se escribe el nombre de un comando", "[comm
     CommandMenu menu;
     CHECK_FALSE(menu.is_open());
 
-    menu.update("/", true);
+    menu.update("/", true, kChat);
     CHECK(menu.is_open());
     CHECK(shown(menu) == kAll);
 
-    menu.update("/b", true);
+    menu.update("/b", true, kChat);
     CHECK(menu.is_open());
 
     SECTION("Se cierra con un espacio o un salto de línea") {
-        menu.update("/buscar ", true);
+        menu.update("/buscar ", true, kChat);
         CHECK_FALSE(menu.is_open());
-        menu.update("/buscar\nhola", true);
+        menu.update("/buscar\nhola", true, kChat);
         CHECK_FALSE(menu.is_open());
-        menu.update("/b", true);
+        menu.update("/b", true, kChat);
         CHECK(menu.is_open());
     }
     SECTION("Se cierra si el texto no empieza con /") {
-        menu.update("", true);
+        menu.update("", true, kChat);
         CHECK_FALSE(menu.is_open());
-        menu.update("hola /buscar", true);
+        menu.update("hola /buscar", true, kChat);
         CHECK_FALSE(menu.is_open());
-        menu.update(" /buscar", true);
+        menu.update(" /buscar", true, kChat);
         CHECK_FALSE(menu.is_open());
     }
     SECTION("Solo con el foco en la caja") {
-        menu.update("/b", false);
+        menu.update("/b", false, kChat);
         CHECK_FALSE(menu.is_open());
         CHECK(menu.handle(ListKey::Down).type == CommandMenuAction::Type::Pass);
-        menu.update("/b", true);
+        menu.update("/b", true, kChat);
         CHECK(menu.is_open());
     }
 }
 
 TEST_CASE("El menú filtra por prefijo sin distinguir mayúsculas", "[command_menu]") {
     CommandMenu menu;
-    menu.update("/g", true);
+    menu.update("/g", true, kChat);
     CHECK(shown(menu) == std::vector<std::string>{"/guardar"});
-    menu.update("/GU", true);
+    menu.update("/GU", true, kChat);
     CHECK(shown(menu) == std::vector<std::string>{"/guardar"});
-    menu.update("/e", true);
+    menu.update("/e", true, kChat);
     CHECK(shown(menu) == std::vector<std::string>{"/exportar"});
-    menu.update("/exportar", true);
+    menu.update("/exportar", true, kChat);
     CHECK(shown(menu) == std::vector<std::string>{"/exportar"});
     // Orden del registro.
-    menu.update("/", true);
+    menu.update("/", true, kChat);
     CHECK(shown(menu) == kAll);
 }
 
 TEST_CASE("Sin coincidencias, el menú sigue abierto y deja pasar las teclas", "[command_menu]") {
     CommandMenu menu;
-    menu.update("/xyz", true);
+    menu.update("/xyz", true, kChat);
     CHECK(menu.is_open());
     CHECK(menu.matches().empty());
     CHECK(menu.handle(ListKey::Down).type == CommandMenuAction::Type::Pass);
@@ -96,7 +98,7 @@ TEST_CASE("Sin coincidencias, el menú sigue abierto y deja pasar las teclas", "
     CHECK(menu.handle(ListKey::Enter).type == CommandMenuAction::Type::Pass);
     CHECK(menu.choose(0).type == CommandMenuAction::Type::Pass);
     // /buscarx tampoco es un comando.
-    menu.update("/buscarx", true);
+    menu.update("/buscarx", true, kChat);
     CHECK(menu.matches().empty());
     // Esc sí cierra.
     CHECK(menu.handle(ListKey::Escape).type == CommandMenuAction::Type::Handled);
@@ -105,7 +107,7 @@ TEST_CASE("Sin coincidencias, el menú sigue abierto y deja pasar las teclas", "
 
 TEST_CASE("El cursor del menú da la vuelta en los extremos", "[command_menu]") {
     CommandMenu menu;
-    menu.update("/", true);
+    menu.update("/", true, kChat);
     CHECK(at_cursor(menu) == "/buscar");
     CHECK(menu.handle(ListKey::Up).type == CommandMenuAction::Type::Handled);
     CHECK(at_cursor(menu) == "/model");
@@ -125,7 +127,7 @@ TEST_CASE("El cursor del menú da la vuelta en los extremos", "[command_menu]") 
         CHECK(at_cursor(menu) == "/buscar");
     }
     SECTION("Con una sola fila, el cursor no se mueve") {
-        menu.update("/e", true);
+        menu.update("/e", true, kChat);
         (void)menu.handle(ListKey::Down);
         CHECK(at_cursor(menu) == "/exportar");
         (void)menu.handle(ListKey::Up);
@@ -140,26 +142,26 @@ TEST_CASE("El cursor del menú da la vuelta en los extremos", "[command_menu]") 
 
 TEST_CASE("El cursor queda en rango cuando cambia el filtro", "[command_menu]") {
     CommandMenu menu;
-    menu.update("/", true);
+    menu.update("/", true, kChat);
     (void)menu.handle(ListKey::End); // /model, la quinta fila.
-    menu.update("/g", true);         // Una sola fila.
+    menu.update("/g", true, kChat);         // Una sola fila.
     CHECK(menu.cursor() == 0);
     CHECK(at_cursor(menu) == "/guardar");
 
     SECTION("Si el comando del cursor sigue, el cursor se queda en él") {
-        menu.update("/", true);
+        menu.update("/", true, kChat);
         CHECK(at_cursor(menu) == "/guardar");
     }
     SECTION("Sin coincidencias y de vuelta") {
-        menu.update("/gx", true);
+        menu.update("/gx", true, kChat);
         CHECK(menu.matches().empty());
         CHECK(menu.cursor() == 0);
-        menu.update("/", true);
+        menu.update("/", true, kChat);
         CHECK(menu.cursor() < menu.matches().size());
     }
     SECTION("Al cerrarse y volver a abrirse, empieza arriba") {
-        menu.update("", true);
-        menu.update("/", true);
+        menu.update("", true, kChat);
+        menu.update("/", true, kChat);
         CHECK(at_cursor(menu) == "/buscar");
     }
 }
@@ -167,31 +169,31 @@ TEST_CASE("El cursor queda en rango cuando cambia el filtro", "[command_menu]") 
 TEST_CASE("Tab completa el comando del cursor", "[command_menu]") {
     CommandMenu menu;
     SECTION("Con argumentos: el nombre y un espacio") {
-        menu.update("/b", true);
+        menu.update("/b", true, kChat);
         const CommandMenuAction action = menu.handle(ListKey::Tab);
         CHECK(action.type == CommandMenuAction::Type::Complete);
         CHECK(action.text == "/buscar ");
         CHECK_FALSE(menu.is_open());
-        menu.update(action.text, true);
+        menu.update(action.text, true, kChat);
         CHECK_FALSE(menu.is_open());
     }
     SECTION("Con argumentos opcionales también lleva el espacio") {
-        menu.update("/c", true);
+        menu.update("/c", true, kChat);
         CHECK(menu.handle(ListKey::Tab).text == "/copiar ");
     }
     SECTION("Sin argumentos: solo el nombre, y el menú no se vuelve a abrir") {
-        menu.update("/ex", true);
+        menu.update("/ex", true, kChat);
         const CommandMenuAction action = menu.handle(ListKey::Tab);
         CHECK(action.type == CommandMenuAction::Type::Complete);
         CHECK(action.text == "/exportar");
-        menu.update(action.text, true);
+        menu.update(action.text, true, kChat);
         CHECK_FALSE(menu.is_open());
         // Hasta que cambie el texto.
-        menu.update("/exporta", true);
+        menu.update("/exporta", true, kChat);
         CHECK(menu.is_open());
     }
     SECTION("Lo que se inserta va en minúsculas") {
-        menu.update("/BUS", true);
+        menu.update("/BUS", true, kChat);
         CHECK(menu.handle(ListKey::Tab).text == "/buscar ");
     }
 }
@@ -199,29 +201,29 @@ TEST_CASE("Tab completa el comando del cursor", "[command_menu]") {
 TEST_CASE("Enter en el menú completa o envía", "[command_menu]") {
     CommandMenu menu;
     SECTION("Un comando que necesita argumento no se envía vacío") {
-        menu.update("/bus", true);
+        menu.update("/bus", true, kChat);
         const CommandMenuAction action = menu.handle(ListKey::Enter);
         CHECK(action.type == CommandMenuAction::Type::Complete);
         CHECK(action.text == "/buscar ");
     }
     SECTION("Con el nombre completo, también completa") {
-        menu.update("/buscar", true);
+        menu.update("/buscar", true, kChat);
         const CommandMenuAction action = menu.handle(ListKey::Enter);
         CHECK(action.type == CommandMenuAction::Type::Complete);
         CHECK(action.text == "/buscar ");
     }
     SECTION("Un comando sin argumento obligatorio se envía") {
-        menu.update("/ex", true);
+        menu.update("/ex", true, kChat);
         const CommandMenuAction action = menu.handle(ListKey::Enter);
         CHECK(action.type == CommandMenuAction::Type::Submit);
         CHECK(action.text == "/exportar");
         CHECK_FALSE(menu.is_open());
         // Si el envío no vacía la caja (un aviso), el menú sigue cerrado.
-        menu.update(action.text, true);
+        menu.update(action.text, true, kChat);
         CHECK_FALSE(menu.is_open());
     }
     SECTION("/copiar se envía sin el espacio") {
-        menu.update("/", true);
+        menu.update("/", true, kChat);
         (void)menu.handle(ListKey::Down);
         const CommandMenuAction action = menu.handle(ListKey::Enter);
         CHECK(action.type == CommandMenuAction::Type::Submit);
@@ -231,38 +233,38 @@ TEST_CASE("Enter en el menú completa o envía", "[command_menu]") {
 
 TEST_CASE("Esc cierra el menú y no se reabre hasta que cambie el texto", "[command_menu]") {
     CommandMenu menu;
-    menu.update("/g", true);
+    menu.update("/g", true, kChat);
     const CommandMenuAction action = menu.handle(ListKey::Escape);
     CHECK(action.type == CommandMenuAction::Type::Handled);
     CHECK(action.text.empty());
     CHECK_FALSE(menu.is_open());
 
     // El mismo texto (cada cuadro vuelve a llamar update): sigue cerrado.
-    menu.update("/g", true);
+    menu.update("/g", true, kChat);
     CHECK_FALSE(menu.is_open());
     // Cerrado, Esc ya no es del menú (cancela la respuesta en main.cpp).
     CHECK(menu.handle(ListKey::Escape).type == CommandMenuAction::Type::Pass);
     // Perder el foco no olvida el cierre.
-    menu.update("/g", false);
-    menu.update("/g", true);
+    menu.update("/g", false, kChat);
+    menu.update("/g", true, kChat);
     CHECK_FALSE(menu.is_open());
 
     SECTION("Escribir otra letra lo abre") {
-        menu.update("/gu", true);
+        menu.update("/gu", true, kChat);
         CHECK(menu.is_open());
     }
     SECTION("Borrar una letra también") {
-        menu.update("/", true);
+        menu.update("/", true, kChat);
         CHECK(menu.is_open());
         // Y volver al texto del cierre ya no lo cierra.
-        menu.update("/g", true);
+        menu.update("/g", true, kChat);
         CHECK(menu.is_open());
     }
 }
 
 TEST_CASE("Ratón: hover mueve el cursor y clic completa", "[command_menu]") {
     CommandMenu menu;
-    menu.update("/", true);
+    menu.update("/", true, kChat);
     menu.select(2);
     CHECK(at_cursor(menu) == "/guardar");
     menu.select(9); // Fuera de rango: no cambia.
@@ -280,11 +282,19 @@ TEST_CASE("El menú solo lista los comandos del modo que recibe", "[command_menu
     menu.update("/", true, chatbot::cli::CommandMode::Chat);
     CHECK(shown(menu) == kAll);
 
-    // Hoy no hay comandos del modo código: abierto, sin coincidencias.
+    CHECK(menu.mode() == kChat);
+
+    // Modo código: /model, /clear y /ayuda; ninguno del chat.
     menu.update("/", true, chatbot::cli::CommandMode::Code);
     CHECK(menu.is_open());
-    CHECK(menu.matches().empty());
+    CHECK(menu.mode() == chatbot::cli::CommandMode::Code);
+    CHECK(shown(menu) == std::vector<std::string>{"/model", "/clear", "/ayuda"});
     menu.update("/b", true, chatbot::cli::CommandMode::Code);
     CHECK(menu.matches().empty());
     CHECK(menu.handle(chatbot::cli::ListKey::Enter).type == chatbot::cli::CommandMenuAction::Type::Pass);
+    // Enter con /clear lo envía (no lleva argumentos).
+    menu.update("/cl", true, chatbot::cli::CommandMode::Code);
+    const CommandMenuAction action = menu.handle(chatbot::cli::ListKey::Enter);
+    CHECK(action.type == CommandMenuAction::Type::Submit);
+    CHECK(action.text == "/clear");
 }

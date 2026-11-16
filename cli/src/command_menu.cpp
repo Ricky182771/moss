@@ -32,6 +32,7 @@ void CommandMenu::update(std::string_view text, bool input_focused, CommandMode 
         dismissed_.reset();
     }
     text_ = std::string{text};
+    mode_ = mode;
     open_ = input_focused && !dismissed_.has_value() && typing_command_name(text);
     if (!open_) {
         // Al volver a abrirse, el cursor empieza arriba.

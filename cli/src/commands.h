@@ -16,6 +16,8 @@ inline constexpr std::string_view kCopyCommand = "/copiar";
 inline constexpr std::string_view kSaveCommand = "/guardar";
 inline constexpr std::string_view kExportCommand = "/exportar";
 inline constexpr std::string_view kModelCommand = "/model";
+inline constexpr std::string_view kClearCommand = "/clear";
+inline constexpr std::string_view kHelpCommand = "/ayuda";
 
 /// Un comando de la caja, como lo muestra el menú de comandos.
 struct CommandInfo {
@@ -29,7 +31,8 @@ struct CommandInfo {
 /// Registro de los comandos, en el orden en que los muestra el menú. Es la
 /// única lista: los argumentos coinciden con los avisos de uso
 /// (kSearchUsage, kCopyUsage, kSaveUsage, kModelUsage), y las pruebas lo revisan.
-inline constexpr std::array<CommandInfo, 5> kCommands = {{
+/// Cada pantalla (y el RPC, que es el chat) solo usa los de su modo (command_in_mode).
+inline constexpr std::array<CommandInfo, 7> kCommands = {{
     {kSearchCommand, "<consulta>", "Busca en la web y responde con fuentes citadas", true,
      CommandMode::Chat},
     {kCopyCommand, "[número de bloque]", "Copia un bloque de código; sin número, el último",
@@ -38,7 +41,9 @@ inline constexpr std::array<CommandInfo, 5> kCommands = {{
      false, CommandMode::Chat},
     {kExportCommand, "", "Exporta la conversación a Markdown", false, CommandMode::Chat},
     {kModelCommand, "[proveedor] [modelo]", "Cambia de modelo o de proveedor", false,
-     CommandMode::Chat},
+     CommandMode::Both},
+    {kClearCommand, "", "Empieza una sesión nueva en esta carpeta", false, CommandMode::Code},
+    {kHelpCommand, "", "Muestra las teclas y los comandos", false, CommandMode::Code},
 }};
 
 /// El comando del registro con ese nombre exacto, o nullptr.

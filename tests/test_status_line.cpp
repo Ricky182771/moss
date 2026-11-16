@@ -7,6 +7,8 @@
 #include <ftxui/screen/screen.hpp>
 #include <ftxui/screen/string.hpp>
 
+#include <algorithm>
+#include <cstddef>
 #include <string>
 #include <vector>
 
@@ -112,28 +114,35 @@ StatusZones thinking() {
 
 } // namespace
 
-TEST_CASE("estado en zonas: el modo a la izquierda, la actividad y el modelo a la derecha",
+TEST_CASE("estado en zonas: el modo a la izquierda, la actividad al centro y el modelo a la "
+          "derecha",
           "[estado][zonas]") {
     const int width = GENERATE(63, 80, 100);
     INFO(width << " columnas");
     const std::string row = draw_zones(thinking(), width);
-    CHECK(row.starts_with("Solo lectura   Pensando… (Esc para cancelar)"));
+    CHECK(row.starts_with("Solo lectura   "));
     CHECK(row.ends_with("modelo-de-prueba"));
     CHECK(ftxui::string_width(row) == width); // El modelo pegado al borde derecho.
+    // Centrada (29 columnas con la pista) sin acercarse a menos de 3 de los lados: en 63, todo
+    // justo, pegada al modo. Antes de "Pensando" todo es ASCII: el byte es la columna.
+    const std::size_t at = row.find("Pensando… (Esc para cancelar)");
+    REQUIRE(at != std::string::npos);
+    CHECK(static_cast<int>(at) == std::clamp((width - 29) / 2, 15, width - 29 - 3 - 16));
 }
 
 TEST_CASE("estado en zonas: en angosto se quita la pista, luego el modelo y luego el modo",
           "[estado][zonas]") {
-    // 62: sin la pista; 12 + 3 + 9 + 3 + 16 = 43 todavía con el modelo.
-    for (const int width : {62, 43}) {
-        INFO(width << " columnas");
-        const std::string row = draw_zones(thinking(), width);
-        CHECK(row.starts_with("Solo lectura   Pensando…"));
-        CHECK(row.find("(Esc") == std::string::npos);
-        CHECK(row.ends_with("   modelo-de-prueba"));
-    }
-    // 42: sin el modelo; 12 + 3 + 9 = 24 todavía con el modo.
-    CHECK(draw_zones(thinking(), 42) == "Solo lectura   Pensando…");
+    // 62: sin la pista, centrada en (62 - 9) / 2 = 26.
+    std::string row = draw_zones(thinking(), 62);
+    CHECK(row.find("(Esc") == std::string::npos);
+    CHECK(row.find("Pensando…") == 26);
+    CHECK(row.ends_with("   modelo-de-prueba"));
+    // 12 + 3 + 9 + 3 + 16 = 43 todavía con el modelo: no queda espacio para centrar.
+    row = draw_zones(thinking(), 43);
+    CHECK(row.starts_with("Solo lectura   Pensando…"));
+    CHECK(row.ends_with("   modelo-de-prueba"));
+    // 42: sin el modelo, centrada en (42 - 9) / 2 = 16; 12 + 3 + 9 = 24 todavía con el modo.
+    CHECK(draw_zones(thinking(), 42) == "Solo lectura    Pensando…");
     CHECK(draw_zones(thinking(), 24) == "Solo lectura   Pensando…");
     // 23: solo la actividad, que nunca se quita.
     CHECK(draw_zones(thinking(), 23) == "Pensando…");
@@ -161,12 +170,18 @@ TEST_CASE("estado en zonas: un aviso largo quita los lados y se recorta; los ind
     CHECK(row.find("…   ↓ Hay más abajo (End)") != std::string::npos);
     CHECK(row.find("Solo lectura") == std::string::npos);
     CHECK(row.find("modelo-de-prueba") == std::string::npos);
-    // Si cabe todo, conviven (y la pista va con la actividad).
+    // Si cabe todo, conviven: los avisos junto al modo y la actividad (con su pista) lo más
+    // cerca del centro después de ellos.
     zones.center = {{"Guardado.", ftxui::bold}, {"↓ Hay más abajo (End)", ftxui::bold, true}};
     const std::string wide = draw_zones(zones, 120);
-    CHECK(wide.starts_with(
-        "Solo lectura   Pensando… (Esc para cancelar)   Guardado.   ↓ Hay más abajo (End)"));
+    CHECK(wide.starts_with("Solo lectura   Guardado.   ↓ Hay más abajo (End)   "));
+    CHECK(wide.find("   Pensando… (Esc para cancelar)") != std::string::npos);
     CHECK(wide.ends_with("modelo-de-prueba"));
+    // A 180, el centro exacto: (180 - 29) / 2 = 75 columnas antes de "Pensando".
+    const std::string wider = draw_zones(zones, 180);
+    const std::size_t at = wider.find("Pensando…");
+    REQUIRE(at != std::string::npos);
+    CHECK(ftxui::string_width(wider.substr(0, at)) == 75);
 }
 
 TEST_CASE("estado en zonas: sin partes mide una fila", "[estado][zonas]") {

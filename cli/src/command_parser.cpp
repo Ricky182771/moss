@@ -88,7 +88,7 @@ ParsedCommand parse_model_command(const std::vector<std::string_view>& args,
     return command;
 }
 
-/// /copiar, /guardar, /exportar y /model. input ya viene recortado. nullopt
+/// /copiar, /guardar, /exportar, /model, /clear y /ayuda. input ya viene recortado. nullopt
 /// si no es ninguno de ellos (por ejemplo "/copiarx").
 std::optional<ParsedCommand> parse_block_command(std::string_view input,
                                                 const EndpointLookup& is_endpoint) {
@@ -126,6 +126,14 @@ std::optional<ParsedCommand> parse_block_command(std::string_view input,
     if (name == kExportCommand) {
         command.type = args.empty() ? ParsedCommand::Type::Export
                                     : ParsedCommand::Type::ExportUsage;
+        return command;
+    }
+    if (name == kClearCommand) {
+        command.type = args.empty() ? ParsedCommand::Type::Clear : ParsedCommand::Type::ClearUsage;
+        return command;
+    }
+    if (name == kHelpCommand) {
+        command.type = args.empty() ? ParsedCommand::Type::Help : ParsedCommand::Type::HelpUsage;
         return command;
     }
     return std::nullopt;

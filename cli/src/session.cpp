@@ -156,10 +156,13 @@ const CodeBlockIndex& Session::code_blocks() {
 
 SubmitOutcome Session::submit(std::string_view text) {
     using Type = ParsedCommand::Type;
-    const ParsedCommand command = parse_command(text, [this](std::string_view id) {
-        const Result<ProviderSettings> form = provider_form();
-        return form.is_ok() && form.value().find_provider(endpoint_provider(id)).has_value();
-    });
+    const ParsedCommand command = parse_command(
+        text,
+        [this](std::string_view id) {
+            const Result<ProviderSettings> form = provider_form();
+            return form.is_ok() && form.value().find_provider(endpoint_provider(id)).has_value();
+        },
+        CommandMode::Chat);
     SubmitOutcome result;
     switch (command.type) {
     case Type::Copy:

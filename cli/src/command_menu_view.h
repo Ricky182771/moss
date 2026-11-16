@@ -18,7 +18,7 @@ inline constexpr int kMenuMinDescription = 12;
 
 /// Dibuja el menú de comandos abierto, de width columnas: una línea en el
 /// color de borde y una fila por comando que coincide, con "nombre
-/// argumentos" alineados al ancho del más largo del registro y la
+/// argumentos" alineados al ancho del más largo del registro (de menu.mode()) y la
 /// descripción (o, si no está disponible, la nota) a la derecha, recortada
 /// con "…". En pantallas angostas la descripción se oculta antes que el
 /// nombre. El cursor lleva Palette::selection() a todo lo ancho; un comando

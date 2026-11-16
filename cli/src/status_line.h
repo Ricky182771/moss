@@ -37,7 +37,9 @@ struct StatusZones {
 
 /// left, el centro y right separados por tres espacios, right pegado al borde derecho. Si no
 /// cabe todo a su ancho natural, se quita primero hint, luego right y luego left; con lo que
-/// queda, el centro es status_line (recorta los avisos y, al final, quita indicadores).
+/// queda, el centro es status_line (recorta los avisos y, al final, quita indicadores). Mientras
+/// left se ve, activity (con hint si cabe) va centrada en el ancho, o lo más cerca del centro
+/// que deje libres a left, los avisos de center (pegados a left) y right.
 [[nodiscard]] ftxui::Element zoned_status_line(const StatusZones& zones, int width);
 
 } // namespace chatbot::cli

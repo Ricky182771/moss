@@ -1014,7 +1014,9 @@ TEST_CASE("RPC: commands.list con y sin configuración", "[rpc]") {
         rpc.initialize();
         rpc.call(2, "commands.list", {{"conversation", "c1"}});
         const Json commands = only(rpc)["result"]["commands"];
-        REQUIRE(commands.size() == chatbot::cli::kCommands.size());
+        // Solo los del chat: /clear y /ayuda son del modo código.
+        REQUIRE(commands.size() == 5);
+        CHECK(commands[4]["name"] == "/model");
         CHECK(commands[0].dump() ==
               R"({"name":"/buscar","arguments":"<consulta>",)"
               R"("description":"Busca en la web y responde con fuentes citadas",)"

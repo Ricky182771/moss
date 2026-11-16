@@ -1,6 +1,7 @@
 #ifndef CHATBOT_CLI_CODE_MODE_H
 #define CHATBOT_CLI_CODE_MODE_H
 
+#include "commands.h"
 #include "conversation.h"
 #include "session.h"
 #include "task_list.h"
@@ -95,6 +96,9 @@ struct CodeStatus {
 [[nodiscard]] std::string code_title(const std::string& folder, const std::string& home,
                                      std::string_view model);
 
+/// El aviso de /ayuda: las teclas del modo código y sus comandos de kCommands, uno por línea.
+[[nodiscard]] std::string code_help_text();
+
 /// Lo que CodeMode necesita del mundo, inyectable para las pruebas.
 struct CodeModeEnvironment {
     /// El de la Session de apoyo (configuración, make_client, reloj y home de display_home).
@@ -143,12 +147,20 @@ public:
     /// Lo que se muestra sin configuración (Session::setup_problem).
     [[nodiscard]] std::string setup_problem() const { return session_.setup_problem(); }
     /// Después de guardar en F2 o cambiar con /model: el cliente y los secretos se rehacen desde
-    /// session().config() para el siguiente turno; el historial se conserva. false, sin cambiar
-    /// nada, con un turno en curso (la pantalla no abre F2 ni /model entonces) o sin
-    /// configuración completa.
+    /// session().config() para el siguiente turno; el historial se conserva. Si cambió el
+    /// proveedor o el modelo, una entrada Notice con el aviso de Session ("Ahora se usa …").
+    /// false, sin cambiar nada, con un turno en curso (la pantalla no abre F2 ni /model
+    /// entonces); false sin configuración completa.
     bool config_changed();
 
     // --- Turno ---
+    /// Lo que hace Enter con el texto de la caja, comandos incluidos (parse_command con
+    /// CommandMode::Code; los del chat son texto normal). Como Session::submit: Started,
+    /// Ignored (turno en curso o caja vacía), Status (el texto se queda), Done (/clear, /ayuda o
+    /// /model que cambió, ya con su entrada) u OpenModelPicker (/model sin modelo).
+    [[nodiscard]] SubmitOutcome submit(const std::string& text);
+    /// Para el menú de "/": configured, busy y model_locked.
+    [[nodiscard]] CommandContext command_context() const;
     /// Empieza un turno. false (sin entrada nueva) sin configuración, con un turno en curso o
     /// con el texto vacío.
     [[nodiscard]] bool send(const std::string& text);
@@ -169,8 +181,8 @@ public:
     [[nodiscard]] CodeStatus status() const;
     [[nodiscard]] std::string title() const;
     /// Clic en la línea del pensamiento de la entrada index, y Ctrl+T (todas).
-    void toggle_reasoning(std::size_t index);
-    void toggle_all_reasoning();
+    void toggle_reasoning(std::size_t index) { chatbot::cli::toggle_reasoning(entries_, index); }
+    void toggle_all_reasoning() { chatbot::cli::toggle_all_reasoning(entries_); }
     /// Clic en la línea ● de la entrada index: abre o cierra su salida. false si no es Tool.
     bool toggle_tool(std::size_t index);
     /// Ctrl+O: abre o cierra la salida de la última herramienta con salida. false si no hay.
@@ -208,6 +220,10 @@ private:
     std::optional<std::size_t> answer_;     ///< Entrada del asistente que sigue llegando.
     std::optional<std::size_t> user_entry_; ///< Entrada del mensaje del turno en curso.
     std::size_t turn_start_ = 0;            ///< Primera entrada del turno en curso.
+    /// El proveedor y el modelo del cliente (Session::model) de la última config_changed o
+    /// del arranque.
+    std::string shown_provider_;
+    std::string shown_model_;
     /// Al final: se destruye primero (sus avisos apuntan a lo de arriba).
     std::unique_ptr<code::CodeSession> code_;
 };

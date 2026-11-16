@@ -1,14 +1,17 @@
 #include "code_mode.h"
 
 #include "app_startup.h"
+#include "command_parser.h"
 #include "conversation_store.h"
 #include "downloads.h"
 
 #include "chatbot/credentials.h"
 #include "chatbot/markdown/markdown.h"
 #include "chatbot/platform.h"
+#include "chatbot/providers.h"
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <filesystem>
 #include <iterator>
@@ -53,7 +56,53 @@ std::vector<TaskItem> task_items(const std::vector<code::TodoItem>& todos) {
     return tasks;
 }
 
+/// Una fila de /ayuda: la tecla y lo que hace en el modo código.
+struct KeyHelp {
+    std::string_view keys;
+    std::string_view action;
+};
+
+// Shift+Tab no va: los modos de permiso son de C3.
+constexpr std::array<KeyHelp, 9> kCodeKeys{{
+    {"Enter", "envía el mensaje"},
+    {"\\ + Enter o Alt+Enter", "salto de línea"},
+    {"Esc", "detiene el turno (antes cierra el menú abierto)"},
+    {"Ctrl+O", "abre o cierra la salida completa de la última herramienta"},
+    {"Clic en la línea de una herramienta", "abre o cierra su salida"},
+    {"Ctrl+T", "abre o cierra el pensamiento"},
+    {"F2", "configuración"},
+    {"PgUp/PgDn, Home/End", "recorren el historial (Home/End con la caja vacía)"},
+    {"Ctrl+C", "sale de Moss Code"},
+}};
+
+SubmitOutcome outcome(SubmitOutcome::Type type, std::string status = {}, bool clear = false) {
+    SubmitOutcome result;
+    result.type = type;
+    result.status = std::move(status);
+    result.clear = clear;
+    return result;
+}
+
 } // namespace
+
+std::string code_help_text() {
+    std::string text = "Teclas:";
+    for (const KeyHelp& key : kCodeKeys) {
+        text += "\n  " + std::string{key.keys} + " · " + std::string{key.action};
+    }
+    text += "\nComandos:";
+    for (const CommandInfo& command : kCommands) {
+        if (!command_in_mode(command.mode, CommandMode::Code)) {
+            continue;
+        }
+        text += "\n  " + std::string{command.name};
+        if (!command.arguments.empty()) {
+            text += " " + std::string{command.arguments};
+        }
+        text += " · " + std::string{command.description};
+    }
+    return text;
+}
 
 Result<CodeProject> open_code_project(const std::string& folder, const CodePaths& paths,
                                       std::function<std::time_t()> now) {
@@ -229,7 +278,8 @@ CodeMode::CodeMode(CodeModeEnvironment environment, Config initial, CodeProject 
     : env_(std::move(environment)), project_(std::move(project)), post_(std::move(post)),
       on_finished_(std::move(on_finished)),
       // Nunca envía: su OnFinished no llega.
-      session_(env_.session, std::move(initial), post_, [](Session::Finished) {}) {
+      session_(env_.session, std::move(initial), post_, [](Session::Finished) {}),
+      shown_provider_(session_.config().provider), shown_model_(session_.model()) {
     code_ = make_code_session();
     add_startup_entries();
 }
@@ -400,12 +450,93 @@ void CodeMode::on_turn_end(const code::TurnOutcome& outcome) {
 }
 
 bool CodeMode::config_changed() {
-    if (busy() || !session_.configured()) {
+    if (busy()) {
         return false;
     }
     const Config& config = session_.config();
+    // session_.model() es el del cliente: vacío sin configurar, así que también cuenta la key
+    // que faltaba.
+    if (config.provider != shown_provider_ || session_.model() != shown_model_) {
+        shown_provider_ = config.provider;
+        shown_model_ = session_.model();
+        // El proveedor o el modelo solo cambian con save_provider (F2, /model y su selector),
+        // que deja su aviso al final de la conversación de la Session de apoyo.
+        const std::vector<Entry>& notices = session_.conversation().entries();
+        if (!notices.empty() && notices.back().kind == EntryKind::Notice) {
+            close_answer();
+            add_entry(EntryKind::Notice, notices.back().text);
+        }
+    }
+    if (!session_.configured()) {
+        return false;
+    }
     return code_->set_client(env_.session.make_client(config),
                              code_secrets(config, code_paths(env_)));
+}
+
+SubmitOutcome CodeMode::submit(const std::string& text) {
+    using Type = ParsedCommand::Type;
+    const auto status = [](std::string_view message) {
+        return outcome(SubmitOutcome::Type::Status, std::string{message});
+    };
+    const ParsedCommand command = parse_command(
+        text,
+        [this](std::string_view id) {
+            const Result<ProviderSettings> form = session_.provider_form();
+            return form.is_ok() && form.value().find_provider(endpoint_provider(id)).has_value();
+        },
+        CommandMode::Code);
+    SubmitOutcome result;
+    switch (command.type) {
+    case Type::Model:
+    case Type::ModelUsage:
+        // La Session de apoyo nunca está ocupada: el turno en curso se revisa aquí, en el
+        // orden del chat (uso, CHAT_MODEL, turno en curso).
+        if (command.type == Type::Model && !session_.model_locked() && busy()) {
+            result = status(kWaitOrCancel);
+        } else {
+            // /model es igual en los dos modos: Session::submit lo parsea y lo corre igual.
+            result = session_.submit(text);
+            if (result.type == SubmitOutcome::Type::Done) {
+                (void)config_changed(); // Cambió directo: el cliente y su aviso.
+            }
+        }
+        break;
+    case Type::Clear:
+        result = clear() ? outcome(SubmitOutcome::Type::Done, {}, true) : status(kWaitOrCancel);
+        break;
+    case Type::ClearUsage:
+        result = status(kClearUsage);
+        break;
+    case Type::Help:
+        close_answer();
+        add_entry(EntryKind::Notice, code_help_text());
+        result = outcome(SubmitOutcome::Type::Done, {}, true);
+        break;
+    case Type::HelpUsage:
+        result = status(kHelpUsage);
+        break;
+    default:
+        if (command.text.empty()) {
+            break; // Solo espacios: como la caja vacía del chat (Ignored).
+        }
+        if (!configured()) {
+            result = status(setup_problem());
+        } else if (send(text)) {
+            result = outcome(SubmitOutcome::Type::Started, {}, true);
+        }
+        break; // Turno en curso o caja vacía: Ignored, el texto se queda.
+    }
+    result.command = command.type;
+    return result;
+}
+
+CommandContext CodeMode::command_context() const {
+    CommandContext context;
+    context.configured = configured();
+    context.busy = busy();
+    context.model_locked = session_.model_locked();
+    return context;
 }
 
 bool CodeMode::send(const std::string& text) {
@@ -455,30 +586,6 @@ CodeStatus CodeMode::status() const {
 
 std::string CodeMode::title() const {
     return code_title(utf8_of(project_.root.path()), env_.session.home, session_.config().model);
-}
-
-void CodeMode::toggle_reasoning(std::size_t index) {
-    if (index >= entries_.size()) {
-        return;
-    }
-    Entry& entry = entries_[index];
-    const ReasoningView view = reasoning_view(entry);
-    if (view != ReasoningView::None) {
-        entry.reasoning_fold =
-            view == ReasoningView::Open ? ReasoningFold::Closed : ReasoningFold::Open;
-    }
-}
-
-void CodeMode::toggle_all_reasoning() {
-    const bool all_open = std::all_of(entries_.begin(), entries_.end(), [](const Entry& entry) {
-        const ReasoningView view = reasoning_view(entry);
-        return view == ReasoningView::None || view == ReasoningView::Open;
-    });
-    for (Entry& entry : entries_) {
-        if (reasoning_view(entry) != ReasoningView::None) {
-            entry.reasoning_fold = all_open ? ReasoningFold::Closed : ReasoningFold::Open;
-        }
-    }
 }
 
 bool CodeMode::toggle_tool(std::size_t index) {

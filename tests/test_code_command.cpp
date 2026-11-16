@@ -5,12 +5,11 @@
 #include "code_command.h"
 
 #include "blocking_transport.hpp"
+#include "code_mode_fakes.hpp"
 #include "fake_transport.hpp"
 #include "temp_dir.hpp"
 
 #include <catch2/catch_test_macros.hpp>
-
-#include <nlohmann/json.hpp>
 
 #include <chrono>
 #include <filesystem>
@@ -30,43 +29,19 @@ using chatbot::HttpResponse;
 using chatbot::cli::CodeEnvironment;
 using chatbot::cli::CommandLine;
 using chatbot::cli::parse_command_line;
-using json = nlohmann::json;
 namespace fs = std::filesystem;
 
 constexpr const char* kMark = "● ";
 
-std::string chunk(json delta) {
-    json choice = json::object();
-    choice["delta"] = std::move(delta);
-    json body = json::object();
-    body["choices"] = json::array({choice});
-    return "data: " + body.dump() + "\n\n";
-}
+// Los guiones SSE son los de code_mode_fakes.hpp; aquí solo sus cuerpos.
+using chatbot_test::ok;
 
-const std::string kDone = "data: [DONE]\n\n";
-
-std::string answer_flow(const std::string& text) {
-    return chunk({{"content", text}}) + kDone;
-}
+std::string answer_flow(const std::string& text) { return chatbot_test::answer(text).body; }
 
 /// Una respuesta del modelo con una llamada a una herramienta (y texto antes, opcional).
 std::string call_flow(const std::string& name, const std::string& arguments,
                       const std::string& text = {}) {
-    std::string flow = text.empty() ? std::string{} : chunk({{"content", text}});
-    json function = json::object();
-    function["name"] = name;
-    function["arguments"] = arguments;
-    json call = json::object();
-    call["index"] = 0;
-    call["id"] = "call_" + name;
-    call["type"] = "function";
-    call["function"] = function;
-    return flow + chunk({{"tool_calls", json::array({call})}}) +
-           "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\n" + kDone;
-}
-
-HttpResponse ok(std::string body) {
-    return HttpResponse{200, std::move(body), std::nullopt, false, ""};
+    return chatbot_test::calls({{name, arguments}}, text).body;
 }
 
 using MakeClient = std::function<std::unique_ptr<chatbot::ChatClient>(const Config&)>;

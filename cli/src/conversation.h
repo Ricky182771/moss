@@ -105,6 +105,12 @@ struct Entry {
 /// espacio como separador de miles ("1 palabra" en singular).
 [[nodiscard]] std::string reasoning_summary(std::string_view reasoning);
 
+/// Abre o cierra el pensamiento de entries[index] (clic en su línea). Sin pensamiento o fuera
+/// de rango, nada. La usan Conversation y el modo código.
+void toggle_reasoning(std::vector<Entry>& entries, std::size_t index);
+/// Ctrl+T: si alguno no está abierto completo, abre todos; si no, los cierra todos.
+void toggle_all_reasoning(std::vector<Entry>& entries);
+
 /// Estado de la conversación. Se usa solo desde el hilo de la interfaz y no
 /// sabe nada de FTXUI ni de hilos.
 class Conversation {
