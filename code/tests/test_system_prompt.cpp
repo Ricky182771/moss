@@ -378,7 +378,9 @@ TEST_CASE("system prompt: con filtros clean/process del repo no se corre git sta
         std::string{"local\tfilter.x.clean cmd\n"},
         std::string{"global\tfilter.lfs.clean git-lfs clean -- %f\nlocal\tfilter.x.clean cmd\n"},
         std::string{"worktree\tfilter.x.process cmd\n"},
-        std::string{"global\tfilter.lfs.clean a\nsegunda línea\n"});
+        std::string{"global\tfilter.lfs.clean a\nsegunda línea\n"},
+        // En el tope de salida: recortada, podría faltar una línea del repo.
+        std::string{"global\t"} + std::string(chatbot::process::kMaxProcessOutput, 'a'));
     ToolFixture fixture;
     SystemPromptOptions options = no_git_options();
     FakeGit git;

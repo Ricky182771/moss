@@ -194,7 +194,9 @@ std::string git_section(const ProjectRoot& root, const SystemPromptOptions& opti
             {"config", "--show-scope", "--get-regexp", "^filter\\..*\\.(clean|process)$"},
             kGitTimeout, cancel);
         const bool exited = filters.status == process::ProcessResult::Status::Exited;
-        if (exited && filters.exit_code == 0 && has_repo_filters(filters.out)) {
+        // Una salida en el tope pudo recortarse justo antes de las líneas del repo: cuenta.
+        if (exited && filters.exit_code == 0 &&
+            (filters.out.size() >= process::kMaxProcessOutput || has_repo_filters(filters.out))) {
             return "- Git: repository status not read, because the repository's git configuration "
                    "defines clean/process filters.\n";
         }
