@@ -17,6 +17,7 @@
 #include <cstdlib>
 #include <ctime>
 #include <filesystem>
+#include <iostream>
 #include <memory>
 #include <optional>
 #include <string>
@@ -104,6 +105,19 @@ AddonsEnvironment addons_environment(ServiceWorker::Post post, std::string chatb
 
 std::string sibling_chatbot_path(const std::string& executable) {
     return (std::filesystem::path{executable}.parent_path() / kAppName).string();
+}
+
+int report_startup_error(const ChatError& error) {
+    std::cerr << "[" << error_kind_label(error.kind) << "] " << error.message << '\n';
+    if (console_closes_on_exit()) {
+        std::cerr << "\nPresiona Enter para cerrar esta ventana." << std::flush;
+        // Un carácter, no una línea: sin ENABLE_PROCESSED_INPUT
+        // (ConsoleInputScope) la consola no convierte Enter en "\r\n" y
+        // getline esperaría un "\n" que nunca llega. Con ENABLE_LINE_INPUT
+        // la lectura regresa al presionar Enter.
+        (void)std::cin.get();
+    }
+    return 1;
 }
 
 } // namespace chatbot::cli

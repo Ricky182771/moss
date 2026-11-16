@@ -5,6 +5,7 @@
 #include "telegram_addon.h"
 
 #include "chatbot/config.h"
+#include "chatbot/error.h"
 #include "chatbot/result.h"
 
 #include <string>
@@ -39,6 +40,12 @@ namespace chatbot::cli {
 
 /// La ruta de moss en la carpeta de executable (la de moss-rpc).
 [[nodiscard]] std::string sibling_chatbot_path(const std::string& executable);
+
+/// Error de arranque de una pantalla de la TUI: por stderr, antes de abrir la
+/// pantalla completa. Con doble clic en Windows, la ventana se cerraría al
+/// salir sin que nadie leyera el error: ahí se espera un Enter. Devuelve el
+/// código de salida (1).
+int report_startup_error(const ChatError& error);
 
 } // namespace chatbot::cli
 

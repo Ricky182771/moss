@@ -94,8 +94,11 @@ add_test(NAME chatbot_markdown_tests COMMAND chatbot_markdown_tests)
 # Van aparte para que chatbot_tests no enlace FTXUI.
 add_executable(chatbot_ui_tests
     ${PROJECT_SOURCE_DIR}/cli/src/addons_panel.cpp
+    ${PROJECT_SOURCE_DIR}/cli/src/key_events.cpp
+    ${PROJECT_SOURCE_DIR}/cli/src/screen_input.cpp
     ${PROJECT_SOURCE_DIR}/cli/src/settings_screen.cpp
     ${PROJECT_SOURCE_DIR}/cli/src/text_area.cpp
+    test_screen_input.cpp
     test_settings_screen.cpp
     test_addons_panel.cpp
     test_command_menu_view.cpp

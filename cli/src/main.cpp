@@ -28,10 +28,13 @@
 #include "key_log.h"
 #include "models_loader.h"
 #include "paste.h"
+#include "prompt_menus.h"
 #include "provider_settings.h"
+#include "screen_input.h"
 #include "scroll.h"
 #include "search_settings.h"
 #include "session.h"
+#include "settings_binding.h"
 #include "settings_screen.h"
 #include "sidebar.h"
 #include "sidebar_view.h"
@@ -76,22 +79,8 @@
 
 namespace {
 
-/// Líneas que mueve cada paso de la rueda del ratón.
-constexpr int kWheelStep = 3;
-
-/// Atajos de pegado de Windows: Ctrl+V (Ctrl+Shift+V llega igual, como el
-/// byte 0x16) y Shift+Insert (ESC [ 2 ; 2 ~ = 1b 5b 32 3b 32 7e, que FTXUI
-/// v7.0.3 entrega tal cual como Event::Special). Bytes confirmados en conhost
-/// (Windows 11 LTSC 2024) con CHAT_DEBUG_KEYS.
-bool is_paste_shortcut(const ftxui::Event& event) {
-    return event == ftxui::Event::CtrlV ||
-           event == ftxui::Event::Special(chatbot::cli::kShiftInsert);
-}
-
 // Los traductores de teclas (key_events.h) se llaman sin calificar en el loop.
-using chatbot::cli::key_log_event;
 using chatbot::cli::list_key;
-using chatbot::cli::paste_key;
 
 /// Ayuda de teclas de la barra de título del chat: larga y, si no cabe, corta.
 constexpr chatbot::cli::TitleHelp kChatTitleHelp{"Ctrl+B barra · Ctrl+O conversaciones",
@@ -117,23 +106,6 @@ int main(int argc, char** argv) {
     // ese join tampoco mata el proceso.
     const chatbot::ConsoleInputScope console_input;
 
-    // Errores de arranque: por stderr, antes de abrir la pantalla completa.
-    // Con doble clic en Windows, la ventana se cerraría al salir sin que
-    // nadie leyera el error: ahí se espera un Enter.
-    const auto fail = [](const chatbot::ChatError& error) {
-        std::cerr << "[" << chatbot::error_kind_label(error.kind) << "] " << error.message
-                  << '\n';
-        if (chatbot::console_closes_on_exit()) {
-            std::cerr << "\nPresiona Enter para cerrar esta ventana." << std::flush;
-            // Un carácter, no una línea: sin ENABLE_PROCESSED_INPUT
-            // (ConsoleInputScope) la consola no convierte Enter en "\r\n" y
-            // getline esperaría un "\n" que nunca llega. Con ENABLE_LINE_INPUT
-            // la lectura regresa al presionar Enter.
-            (void)std::cin.get();
-        }
-        return 1;
-    };
-
     // Modo portable y configuración (app_startup.h), antes de tocar la
     // terminal: si fallan, el error sale por stderr sin abrir la pantalla
     // completa (si no se puede escribir en datos/, nunca se usa en silencio
@@ -146,7 +118,9 @@ int main(int argc, char** argv) {
         initial.is_ok() ? chatbot::validate_config(initial.value()) : std::nullopt;
     const bool has_terminal = chatbot::stdio_is_terminal();
     if (initial.is_error() || (incomplete.has_value() && !has_terminal)) {
-        return fail(initial.is_error() ? initial.error() : *incomplete);
+        // Por stderr, antes de abrir la pantalla completa (app_startup.h).
+        return chatbot::cli::report_startup_error(initial.is_error() ? initial.error()
+                                                                     : *incomplete);
     }
 
     // Tema, fondo y símbolos de config.json ("appearance"), con su aviso
@@ -184,17 +158,16 @@ int main(int argc, char** argv) {
     // Menú de comandos al escribir "/" en la caja, y sus filas en el último
     // cuadro (para el ratón).
     chatbot::cli::CommandMenu command_menu;
-    ftxui::Box command_menu_box;
-    std::vector<ftxui::Box> command_menu_rows;
+    // También las del selector de /model.
+    chatbot::cli::MenuBoxes menu_boxes;
     bool export_hover = false;
     bool dragging = false;  ///< Se arrastra el divisor: el ratón es de ResizableSplit.
     int right_tab = 0; ///< Lado derecho: 0 = conversación, 1 = configuración.
     auto screen = ftxui::App::Fullscreen();
-    const auto post = [&screen](std::function<void()> task) {
-        screen.Post(std::move(task));
-        // Post de una tarea no redibuja por sí solo; un evento sí.
-        screen.PostEvent(ftxui::Event::Custom);
-    };
+    // screen.Post y un evento para redibujar (screen_input.h).
+    const chatbot::cli::RequestRunner::Post post = chatbot::cli::screen_post(screen);
+    // El loop, Ctrl+C, Ctrl+Z y el pegado entre corchetes de la terminal.
+    chatbot::cli::ScreenControl control(screen);
 
     // La caja de entrada; se crea después de la sesión, que su placeholder consulta.
     std::shared_ptr<chatbot::cli::TextArea> input_area;
@@ -224,9 +197,6 @@ int main(int argc, char** argv) {
     chatbot::cli::ModelPicker model_picker(
         [&session](std::string_view provider) { return session.models_config(provider); },
         [] { return std::make_unique<chatbot::CurlTransport>(); }, post);
-    ftxui::Box model_picker_box;
-    std::vector<ftxui::Box> model_picker_rows;
-    std::size_t model_picker_first = 0; ///< first() del cuadro de model_picker_rows.
 
     // Avisos de arranque: tema, instrucciones del sistema y búsqueda.
     std::string startup_warning = appearance_warning;
@@ -319,133 +289,34 @@ int main(int argc, char** argv) {
         screen.PostEvent(ftxui::Event::Custom);
     });
 
-    // Aplica lo que pidió el menú de comandos. true si el menú usó el evento.
-    const auto apply_command_menu = [&](const chatbot::cli::CommandMenuAction& action) {
-        using Type = chatbot::cli::CommandMenuAction::Type;
-        switch (action.type) {
-        case Type::Pass:
-            return false;
-        case Type::Handled:
-            return true;
-        case Type::Complete:
-        case Type::Submit:
-            input_area->set_text(action.text); // El cursor al final.
-            if (action.type == Type::Submit) {
-                send();
-            }
-            return true;
-        }
-        return false;
-    };
+    // El menú de "/" y el selector de /model sobre la caja (prompt_menus.h).
+    const chatbot::cli::PromptMenus menus{.command_menu = command_menu,
+                                          .model_picker = model_picker,
+                                          .session = session,
+                                          .input = *input_area,
+                                          .scroll = scroll,
+                                          .flash = flash,
+                                          .send = send,
+                                          .mode = chatbot::cli::CommandMode::Chat,
+                                          .on_switch = {}};
 
-    // Aplica lo que pidió el selector de /model. true si el selector usó el evento.
-    const auto apply_model_picker = [&](const chatbot::cli::ModelPickerAction& action) {
-        using Type = chatbot::cli::ModelPickerAction::Type;
-        switch (action.type) {
-        case Type::Pass:
-            return false;
-        case Type::Handled:
-        case Type::Closed: // El filtro se queda en la caja, como con el menú de "/".
-            return true;
-        case Type::ClearInput:
-            input_area->set_text("");
-            return true;
-        case Type::Status:
-            flash = action.text;
-            return true;
-        case Type::Switch:
-            if (const std::optional<std::string> notice =
-                    model_picker.finish(session.switch_model(action.provider, action.text))) {
-                flash = *notice;
-            }
-            if (!model_picker.is_open()) {
-                input_area->set_text("");
-                scroll.to_bottom();
-            }
-            return true;
-        }
-        return false;
-    };
-
-    // Pantalla de configuración. Al cerrarse, vuelve la conversación.
-    chatbot::cli::SettingsScreen settings(
-        models_loader, palette,
-        [&](const chatbot::cli::ProviderSettings& form) {
-            std::optional<std::string> error = session.save_provider(form);
-            if (!error.has_value()) {
-                scroll.to_bottom();
-            }
-            return error;
-        },
-        [&](const chatbot::cli::Appearance& chosen) -> std::optional<std::string> {
-            const std::optional<std::string> config_path = chatbot::default_config_path();
-            if (!config_path.has_value()) {
-                return chatbot::missing_config_dir_message(chatbot::current_os());
-            }
-            // Con NO_COLOR el tema y el fondo no se eligen: se quedan como
-            // están en config.json (vacíos no se escriben).
-            const bool no_color = chatbot::cli::no_color_enabled();
-            const chatbot::AppearanceValues values{
-                no_color ? std::string{} : std::string{chosen.theme->id},
-                no_color ? std::string{}
-                         : std::string{chatbot::cli::background_id(chosen.background)},
-                std::string{chatbot::cli::symbol_mode_id(chosen.symbol_mode)}};
-            if (const auto error = chatbot::save_appearance(*config_path, values)) {
-                return error->message;
-            }
-            // Se aplica sin reiniciar: la caché del historial se invalida
-            // sola (su llave incluye el tema, el fondo y los símbolos).
-            appearance = chosen;
-            appearance.symbols =
-                chatbot::cli::resolve_symbols(chosen.symbol_mode, detected_symbols);
-            palette = chatbot::cli::Palette{appearance};
-            return std::nullopt;
-        },
-        [&](const std::optional<std::string>& stored) {
-            std::optional<std::string> error = session.save_system_prompt(stored);
-            if (!error.has_value()) {
-                scroll.to_bottom();
-            }
-            return error;
-        },
-        [&](const std::string& key) {
-            std::optional<std::string> error = session.save_search_key(key);
-            if (!error.has_value()) {
-                scroll.to_bottom();
-            }
-            return error;
-        },
-        [&] {
-            right_tab = 0;
-            input->TakeFocus();
-        });
-
-    settings.set_portable_dir(chatbot::process_portable_data_dir());
-    settings.set_model_params_handlers(
-        [&](const chatbot::ModelParams& draft) { return session.check_model_params(draft); },
-        [&](const chatbot::ModelParams& draft) {
-            std::optional<std::string> error = session.save_model_params(draft);
-            if (!error.has_value()) {
-                scroll.to_bottom();
-            }
-            return error;
-        });
-    settings.set_on_delete_endpoint([&](const std::string& id) {
-        chatbot::cli::SettingsScreen::EndpointDeleted result;
-        const chatbot::cli::EndpointDeletion deletion = session.delete_endpoint(id);
-        result.message = deletion.message;
-        if (deletion.status == chatbot::cli::EndpointDeletion::Status::Deleted) {
-            chatbot::Result<chatbot::cli::ProviderSettings> form = session.provider_form();
-            if (form.is_ok()) {
-                result.form = std::move(form).value();
-            } else {
-                result.message = form.error().message;
-            }
-        }
-        return result;
-    });
-    settings.set_addons_environment(
-        chatbot::cli::addons_environment(post, chatbot::executable_path().value_or("")));
+    // Pantalla de configuración (settings_binding.h): guarda por la sesión.
+    // Al cerrarse, vuelve la conversación.
+    const chatbot::cli::SettingsContext settings_context{
+        .session = session,
+        .appearance = appearance,
+        .palette = palette,
+        .detected_symbols = detected_symbols,
+        .on_saved = [&] { scroll.to_bottom(); },
+        .on_open = [&] { right_tab = 1; },
+        .on_close =
+            [&] {
+                right_tab = 0;
+                input->TakeFocus();
+            }};
+    chatbot::cli::SettingsScreen settings =
+        chatbot::cli::make_settings_screen(models_loader, settings_context);
+    chatbot::cli::bind_settings(settings, settings_context, post);
 
     // El foco del lado derecho: la configuración si está abierta; si no, la caja.
     const auto focus_main = [&] {
@@ -458,33 +329,10 @@ int main(int argc, char** argv) {
 
     // Abre la configuración (F2 o "⚙ Configuración"), con un aviso opcional.
     const auto open_settings = [&](std::string notice) {
-        if (session.busy()) {
-            flash = std::string{chatbot::cli::kWaitOrCancel};
-            return;
+        if (const std::optional<std::string> problem =
+                chatbot::cli::open_settings(settings, settings_context, std::move(notice))) {
+            flash = *problem;
         }
-        if (settings.is_open()) {
-            settings.focus();
-            return;
-        }
-        const chatbot::Result<chatbot::cli::ProviderSettings> provider = session.provider_form();
-        if (provider.is_error()) {
-            flash = provider.error().message;
-            return;
-        }
-        const chatbot::Result<chatbot::cli::SearchSettings> search = session.search_form();
-        if (search.is_error()) {
-            flash = search.error().message;
-            return;
-        }
-        right_tab = 1;
-        chatbot::cli::ModelParamsPage model;
-        model.problem = session.model_params_problem();
-        model.model = session.config().model;
-        model.provider = session.config().provider;
-        model.provider_label = provider.value().provider_label();
-        model.saved = session.model_params();
-        settings.open(provider.value(), session.config(), appearance, session.system_prompt(),
-                      search.value(), std::move(notice), std::move(model));
     };
 
     // Ejecuta lo que pidió la barra de conversaciones.
@@ -665,22 +513,22 @@ int main(int argc, char** argv) {
         command_menu.update(input_area->text(), input->Focused() && !model_picker.is_open());
         ftxui::Element menu = ftxui::emptyElement();
         if (model_picker.is_open()) {
-            model_picker_first = model_picker.first();
+            menu_boxes.model_picker_first = model_picker.first();
             menu = chatbot::cli::render_model_picker(model_picker, width, palette,
-                                                     &model_picker_rows) |
-                   ftxui::reflect(model_picker_box);
+                                                     &menu_boxes.model_picker_rows) |
+                   ftxui::reflect(menu_boxes.model_picker);
         } else {
-            model_picker_rows.clear();
-            model_picker_box = ftxui::Box{};
+            menu_boxes.model_picker_rows.clear();
+            menu_boxes.model_picker = ftxui::Box{};
         }
         if (command_menu.is_open()) {
             menu = chatbot::cli::render_command_menu(
                        command_menu, chatbot::cli::command_availability(session.command_context()),
-                       width, palette, &command_menu_rows) |
-                   ftxui::reflect(command_menu_box);
+                       width, palette, &menu_boxes.command_menu_rows) |
+                   ftxui::reflect(menu_boxes.command_menu);
         } else {
-            command_menu_rows.clear();
-            command_menu_box = ftxui::Box{};
+            menu_boxes.command_menu_rows.clear();
+            menu_boxes.command_menu = ftxui::Box{};
         }
         const bool hide_status =
             (command_menu.is_open() || model_picker.is_open()) && status.empty();
@@ -745,8 +593,13 @@ int main(int argc, char** argv) {
         dragging = false;
     };
 
+    // El pegado (screen_input.h): a la configuración si está abierta; si no,
+    // a la caja; con la barra enfocada, se ignora.
+    chatbot::cli::ScreenInput screen_input(settings, *input_area, flash, [&] {
+        return sidebar_visible && sidebar_panel->Focused();
+    });
     // Pegado entre corchetes: acumula lo que llega entre 200~ y 201~ (ver root).
-    chatbot::cli::BracketedPaste bracketed_paste;
+    chatbot::cli::BracketedPaste& bracketed_paste = screen_input.bracketed_paste();
 
     const ftxui::Component layout = ftxui::Renderer(split, [&] {
         // Con un pegado abierto, cada cuadro le dice a BracketedPaste que el
@@ -787,11 +640,6 @@ int main(int argc, char** argv) {
         return split->Render() | palette.base();
     });
 
-    // Ctrl+C se maneja aquí: con el manejo por defecto, FTXUI restaura la
-    // terminal y relanza SIGINT dentro de Loop(), y el proceso muere sin
-    // destruir el runner (que cancela y hace join). Así, Loop() regresa.
-    screen.ForceHandleCtrlC(false);
-
     // Ratón: la barra (rueda y clic), el divisor (de ResizableSplit) y el
     // historial (rueda).
     const auto handle_mouse = [&](ftxui::Event event) { // mouse() no es const.
@@ -823,9 +671,9 @@ int main(int argc, char** argv) {
         if (sidebar_visible && sidebar_box.Contain(mouse.x, mouse.y)) {
             const std::vector<chatbot::cli::SidebarRow> rows = sidebar.rows(today());
             if (mouse.button == ftxui::Mouse::WheelUp) {
-                sidebar.scroll(-kWheelStep, rows, sidebar_rows_visible());
+                sidebar.scroll(-chatbot::cli::kWheelStep, rows, sidebar_rows_visible());
             } else if (mouse.button == ftxui::Mouse::WheelDown) {
-                sidebar.scroll(kWheelStep, rows, sidebar_rows_visible());
+                sidebar.scroll(chatbot::cli::kWheelStep, rows, sidebar_rows_visible());
             } else if ((mouse.button == ftxui::Mouse::Left ||
                         mouse.button == ftxui::Mouse::Right) &&
                        mouse.motion == ftxui::Mouse::Pressed) {
@@ -848,41 +696,9 @@ int main(int argc, char** argv) {
         }
         const bool click =
             mouse.button == ftxui::Mouse::Left && mouse.motion == ftxui::Mouse::Pressed;
-        // Selector de /model: hover mueve el cursor, clic elige (como Enter)
-        // y la rueda mueve el cursor. Nada llega al historial.
-        if (model_picker.is_open() && model_picker_box.Contain(mouse.x, mouse.y)) {
-            if (mouse.button == ftxui::Mouse::WheelUp || mouse.button == ftxui::Mouse::WheelDown) {
-                model_picker.scroll(mouse.button == ftxui::Mouse::WheelUp ? -1 : 1);
-                return true;
-            }
-            // Las cajas son del cuadro anterior: su first, no el de ahora.
-            const std::size_t first = model_picker_first;
-            for (std::size_t row = 0; row < model_picker_rows.size(); ++row) {
-                if (!model_picker_rows[row].Contain(mouse.x, mouse.y)) {
-                    continue;
-                }
-                if (mouse.motion == ftxui::Mouse::Moved) {
-                    model_picker.select(first + row);
-                } else if (click) {
-                    (void)apply_model_picker(model_picker.choose(first + row));
-                }
-                break;
-            }
-            return true;
-        }
-        // Menú de comandos: hover mueve el cursor y clic completa (como Tab).
-        // Nada del ratón sobre el menú llega al historial (tampoco la rueda).
-        if (command_menu.is_open() && command_menu_box.Contain(mouse.x, mouse.y)) {
-            for (std::size_t row = 0; row < command_menu_rows.size(); ++row) {
-                if (!command_menu_rows[row].Contain(mouse.x, mouse.y)) {
-                    continue;
-                }
-                if (mouse.motion == ftxui::Mouse::Moved) {
-                    command_menu.select(row);
-                } else if (click) {
-                    (void)apply_command_menu(command_menu.choose(row));
-                }
-            }
+        // Selector de /model y menú de comandos (prompt_menus.h): nada del
+        // ratón sobre ellos llega al historial.
+        if (chatbot::cli::menus_mouse(menus, menu_boxes, mouse)) {
             return true;
         }
         // Botones de los bloques y [Exportar] (sin respuestas no hace nada):
@@ -913,102 +729,18 @@ int main(int argc, char** argv) {
             }
             return true;
         }
-        // La rueda sobre la caja la desplaza si su texto no cabe; si no,
-        // mueve el historial.
-        if ((mouse.button == ftxui::Mouse::WheelUp || mouse.button == ftxui::Mouse::WheelDown) &&
-            input_area->scrollable() && input_area->contains(mouse.x, mouse.y)) {
-            (void)input->OnEvent(event);
-            return true;
-        }
-        if (mouse.button == ftxui::Mouse::WheelUp) {
-            scroll.by(-kWheelStep);
-            return true;
-        }
-        if (mouse.button == ftxui::Mouse::WheelDown) {
-            scroll.by(kWheelStep);
-            return true;
-        }
-        return false;
-    };
-
-    // Pegado entre corchetes (DECSET 2004): se activa con la primera tarea
-    // del loop, cuando FTXUI ya instaló la terminal (en conhost, el modo VT
-    // de salida lo activa FTXUI) y se desactiva antes de salir del loop.
-    // Todo va por std::cout, el canal de FTXUI, entre cuadros. El acumulador
-    // (bracketed_paste) se declara antes de layout, que le avisa de cada cuadro.
-    bool paste_mode_lost = false; ///< POSIX: se suspendió con Ctrl+Z (se desactivó).
-    const auto quit = [&] {
-        (void)chatbot::cli::write_to_terminal(chatbot::cli::kBracketedPasteOff);
-        screen.Exit();
-    };
-
-    // Aviso en la línea de estado o, con la configuración abierta, bajo su
-    // formulario (la línea de estado no se ve).
-    const auto notify = [&](std::string_view notice) {
-        if (settings.is_open()) {
-            settings.show_notice(std::string{notice});
-        } else {
-            flash = std::string{notice};
-        }
-    };
-    // A dónde iría un pegado según el foco (paste.h).
-    const auto current_paste_target = [&] {
-        return chatbot::cli::paste_target(
-            sidebar_visible && sidebar_panel->Focused(), settings.is_open(),
-            settings.is_open() ? settings.paste_target() : chatbot::cli::PasteTarget::None);
-    };
-    // Inserta un pegado (entre corchetes o con un atajo) donde está el foco:
-    // un solo Event::Character con todo el texto, que Input::HandleCharacter
-    // inserta de una vez en el cursor. Así sirve en la caja y en todos los
-    // campos de la configuración. Con la barra lateral, se ignora.
-    // Devuelve true si insertó algo.
-    const auto deliver_paste = [&](std::string_view raw, bool truncated) {
-        const std::optional<chatbot::cli::SanitizedPaste> paste =
-            chatbot::cli::prepare_paste(raw, current_paste_target());
-        if (!paste.has_value()) {
-            return false;
-        }
-        const ftxui::Event event = ftxui::Event::Character(paste->text);
-        if (settings.is_open()) {
-            (void)settings.component()->OnEvent(event);
-        } else if (event == ftxui::Event::Return) {
-            // Event compara solo el texto: un "\n" pegado solo sería Enter
-            // para la caja y enviaría el mensaje.
-            input_area->insert(paste->text);
-        } else {
-            (void)input->OnEvent(event);
-        }
-        if (truncated || paste->truncated) {
-            notify(chatbot::cli::kPasteTruncated);
-        }
-        return true;
+        // La rueda: la caja o el historial (screen_input.h).
+        return chatbot::cli::wheel_event(event, scroll, *input_area);
     };
 
     // Registro de teclas para diagnosticar (CHAT_DEBUG_KEYS, key_log.h).
     chatbot::cli::KeyLog key_log{chatbot::cli::environment_value("CHAT_DEBUG_KEYS")};
-    const auto log_event = [&](ftxui::Event& event) {
-        chatbot::cli::KeyLogState state;
-        state.settings_open = settings.is_open();
-        state.sidebar_focused = sidebar_visible && sidebar_panel->Focused();
-        state.paste_target = current_paste_target();
-        state.bracketed_paste_open = bracketed_paste.active();
-        if (settings.is_open()) {
-            state.focused_fields = settings.debug_focus();
-        }
-        key_log.write(chatbot::cli::format_key_event(
-            chatbot::cli::key_log_time(std::chrono::system_clock::now()), key_log_event(event),
-            state));
-    };
 
     const ftxui::Component root = ftxui::CatchEvent(layout, [&](ftxui::Event event) {
         if (key_log.enabled()) {
-            log_event(event);
+            screen_input.log_event(key_log, event);
         }
-        if (paste_mode_lost) {
-            // De vuelta de Ctrl+Z (fg): el shell pudo haberlo desactivado.
-            (void)chatbot::cli::write_to_terminal(chatbot::cli::kBracketedPasteOn);
-            paste_mode_lost = false;
-        }
+        control.resume();
         // Una respuesta de la terminal que FTXUI no entendió (DCS, DA) no
         // es una tecla: no borra el aviso ni llega a los componentes.
         if (!event.is_character() && !event.is_mouse() &&
@@ -1016,20 +748,12 @@ int main(int argc, char** argv) {
             return true;
         }
         // Lo que llega entre las marcas del pegado es texto, aunque sea
-        // Enter, Tab o Ctrl+C. Sin 201~ y tras más de kPasteIdleLimit con
-        // cuadros y sin entrada, el pegado se entrega y este evento sigue
-        // normal (así Ctrl+C siempre puede salir).
-        const chatbot::cli::BracketedPaste::Step pasted = bracketed_paste.feed(
-            paste_key(event), event.is_character() ? event.character() : std::string{});
-        if (pasted.text.has_value()) {
-            flash.clear(); // Como cualquier tecla.
-            deliver_paste(*pasted.text, pasted.truncated);
-        }
-        if (pasted.consumed) {
+        // Enter, Tab o Ctrl+C.
+        if (screen_input.feed_paste(event)) {
             return true;
         }
         if (event == ftxui::Event::CtrlC) {
-            quit();
+            control.quit();
             return true;
         }
         if (event == ftxui::Event::Custom) {
@@ -1054,37 +778,11 @@ int main(int argc, char** argv) {
             return handle_mouse(std::move(event));
         }
         flash.clear(); // El aviso dura hasta la siguiente tecla.
-        if (event == ftxui::Event::CtrlZ && chatbot::current_os() == chatbot::Os::Posix) {
-            // FTXUI suspende el proceso (SIGTSTP): el shell no debe recibir
-            // las marcas. Al volver se activa otra vez (arriba).
-            (void)chatbot::cli::write_to_terminal(chatbot::cli::kBracketedPasteOff);
-            paste_mode_lost = true;
-            return false;
+        if (control.suspend(event)) {
+            return false; // POSIX, Ctrl+Z: FTXUI suspende el proceso.
         }
-        if (chatbot::current_os() == chatbot::Os::Windows && is_paste_shortcut(event)) {
-            // conhost no pega con la entrada en modo VT (la activa FTXUI):
-            // la app lee el portapapeles. En Linux la terminal pega sola.
-            const chatbot::cli::PasteTarget target = current_paste_target();
-            if (target == chatbot::cli::PasteTarget::None) {
-                // Una lista, un botón o una pregunta: aviso. La barra lateral: nada.
-                if (const auto notice = chatbot::cli::paste_shortcut_notice(
-                        sidebar_visible && sidebar_panel->Focused(), target)) {
-                    notify(*notice);
-                }
-                key_log.write(chatbot::cli::key_log_time(std::chrono::system_clock::now()) +
-                              " paste-shortcut ignored target=none");
-                return true;
-            }
-            const std::optional<std::string> text = chatbot::cli::read_native_clipboard();
-            const bool delivered = text.has_value() && deliver_paste(*text, false);
-            if (!text.has_value()) {
-                notify(chatbot::cli::kClipboardNoText);
-            }
-            key_log.write(chatbot::cli::format_paste_shortcut(
-                chatbot::cli::key_log_time(std::chrono::system_clock::now()),
-                text.has_value() ? std::optional<std::size_t>{text->size()} : std::nullopt,
-                delivered));
-            return true;
+        if (screen_input.paste_shortcut(event, key_log)) {
+            return true; // Windows: Ctrl+V o Shift+Insert.
         }
         if (event == ftxui::Event::F2) {
             if (settings.is_open()) {
@@ -1147,71 +845,21 @@ int main(int argc, char** argv) {
             (void)settings.component()->OnEvent(event);
             return true;
         }
-        // Selector de /model abierto: ↑/↓, Tab, Enter y Esc son suyos (Enter
-        // nunca envía la caja mientras está abierto).
-        model_picker.update(input_area->text());
-        if (model_picker.is_open() && input->Focused()) {
-            using chatbot::cli::ListKey;
-            const ListKey key = list_key(event);
-            if ((key == ListKey::Up || key == ListKey::Down || key == ListKey::Tab ||
-                 key == ListKey::Enter || key == ListKey::Escape) &&
-                apply_model_picker(model_picker.handle(key))) {
-                return true;
-            }
-        }
-        // Menú de comandos abierto: ↑/↓, Tab, Enter y Esc son primero suyos
-        // (el primer Esc lo cierra; el segundo ya cancela la respuesta).
-        command_menu.update(input_area->text(), input->Focused() && !model_picker.is_open());
-        if (command_menu.is_open()) {
-            using chatbot::cli::ListKey;
-            const ListKey key = list_key(event);
-            if ((key == ListKey::Up || key == ListKey::Down || key == ListKey::Tab ||
-                 key == ListKey::Enter || key == ListKey::Escape) &&
-                apply_command_menu(command_menu.handle(key))) {
-                return true;
-            }
-        }
-        // "\" + Enter: salto de línea en lugar de enviar.
-        if (event == ftxui::Event::Return && input_area->backslash_newline()) {
+        // El selector de /model y el menú de "/" (prompt_menus.h): el primer
+        // Esc cierra el menú; el segundo ya cancela la respuesta.
+        if (chatbot::cli::menus_key(menus, event)) {
             return true;
         }
-        // Alt+Enter (donde llega: en Windows es pantalla completa).
-        if (event == ftxui::Event::Special(chatbot::cli::kAltEnter) ||
-            event == ftxui::Event::Special(chatbot::cli::kAltEnterLf)) {
-            input_area->insert("\n");
-            return true;
-        }
-        // ←/→, ↑/↓ y Tab son de la caja: si llegaran al contenedor del
-        // split, moverían el foco a la barra.
-        if (event == ftxui::Event::ArrowLeft || event == ftxui::Event::ArrowRight ||
-            event == ftxui::Event::ArrowUp || event == ftxui::Event::ArrowDown ||
-            event == ftxui::Event::Tab || event == ftxui::Event::TabReverse) {
-            input->OnEvent(event);
+        // "\" + Enter, Alt+Enter, flechas y Tab (screen_input.h).
+        if (chatbot::cli::input_key(event, *input_area)) {
             return true;
         }
         if (event == ftxui::Event::Escape) {
             session.cancel(); // Sin petición en curso no hace nada (no borra la caja).
             return true;
         }
-        if (event == ftxui::Event::PageUp) {
-            scroll.page_up();
-            return true;
-        }
-        if (event == ftxui::Event::PageDown) {
-            scroll.page_down();
-            return true;
-        }
-        // Home/End: con texto en la caja mueven el cursor (los maneja la caja);
-        // con la caja vacía mueven el historial.
-        if (event == ftxui::Event::Home && input_area->text().empty()) {
-            scroll.to_top();
-            return true;
-        }
-        if (event == ftxui::Event::End && input_area->text().empty()) {
-            scroll.to_bottom();
-            return true;
-        }
-        return false;
+        // PgUp/PgDn y, con la caja vacía, Home/End (screen_input.h).
+        return chatbot::cli::scroll_key(event, scroll, *input_area);
     });
 
     if (incomplete.has_value()) {
@@ -1226,8 +874,8 @@ int main(int argc, char** argv) {
     } else {
         input->TakeFocus();
     }
-    screen.Post([] { (void)chatbot::cli::write_to_terminal(chatbot::cli::kBracketedPasteOn); });
-    screen.Loop(root);
+    // Ctrl+C como evento y el pegado entre corchetes (screen_input.h).
+    control.run(root);
 
     // Al regresar de Loop(), la sesión (con su runner) se destruye antes que
     // screen (y el cargador de modelos une sus hilos): el runner
