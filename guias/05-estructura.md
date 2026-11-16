@@ -127,6 +127,8 @@ moss/
 │       ├── provider_settings.h/.cpp   # lógica del formulario "Proveedor de IA": tabla, endpoints y "Agregar endpoint…" (sin FTXUI)
 │       ├── models_loader.h/.cpp       # hilo de trabajo de GET /models (sin FTXUI)
 │       ├── code_command.h/.cpp        # moss code -p: el modo código sin pantalla (sin FTXUI); code_command_stub.cpp lo reemplaza con CHATBOT_BUILD_CODE=OFF (sale con 69)
+│       ├── code_mode.h/.cpp           # CodeMode: la lógica de la pantalla de Moss Code (entradas, tareas, estado, título) y el arranque que comparte con -p; solo con CHATBOT_BUILD_CODE (sin FTXUI)
+│       ├── task_list.h                # TaskState y TaskItem de la lista de tareas, y tasks_for_new_turn (sin FTXUI)
 │       ├── interrupt.h                # Ctrl+C del modo código; interrupt_posix.cpp o interrupt_windows.cpp (CMake elige)
 │       ├── command_parser.h/.cpp      # reconoce /buscar, /copiar, /guardar, /exportar y /model (sin FTXUI)
 │       ├── commands.h/.cpp            # registro de comandos (kCommands) y su disponibilidad (sin FTXUI)

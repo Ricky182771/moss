@@ -43,13 +43,16 @@ if(WIN32)
 else()
     set(CHATBOT_CLIPBOARD_SOURCE src/clipboard_posix.cpp)
 endif()
-# moss code (code_command.h): con CHATBOT_BUILD_CODE usa el motor (chatbot::code) y Ctrl+C por
-# sistema; sin él, un archivo que solo avisa que no está incluido.
+# moss code (code_command.h) y la lógica de su pantalla (code_mode.h): con CHATBOT_BUILD_CODE usan
+# el motor (chatbot::code) y Ctrl+C por sistema; sin él, un archivo que solo avisa que no está
+# incluido.
 if(CHATBOT_BUILD_CODE)
     if(WIN32)
-        set(CHATBOT_CODE_COMMAND_SOURCES src/code_command.cpp src/interrupt_windows.cpp)
+        set(CHATBOT_CODE_COMMAND_SOURCES src/code_command.cpp src/code_mode.cpp
+            src/interrupt_windows.cpp)
     else()
-        set(CHATBOT_CODE_COMMAND_SOURCES src/code_command.cpp src/interrupt_posix.cpp)
+        set(CHATBOT_CODE_COMMAND_SOURCES src/code_command.cpp src/code_mode.cpp
+            src/interrupt_posix.cpp)
     endif()
 else()
     set(CHATBOT_CODE_COMMAND_SOURCES src/code_command_stub.cpp)

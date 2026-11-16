@@ -1,26 +1,14 @@
 #ifndef CHATBOT_CLI_TASK_LIST_VIEW_H
 #define CHATBOT_CLI_TASK_LIST_VIEW_H
 
+#include "task_list.h"
 #include "theme.h"
 
 #include <ftxui/dom/elements.hpp>
 
-#include <cstdint>
-#include <string>
 #include <vector>
 
 namespace chatbot::cli {
-
-/// En qué va una tarea de la lista del modelo (todo_write).
-enum class TaskState : std::uint8_t { Pending, Active, Done };
-
-/// Una tarea de la lista, como la dibuja render_task_list. Texto externo: se
-/// filtra con md::sanitize al dibujarlo.
-struct TaskItem {
-    TaskState state = TaskState::Pending;
-    std::string content;     ///< "Agregar la prueba".
-    std::string active_form; ///< "Agregando la prueba": se ve mientras está en curso.
-};
 
 /// Filas como máximo de la lista de tareas.
 inline constexpr int kTaskListMaxRows = 3;

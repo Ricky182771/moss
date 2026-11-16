@@ -54,9 +54,11 @@ add_executable(chatbot_tests
     test_tool_call_accumulator.cpp
     test_web_search.cpp)
 
-# moss code -p (code_command.h): solo existe con Moss Code; sin él, code_command_stub.cpp.
+# moss code -p (code_command.h) y CodeMode (code_mode.h): solo existen con Moss Code; sin él,
+# code_command_stub.cpp. code_mode.h usa los tipos de chatbot::code (privada de chatbot_cli_lib).
 if(CHATBOT_BUILD_CODE)
-    target_sources(chatbot_tests PRIVATE test_code_command.cpp)
+    target_sources(chatbot_tests PRIVATE test_code_command.cpp test_code_mode.cpp)
+    target_link_libraries(chatbot_tests PRIVATE chatbot::code)
 endif()
 target_compile_features(chatbot_tests PRIVATE cxx_std_20)
 target_include_directories(chatbot_tests PRIVATE
