@@ -30,7 +30,7 @@ Teclas:
 | F2 | Abre o cierra la configuración |
 | Ctrl+N | Empieza una conversación nueva |
 | Ctrl+B | Muestra u oculta la barra de conversaciones |
-| Ctrl+O | Pasa a la barra de conversaciones (y la muestra si estaba oculta) |
+| Ctrl+O | Pasa a la barra de conversaciones (y la muestra si estaba oculta). En `moss code` significa otra cosa: ver [Moss Code](19-moss-code-uso.md) |
 | Ctrl+T | Abre el pensamiento de todas las respuestas (si ya están todos abiertos, los cierra); ver [Pensamiento](#pensamiento-del-modelo) |
 | Ctrl+C | Sale |
 

@@ -37,10 +37,13 @@ public:
     /// cada tecla y al dibujar. El menú se ve si la caja tiene el foco, el
     /// texto empieza con "/" y no tiene espacios ni saltos de línea (se está
     /// escribiendo el nombre), salvo que se haya cerrado (Esc o al elegir)
-    /// con este mismo texto.
-    void update(std::string_view text, bool input_focused);
+    /// con este mismo texto. Solo coinciden los comandos del modo mode (sin valor
+    /// por defecto: cada pantalla dice el suyo).
+    void update(std::string_view text, bool input_focused, CommandMode mode);
 
     [[nodiscard]] bool is_open() const { return open_; }
+    /// El modo del último update (la vista mide solo sus comandos).
+    [[nodiscard]] CommandMode mode() const { return mode_; }
     /// Índices en kCommands de los comandos que coinciden, en orden. Vacío
     /// con el menú abierto: se ve la fila kNoMatches.
     [[nodiscard]] const std::vector<std::size_t>& matches() const { return matches_; }
@@ -70,6 +73,7 @@ private:
     void dismiss(std::string text);
 
     bool open_ = false;
+    CommandMode mode_ = CommandMode::Chat;
     std::string text_; ///< Texto de la caja en el último update.
     std::optional<std::string> dismissed_;
     std::vector<std::size_t> matches_;

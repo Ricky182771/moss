@@ -12,7 +12,7 @@ Moss es un chatbot tipo asistente general que corre en la terminal (pantalla com
 - **RPC (`rpc/`)**: ejecutable `moss-rpc`, la app sin pantalla por JSON-RPC 2.0 sobre stdin/stdout, para la interfaz gráfica (Flutter) y otras interfaces. Usa la misma lógica que la TUI (`Session`), sin FTXUI ni addons. Protocolo en `rpc/PROTOCOL.md`.
 - **Addons (`addons/`)**: bots que usan el mismo núcleo (hoy, Telegram), compilados por defecto solo en Linux; la app los arranca (`moss telegram`) y los configura en F2 → Addons (sección 14). `core` no sabe que existen; de `addons/`, `cli/` solo usa `chatbot::addon_settings`.
 - **Procesos (`process/`)**: `chatbot::process`, programas externos sin shell (`run_process`, `find_in_path`); la usan `cli/` y `code/`.
-- **Moss Code (`code/`)**: `chatbot::code`, el motor del modo agente de programación (herramientas de lectura, `ProjectRoot`, `AgentLoop`), sin terminal; `moss code -p` en C1. Opción `CHATBOT_BUILD_CODE` (ON). Diseño: `guias/18-moss-code.md`; uso: `guias/19-moss-code-uso.md`.
+- **Moss Code (`code/`)**: `chatbot::code`, el motor del modo agente de programación (herramientas de lectura, `ProjectRoot`, `AgentLoop`), sin terminal; `moss code -p` en C1; `moss code` abre su pantalla de solo lectura en C2 (`cli/src/code_screen.cpp` y `CodeMode`). Opción `CHATBOT_BUILD_CODE` (ON). Diseño: `guias/18-moss-code.md`; uso: `guias/19-moss-code-uso.md`.
 - **Interfaz gráfica (`gui/`)**: app de Flutter (`moss-gui`) que arranca `moss-rpc` como proceso hijo; sin lógica del núcleo (sección 16).
 - **Servidor**: API de NVIDIA NIM (plan gratuito), compatible con OpenAI: `POST {base_url}/chat/completions`.
 

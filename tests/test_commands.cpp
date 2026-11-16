@@ -5,6 +5,7 @@
 
 #include <string>
 #include <string_view>
+#include <vector>
 
 using chatbot::cli::CommandAvailability;
 using chatbot::cli::CommandContext;
@@ -36,12 +37,16 @@ TEST_CASE("Cada comando del registro lo reconoce parse_command", "[commands]") {
     for (const CommandInfo& command : kCommands) {
         INFO(command.name);
         CHECK(command.name.front() == '/');
-        const ParsedCommand parsed = chatbot::cli::parse_command(command.name);
+        // En su modo (los de los dos, en el del chat).
+        const chatbot::cli::CommandMode mode = command.mode == chatbot::cli::CommandMode::Both
+                                                   ? chatbot::cli::CommandMode::Chat
+                                                   : command.mode;
+        const ParsedCommand parsed = chatbot::cli::parse_command(command.name, {}, mode);
         CHECK(parsed.type != ParsedCommand::Type::Normal);
         CHECK(chatbot::cli::command_name(parsed.type) == command.name);
         // Con un argumento también es el mismo comando (bien o mal usado).
         const ParsedCommand with_argument =
-            chatbot::cli::parse_command(std::string{command.name} + " 1");
+            chatbot::cli::parse_command(std::string{command.name} + " 1", {}, mode);
         CHECK(chatbot::cli::command_name(with_argument.type) == command.name);
     }
 }
@@ -50,7 +55,8 @@ TEST_CASE("Ningún tipo de ParsedCommand queda sin entrada en el registro", "[co
     using Type = ParsedCommand::Type;
     for (const Type type : {Type::Search, Type::SearchEmpty, Type::Copy, Type::CopyUsage,
                             Type::Save, Type::SaveUsage, Type::Export, Type::ExportUsage,
-                            Type::Model, Type::ModelUsage}) {
+                            Type::Model, Type::ModelUsage, Type::Clear, Type::ClearUsage,
+                            Type::Help, Type::HelpUsage}) {
         INFO(static_cast<int>(type));
         CHECK(chatbot::cli::find_command(chatbot::cli::command_name(type)) != nullptr);
     }
@@ -67,9 +73,13 @@ TEST_CASE("Los argumentos del registro coinciden con los avisos de uso", "[comma
     CHECK(usage("/copiar") == chatbot::cli::kCopyUsage);
     CHECK(usage("/guardar") == chatbot::cli::kSaveUsage);
     CHECK(usage("/model") == chatbot::cli::kModelUsage);
-    const CommandInfo* exportar = chatbot::cli::find_command("/exportar");
-    REQUIRE(exportar != nullptr);
-    CHECK(exportar->arguments.empty());
+    for (const char* name : {"/exportar", "/clear", "/ayuda"}) {
+        const CommandInfo* command = chatbot::cli::find_command(name);
+        REQUIRE(command != nullptr);
+        CHECK(command->arguments.empty());
+    }
+    CHECK(chatbot::cli::kClearUsage == "Uso: /clear (sin argumentos)");
+    CHECK(chatbot::cli::kHelpUsage == "Uso: /ayuda (sin argumentos)");
 }
 
 TEST_CASE("Registro: nombres en minúsculas, sin repetir y descripciones cortas", "[commands]") {
@@ -140,13 +150,36 @@ TEST_CASE("Disponibilidad de los comandos", "[commands]") {
         context.has_turns = false;
         CHECK(availability_of("/exportar", context).note == "la conversación está vacía");
     }
-    SECTION("Con una respuesta en curso, ninguno") {
+    SECTION("Con una respuesta en curso, ninguno salvo /ayuda") {
         CommandContext context = ready();
         context.busy = true;
-        for (const CommandAvailability& state : chatbot::cli::command_availability(context)) {
-            CHECK_FALSE(state.available);
-            CHECK(state.note == "espera a que termine la respuesta");
+        const std::vector<CommandAvailability> all = chatbot::cli::command_availability(context);
+        for (std::size_t i = 0; i < kCommands.size(); ++i) {
+            INFO(kCommands[i].name);
+            if (kCommands[i].name == "/ayuda") {
+                CHECK(all[i].available); // Solo agrega una entrada: sirve durante el turno.
+                continue;
+            }
+            CHECK_FALSE(all[i].available);
+            CHECK(all[i].note == "espera a que termine la respuesta");
         }
+    }
+    SECTION("Modo código: /clear espera al turno; /model también y respeta CHAT_MODEL") {
+        // Lo que llena CodeMode::command_context: configured, busy y model_locked.
+        CommandContext context{};
+        context.configured = true;
+        CHECK(availability_of("/clear", context).available);
+        CHECK(availability_of("/model", context).available);
+        CHECK(availability_of("/ayuda", context).available);
+        context.busy = true;
+        CHECK(availability_of("/clear", context).note == "espera a que termine la respuesta");
+        CHECK(availability_of("/model", context).note == "espera a que termine la respuesta");
+        context.model_locked = true;
+        CHECK(availability_of("/model", context).note == "fijado por CHAT_MODEL");
+        CHECK(availability_of("/clear", context).note == "espera a que termine la respuesta");
+        context.busy = false;
+        CHECK(availability_of("/clear", context).available);
+        CHECK_FALSE(availability_of("/model", context).available);
     }
     SECTION("Lo que no se arregla esperando va antes que la respuesta en curso") {
         CommandContext context{};
@@ -155,4 +188,24 @@ TEST_CASE("Disponibilidad de los comandos", "[commands]") {
         CHECK(availability_of("/copiar", context).note == "no hay bloques de código");
         CHECK(availability_of("/exportar", context).note == "la conversación está vacía");
     }
+}
+
+TEST_CASE("Los comandos de cada modo, en el orden del registro", "[commands]") {
+    using chatbot::cli::CommandMode;
+    const auto names_in = [](CommandMode mode) {
+        std::vector<std::string_view> names;
+        for (const CommandInfo& command : kCommands) {
+            if (chatbot::cli::command_in_mode(command.mode, mode)) {
+                names.push_back(command.name);
+            }
+        }
+        return names;
+    };
+    CHECK(names_in(CommandMode::Chat) ==
+          std::vector<std::string_view>{"/buscar", "/copiar", "/guardar", "/exportar", "/model"});
+    CHECK(names_in(CommandMode::Code) ==
+          std::vector<std::string_view>{"/model", "/clear", "/ayuda"});
+    CHECK(chatbot::cli::command_in_mode(CommandMode::Both, CommandMode::Chat));
+    CHECK(chatbot::cli::command_in_mode(CommandMode::Both, CommandMode::Code));
+    CHECK_FALSE(chatbot::cli::command_in_mode(CommandMode::Code, CommandMode::Chat));
 }

@@ -133,6 +133,7 @@ TEST_CASE("línea de comandos: mensajes y ayuda", "[addons][lanzador]") {
               .find("no instalado (copia moss-telegram junto a moss)") != std::string::npos);
 
     CHECK(installed.find("moss code [carpeta] -p <texto>") != std::string::npos);
+    CHECK(installed.find("moss code [carpeta]        Moss Code:") != std::string::npos);
 
     bool searched = false;
     const std::string windows = chatbot::cli::usage_text(

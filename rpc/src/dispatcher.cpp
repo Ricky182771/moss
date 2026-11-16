@@ -1492,6 +1492,9 @@ Json Dispatcher::command_list() const {
     Json commands = Json::array();
     for (std::size_t i = 0; i < cli::kCommands.size(); ++i) {
         const cli::CommandInfo& command = cli::kCommands[i];
+        if (!cli::command_in_mode(command.mode, cli::CommandMode::Chat)) {
+            continue; // El RPC es el chat: /clear y /ayuda son del modo código.
+        }
         commands.push_back({{"name", std::string{command.name}},
                             {"arguments", std::string{command.arguments}},
                             {"description", std::string{command.description}},

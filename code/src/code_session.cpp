@@ -47,6 +47,11 @@ bool CodeSession::respond_approval(ApprovalDecision decision, const std::string&
     return loop_->respond_approval(decision, reason);
 }
 
+bool CodeSession::set_client(std::unique_ptr<ChatClient> client,
+                             std::vector<std::string> secrets) {
+    return loop_->set_client(std::move(client), std::move(secrets));
+}
+
 const std::vector<TodoItem>& CodeSession::todos() const {
     return loop_->todos();
 }

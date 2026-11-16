@@ -11,12 +11,13 @@ namespace {
 // "Colores y accesibilidad").
 // Un respaldo de otro ancho lo dice; donde se usa, el layout mide el texto.
 // Comprobado con el cmap de consola.ttf y lucon.ttf (tools/check_glyphs.ps1).
-constexpr std::array<GlyphInfo, 20> kGlyphs{{
+constexpr std::array<GlyphInfo, 22> kGlyphs{{
     {Glyph::Gear, "⚙", "*"},
     {Glyph::Check, "✓", "√"},
     {Glyph::Warning, "⚠", "!"},
     {Glyph::TaskDone, "☑", "[x]"}, // 3 columnas: la sangría de la lista se mide.
     {Glyph::TaskOpen, "☐", "[ ]"},
+    {Glyph::TaskActive, "◐", "[~]"},
     {Glyph::DropdownOpen, "▴", "^"},
     {Glyph::DropdownClosed, "▾", "v"},
     {Glyph::HeadingMark, "▍", "▌"},
@@ -27,6 +28,7 @@ constexpr std::array<GlyphInfo, 20> kGlyphs{{
     {Glyph::BulletLevel3, "▪", "-"},
     {Glyph::ReasoningClosed, "▸", ">"},
     {Glyph::SearchMark, "⌕", "@"},
+    {Glyph::ToolResult, "⎿", "└"},
     {Glyph::RoundedTopLeft, "╭", "┌"},
     {Glyph::RoundedTopRight, "╮", "┐"},
     {Glyph::RoundedBottomLeft, "╰", "└"},

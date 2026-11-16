@@ -20,6 +20,8 @@ using chatbot::cli::CommandAvailability;
 using chatbot::cli::CommandContext;
 using chatbot::cli::CommandMenu;
 
+constexpr chatbot::cli::CommandMode kChat = chatbot::cli::CommandMode::Chat;
+
 /// Todo disponible.
 std::vector<CommandAvailability> all_available() {
     return chatbot::cli::command_availability(CommandContext{true, true, true, true, false, false});
@@ -69,7 +71,7 @@ int column_of(const ftxui::Screen& screen, int y, const std::string& needle) {
 
 TEST_CASE("Menú de comandos: columnas alineadas", "[command_menu_view]") {
     CommandMenu menu;
-    menu.update("/", true);
+    menu.update("/", true, kChat);
     const ftxui::Screen screen = draw(menu, all_available(), 100, chatbot::cli::terminal_palette());
     const std::vector<std::string> rows = rows_of(screen);
     REQUIRE(rows.size() == 6);
@@ -90,9 +92,26 @@ TEST_CASE("Menú de comandos: columnas alineadas", "[command_menu_view]") {
     CHECK(rows[1].rfind("  /", 0) == 0);
 }
 
+TEST_CASE("Menú de comandos: en modo código, sus tres comandos y sus columnas",
+          "[command_menu_view]") {
+    CommandMenu menu;
+    menu.update("/", true, chatbot::cli::CommandMode::Code);
+    const ftxui::Screen screen = draw(menu, all_available(), 100, chatbot::cli::terminal_palette());
+    const std::vector<std::string> rows = rows_of(screen);
+    REQUIRE(rows.size() == 4);
+    CHECK(rows[1].find("  /model [proveedor] [modelo]") == 0);
+    CHECK(rows[2].find("  /clear") == 0);
+    CHECK(rows[3].find("  /ayuda") == 0);
+    // Alineado al más largo del modo, no al /guardar del chat.
+    const int description = 2 + ftxui::string_width("/model [proveedor] [modelo]") + 2;
+    CHECK(column_of(screen, 1, "Cambia de modelo") == description);
+    CHECK(column_of(screen, 2, "Empieza una sesión nueva") == description);
+    CHECK(column_of(screen, 3, "Muestra las teclas") == description);
+}
+
 TEST_CASE("Menú de comandos: el cursor lleva la selección a todo lo ancho", "[command_menu_view]") {
     CommandMenu menu;
-    menu.update("/", true);
+    menu.update("/", true, kChat);
     (void)menu.handle(chatbot::cli::ListKey::Down); // /copiar
     const ftxui::Screen screen = draw(menu, all_available(), 100, chatbot::cli::terminal_palette());
     // Tema "De la terminal": la selección es invertida.
@@ -105,7 +124,7 @@ TEST_CASE("Menú de comandos: el cursor lleva la selección a todo lo ancho", "[
 TEST_CASE("Menú de comandos: los no disponibles muestran su nota, atenuados",
           "[command_menu_view]") {
     CommandMenu menu;
-    menu.update("/", true);
+    menu.update("/", true, kChat);
     CommandContext context{true, false, false, true, false}; // Sin key ni bloques.
     const ftxui::Screen screen = draw(menu, chatbot::cli::command_availability(context), 100,
                                       chatbot::cli::terminal_palette());
@@ -122,7 +141,7 @@ TEST_CASE("Menú de comandos: los no disponibles muestran su nota, atenuados",
 
 TEST_CASE("Menú de comandos: recorte con … en ancho chico", "[command_menu_view]") {
     CommandMenu menu;
-    menu.update("/", true);
+    menu.update("/", true, kChat);
     SECTION("La descripción se recorta") {
         const ftxui::Screen screen =
             draw(menu, all_available(), 60, chatbot::cli::terminal_palette());
@@ -154,7 +173,7 @@ TEST_CASE("Menú de comandos: recorte con … en ancho chico", "[command_menu_vi
 
 TEST_CASE("Menú de comandos: fila de sin coincidencias", "[command_menu_view]") {
     CommandMenu menu;
-    menu.update("/xyz", true);
+    menu.update("/xyz", true, kChat);
     std::vector<ftxui::Box> boxes{ftxui::Box{}};
     const ftxui::Screen screen =
         draw(menu, all_available(), 80, chatbot::cli::terminal_palette(), &boxes);
@@ -169,7 +188,7 @@ TEST_CASE("Menú de comandos: fila de sin coincidencias", "[command_menu_view]")
 
 TEST_CASE("Menú de comandos: una caja por fila para el ratón", "[command_menu_view]") {
     CommandMenu menu;
-    menu.update("/", true);
+    menu.update("/", true, kChat);
     std::vector<ftxui::Box> boxes;
     (void)draw(menu, all_available(), 80, chatbot::cli::terminal_palette(), &boxes);
     REQUIRE(boxes.size() == 5);
@@ -186,7 +205,7 @@ TEST_CASE("Menú de comandos: colores del tema", "[command_menu_view]") {
     // selección del tema (contraste ya revisado en test_theme).
     const chatbot::cli::Palette palette{chatbot::cli::default_theme()};
     CommandMenu menu;
-    menu.update("/", true);
+    menu.update("/", true, kChat);
     CommandContext context{true, true, false, false, false};
     const ftxui::Screen screen =
         draw(menu, chatbot::cli::command_availability(context), 100, palette);

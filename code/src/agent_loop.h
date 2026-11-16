@@ -38,6 +38,7 @@ public:
     [[nodiscard]] LoopState state() const { return state_; }
     [[nodiscard]] std::optional<ToolCallInfo> pending_approval() const;
     bool respond_approval(ApprovalDecision decision, const std::string& reason);
+    bool set_client(std::unique_ptr<ChatClient> client, std::vector<std::string> secrets);
     [[nodiscard]] const std::vector<TodoItem>& todos() const { return todos_; }
 
 private:

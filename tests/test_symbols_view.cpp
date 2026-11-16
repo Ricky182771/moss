@@ -128,7 +128,7 @@ TEST_CASE("símbolos sencillos: barra lateral", "[simbolos][barra]") {
 
 TEST_CASE("símbolos sencillos: menú de comandos", "[simbolos][menu]") {
     chatbot::cli::CommandMenu menu;
-    menu.update("/", true);
+    menu.update("/", true, chatbot::cli::CommandMode::Chat);
     const auto availability = chatbot::cli::command_availability(
         chatbot::cli::CommandContext{true, true, true, true, false, false});
     check_all_palettes([&](const Palette& palette) {
@@ -203,7 +203,11 @@ TEST_CASE("símbolos sencillos: barra de título", "[simbolos][titulo]") {
     check_all_palettes([&](const Palette& palette) {
         ftxui::Box box;
         return draw_fit(chatbot::cli::title_bar("Conversación — larga", 60, palette,
-                                                chatbot::cli::ExportButton{true, false}, box),
+                                                chatbot::cli::ExportButton{true, false},
+                                                chatbot::cli::TitleHelp{
+                                                    "Ctrl+B barra · Ctrl+O conversaciones",
+                                                    "Ctrl+B · Ctrl+O"},
+                                                box),
                         60);
     }, false);
 }

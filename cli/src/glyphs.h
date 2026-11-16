@@ -56,15 +56,17 @@ enum class Glyph : std::uint8_t {
     Check,         ///< "[✓ Copiado]" (botones de los bloques).
     Warning,       ///< "⚠ #1 incompleto" (avisos de los botones).
     TaskDone,      ///< Tarea hecha en una lista de markdown.
-    TaskOpen,      ///< Tarea pendiente.
-    DropdownOpen,  ///< Lista de proveedores abierta (configuración).
+    TaskOpen,      ///< Tarea pendiente (también en la lista de tareas del modo código).
+    TaskActive,    ///< Tarea en curso de la lista de tareas del modo código.
+    DropdownOpen, ///< Lista de proveedores abierta (configuración).
     DropdownClosed,
     HeadingMark,   ///< Marca de los títulos H3-H6.
-    ChosenMark,    ///< Elegido en las listas (list_style.h).
+    ChosenMark,    ///< Elegido en las listas (list_style.h) y la línea de una herramienta.
     BulletLevel2,  ///< Viñeta del segundo nivel de una lista de markdown.
     BulletLevel3,  ///< Viñeta del tercer nivel (el primero, "•", se queda).
     ReasoningClosed, ///< "▸ Pensamiento" plegado (abierto: DropdownClosed, "▾").
     SearchMark,    ///< Al final del título en la barra: la conversación usó /buscar.
+    ToolResult,    ///< "⎿" antes del resultado de una herramienta.
     // Los de FTXUI: los cambia Palette (border_style, vscroll).
     RoundedTopLeft, ///< borderRounded y window.
     RoundedTopRight,

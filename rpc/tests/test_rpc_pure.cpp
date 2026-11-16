@@ -173,6 +173,24 @@ TEST_CASE("Codificación de Entry", "[rpc]") {
     CHECK_FALSE(chatbot::rpc::encode_entry(entry).contains("sources"));
 }
 
+TEST_CASE("Codificación de Entry: una herramienta no sale del modo código", "[rpc]") {
+    // El chat nunca la produce; si llegara, es un aviso vacío (conserva los
+    // índices) sin nada de la herramienta.
+    Entry tool;
+    tool.kind = EntryKind::Tool;
+    tool.text = "secreto en text";
+    tool.reasoning = "secreto en reasoning";
+    tool.tool.summary = "Leer secreto.txt";
+    tool.tool.result = "3 líneas";
+    tool.tool.output = "la salida secreta";
+    CHECK(chatbot::rpc::entry_kind_name(EntryKind::Tool) == "notice");
+    Entry empty_notice;
+    empty_notice.kind = EntryKind::Notice;
+    const std::string encoded = chatbot::rpc::encode_entry(tool).dump();
+    CHECK(encoded == chatbot::rpc::encode_entry(empty_notice).dump());
+    CHECK(encoded.find("secret") == std::string::npos);
+}
+
 TEST_CASE("Codificación de cada ErrorKind y de ChatError", "[rpc]") {
     using chatbot::ErrorKind;
     const std::vector<std::pair<ErrorKind, std::string>> names{

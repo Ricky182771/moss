@@ -1,22 +1,19 @@
 #include "code_command.h"
 
 #include "app_startup.h"
+#include "code_mode.h"
 #include "conversation_store.h"
 #include "interrupt.h"
 
-#include "chatbot/code/code_limits.h"
 #include "chatbot/code/code_session.h"
-#include "chatbot/credentials.h"
 #include "chatbot/curl_transport.h"
 #include "chatbot/markdown/markdown.h"
-#include "chatbot/platform.h"
 
 #include <algorithm>
 #include <chrono>
 #include <condition_variable>
 #include <cstddef>
 #include <deque>
-#include <filesystem>
 #include <iostream>
 #include <mutex>
 #include <utility>
@@ -25,26 +22,6 @@
 namespace chatbot::cli {
 
 namespace {
-
-namespace fs = std::filesystem;
-
-// Los strings de la app son UTF-8; fs::path en Windows no lo es (string() usa la página ANSI).
-fs::path path_of(const std::string& text) {
-    std::u8string utf8(text.size(), u8'\0');
-    for (std::size_t i = 0; i < text.size(); ++i) {
-        utf8[i] = static_cast<char8_t>(static_cast<unsigned char>(text[i]));
-    }
-    return fs::path{utf8};
-}
-
-std::string utf8_of(const fs::path& path) {
-    const std::u8string utf8 = path.u8string();
-    std::string text(utf8.size(), '\0');
-    for (std::size_t i = 0; i < utf8.size(); ++i) {
-        text[i] = static_cast<char>(static_cast<unsigned char>(utf8[i]));
-    }
-    return text;
-}
 
 /// Texto que viene del modelo o de un archivo, para stderr: sin controles y en una línea.
 std::string one_line(const std::string& text) {
@@ -103,50 +80,6 @@ private:
     std::deque<Task> tasks_;
 };
 
-/// Lo que no debe llegar al modelo: la key del modelo, las del entorno y todas las de
-/// credentials.json (búsqueda, Telegram, otros proveedores). Sin vacíos ni repetidos.
-std::vector<std::string> secrets_of(const Config& config, const CodeEnvironment& environment) {
-    std::vector<std::string> secrets;
-    const auto add = [&secrets](const std::string& secret) {
-        if (!secret.empty() && std::find(secrets.begin(), secrets.end(), secret) == secrets.end()) {
-            secrets.push_back(secret);
-        }
-    };
-    add(config.api_key);
-    for (const std::string& secret : environment.env_secrets) {
-        add(secret);
-    }
-    if (environment.credentials_path.has_value()) {
-        // Ilegible o con permisos abiertos: sin esas keys (la app tampoco las usa).
-        const Result<Credentials> stored = load_credentials(*environment.credentials_path);
-        if (!stored.is_error()) {
-            for (const auto& [name, key] : stored.value().keys) {
-                add(key);
-            }
-        }
-    }
-    return secrets;
-}
-
-/// La carpeta de datos de la app por defecto, sin CHAT_DATA_DIR: el padre de las conversaciones.
-std::optional<std::string> default_app_data_dir() {
-    const auto env = [](const char* name) -> std::optional<std::string> {
-        const std::string_view value = process_env(name);
-        return value.empty() ? std::nullopt : std::optional<std::string>{std::string{value}};
-    };
-    const std::optional<std::string> conversations =
-        current_os() == Os::Windows
-            ? resolve_windows_data_dir(std::nullopt, process_portable_data_dir(),
-                                       known_folder(KnownFolder::LocalAppData),
-                                       env("LOCALAPPDATA"))
-            : resolve_data_dir(std::nullopt, process_portable_data_dir(), env("XDG_DATA_HOME"),
-                               env("HOME"));
-    if (!conversations.has_value()) {
-        return std::nullopt;
-    }
-    return utf8_of(path_of(*conversations).parent_path());
-}
-
 // "●" (U+25CF); no está en la tabla de símbolos de glyphs.cpp y esta salida va a stderr, sin
 // pantalla ni modo Sencillos. Escapado porque test_glyphs prohíbe ese carácter en cli/src.
 constexpr const char* kToolMark = "\u25CF ";
@@ -158,10 +91,6 @@ constexpr std::chrono::milliseconds kPollInterval{50};
 
 int run_code(const CommandLine& line, CodeEnvironment& environment) {
     std::ostream& err = environment.err;
-    if (!line.prompt.has_value()) {
-        err << "La pantalla de Moss Code llega en C2; por ahora usa: moss code -p \"…\"\n";
-        return kExitUsage;
-    }
 
     // Configuración, como la app (también en portable): sin key o sin modelo, el error Config.
     const Result<Config> loaded = environment.load_config();
@@ -178,47 +107,23 @@ int run_code(const CommandLine& line, CodeEnvironment& environment) {
         err << one_line(warning) << '\n';
     }
 
-    // La raíz: la indicada o la actual; nunca la carpeta de Moss (configuración ni datos).
-    std::error_code ignored;
-    const std::string folder =
-        line.folder.empty() ? utf8_of(fs::current_path(ignored)) : line.folder;
-    std::vector<std::string> blocked;
-    for (const std::optional<std::string>& file : {environment.config_path,
-                                                   environment.credentials_path}) {
-        if (file.has_value()) {
-            blocked.push_back(utf8_of(path_of(*file).parent_path()));
-        }
-    }
-    for (const std::optional<std::string>& dir :
-         {environment.data_dir, environment.app_data_dir, environment.portable_dir}) {
-        if (dir.has_value()) {
-            blocked.push_back(*dir);
-        }
-    }
-    const Result<code::ProjectRoot> root = code::ProjectRoot::open(folder, blocked);
-    if (root.is_error()) {
-        print_error(err, root.error());
+    // La carpeta, los límites y las instrucciones personales, como la pantalla (code_mode.h).
+    const CodePaths paths{
+        .config_path = environment.config_path,
+        .credentials_path = environment.credentials_path,
+        .data_dir = environment.data_dir,
+        .app_data_dir = environment.app_data_dir,
+        .portable_dir = environment.portable_dir,
+        .home = environment.home,
+        .env_secrets = environment.env_secrets,
+    };
+    const Result<CodeProject> project = open_code_project(line.folder, paths, environment.now);
+    if (project.is_error()) {
+        print_error(err, project.error());
         return kExitCodeError;
     }
-    if (!environment.home.empty() && root.value().is_same_directory(environment.home)) {
-        err << "Aviso: la carpeta del proyecto es tu carpeta personal; el modelo podrá leer "
-               "todo lo que hay en ella.\n";
-    }
-
-    // Límites e instrucciones personales (junto a config.json).
-    code::CodeLimits limits;
-    if (environment.config_path.has_value()) {
-        const code::LoadedCodeLimits loaded_limits = code::load_code_limits(*environment.config_path);
-        limits = loaded_limits.limits;
-        for (const std::string& warning : loaded_limits.warnings) {
-            err << one_line(warning) << '\n';
-        }
-    }
-    code::SystemPromptOptions prompt_options;
-    prompt_options.now = environment.now;
-    if (environment.config_path.has_value()) {
-        prompt_options.personal_instructions =
-            utf8_of(path_of(*environment.config_path).parent_path() / "AGENTS.md");
+    for (const std::string& notice : project.value().notices) {
+        err << one_line(notice) << '\n';
     }
 
     // Se destruye al revés: la sesión primero (su hilo de trabajo usa la cola y los flujos).
@@ -237,20 +142,20 @@ int run_code(const CommandLine& line, CodeEnvironment& environment) {
     observer.on_turn_end = [&outcome](const code::TurnOutcome& end) { outcome = end; };
 
     code::CodeSessionEnvironment session_environment{
-        .root = root.value(),
+        .root = project.value().root,
         .client = environment.make_client(config),
-        .prompt_options = std::move(prompt_options),
-        .secrets = secrets_of(config, environment),
-        .limits = limits,
+        .prompt_options = project.value().prompt_options,
+        .secrets = code_secrets(config, paths),
+        .limits = project.value().limits,
         .interactive = false,
     };
     code::CodeSession session{std::move(session_environment),
                               [&queue](code::CodeSession::Task task) { queue.post(std::move(task)); },
                               std::move(observer)};
     if (session.instructions().instructions_truncated) {
-        err << "Aviso: AGENTS.md o CLAUDE.md es demasiado largo y se recortó.\n";
+        err << kInstructionsTruncated << '\n';
     }
-    if (!session.send(*line.prompt)) {
+    if (!session.send(line.prompt.value_or(std::string{}))) {
         err << "[Config] No se pudo empezar el turno.\n";
         return kExitCodeError;
     }
@@ -297,7 +202,7 @@ int run_code_command(const CommandLine& line) {
         .data_dir = default_data_dir(),
         .app_data_dir = default_app_data_dir(),
         .portable_dir = process_portable_data_dir(),
-        .home = std::string{process_env("HOME")},
+        .home = personal_home(),
         .env_secrets = {std::string{process_env("CHAT_SEARCH_API_KEY")},
                         std::string{process_env("CHAT_TELEGRAM_TOKEN")}},
         .make_client =
@@ -307,9 +212,6 @@ int run_code_command(const CommandLine& line) {
         .interrupted = InterruptGuard::requested,
         .now = [] { return std::time(nullptr); },
     };
-    if (environment.home.empty()) {
-        environment.home = std::string{process_env("USERPROFILE")}; // Windows.
-    }
     return run_code(line, environment);
 }
 

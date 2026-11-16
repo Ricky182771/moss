@@ -12,4 +12,8 @@ int run_code_command(const CommandLine&) {
     return kExitUnavailable;
 }
 
+int run_code_screen(const std::string&) {
+    return run_code_command({});
+}
+
 } // namespace chatbot::cli

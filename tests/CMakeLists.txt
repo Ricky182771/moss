@@ -54,9 +54,11 @@ add_executable(chatbot_tests
     test_tool_call_accumulator.cpp
     test_web_search.cpp)
 
-# moss code -p (code_command.h): solo existe con Moss Code; sin él, code_command_stub.cpp.
+# moss code -p (code_command.h) y CodeMode (code_mode.h): solo existen con Moss Code; sin él,
+# code_command_stub.cpp. code_mode.h usa los tipos de chatbot::code (privada de chatbot_cli_lib).
 if(CHATBOT_BUILD_CODE)
-    target_sources(chatbot_tests PRIVATE test_code_command.cpp)
+    target_sources(chatbot_tests PRIVATE test_code_command.cpp test_code_mode.cpp)
+    target_link_libraries(chatbot_tests PRIVATE chatbot::code)
 endif()
 target_compile_features(chatbot_tests PRIVATE cxx_std_20)
 target_include_directories(chatbot_tests PRIVATE
@@ -92,8 +94,11 @@ add_test(NAME chatbot_markdown_tests COMMAND chatbot_markdown_tests)
 # Van aparte para que chatbot_tests no enlace FTXUI.
 add_executable(chatbot_ui_tests
     ${PROJECT_SOURCE_DIR}/cli/src/addons_panel.cpp
+    ${PROJECT_SOURCE_DIR}/cli/src/key_events.cpp
+    ${PROJECT_SOURCE_DIR}/cli/src/screen_input.cpp
     ${PROJECT_SOURCE_DIR}/cli/src/settings_screen.cpp
     ${PROJECT_SOURCE_DIR}/cli/src/text_area.cpp
+    test_screen_input.cpp
     test_settings_screen.cpp
     test_addons_panel.cpp
     test_command_menu_view.cpp
@@ -104,6 +109,7 @@ add_executable(chatbot_ui_tests
     test_sidebar_view.cpp
     test_status_line.cpp
     test_symbols_view.cpp
+    test_task_list_view.cpp
     test_text_area.cpp
     test_text_edit.cpp
     test_markdown_view.cpp
@@ -115,6 +121,15 @@ target_link_libraries(chatbot_ui_tests PRIVATE
 # Archivos de tests/data (solo lectura).
 target_compile_definitions(chatbot_ui_tests PRIVATE
     CHATBOT_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
+# La pantalla de Moss Code (code_screen.h) con CodeMode y clientes falsos: solo con Moss Code.
+if(CHATBOT_BUILD_CODE)
+    target_sources(chatbot_ui_tests PRIVATE
+        ${PROJECT_SOURCE_DIR}/cli/src/code_screen.cpp
+        ${PROJECT_SOURCE_DIR}/cli/src/prompt_menus.cpp
+        ${PROJECT_SOURCE_DIR}/cli/src/settings_binding.cpp
+        test_code_screen.cpp)
+    target_link_libraries(chatbot_ui_tests PRIVATE chatbot::code)
+endif()
 chatbot_set_warnings(chatbot_ui_tests)
 chatbot_windows_manifest(chatbot_ui_tests)
 add_test(NAME chatbot_ui_tests COMMAND chatbot_ui_tests)

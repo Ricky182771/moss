@@ -74,7 +74,8 @@ TEST_CASE("todo_write valida estados, campos y content vacío sin tocar la lista
 
 TEST_CASE("todo_write: etiqueta y resumen de la llamada", "[todo_write]") {
     ToolFixture fixture;
-    CHECK(fixture.registry.label("todo_write") == "Lista de tareas");
-    CHECK(fixture.registry.summarize("todo_write", kThree) == "Lista de tareas (3)");
-    CHECK(fixture.registry.summarize("todo_write", R"({"todos": []})") == "Lista de tareas (0)");
+    // Solo "Tareas": la cuenta va en la línea del resultado.
+    CHECK(fixture.registry.label("todo_write") == "Tareas");
+    CHECK(fixture.registry.summarize("todo_write", kThree) == "Tareas");
+    CHECK(fixture.registry.summarize("todo_write", R"({"todos": []})") == "Tareas");
 }

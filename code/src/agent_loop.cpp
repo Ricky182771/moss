@@ -149,6 +149,21 @@ bool AgentLoop::respond_approval(ApprovalDecision decision, const std::string& r
     return true;
 }
 
+bool AgentLoop::set_client(std::unique_ptr<ChatClient> client, std::vector<std::string> secrets) {
+    if (state_ != LoopState::Idle || client == nullptr) {
+        return false;
+    }
+    // En Idle el hilo de trabajo ya mandó su último aviso; el join garantiza que nada suyo siga
+    // vivo cuando se destruya el cliente viejo. Cada petición y herramienta toma env_.client y
+    // env_.secrets al empezar: no queda ninguna copia vieja.
+    if (worker_.joinable()) {
+        worker_.join();
+    }
+    env_.client = std::move(client);
+    env_.secrets = std::move(secrets);
+    return true;
+}
+
 void AgentLoop::start_request() {
     if (steps_ >= env_.limits.max_steps) {
         stop(TurnEnd::StepLimit, {},

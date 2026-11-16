@@ -33,6 +33,29 @@ enum class EntryKind {
     Error,
     Notice, ///< Texto informativo, no es un error (p. ej. "Respuesta cancelada.").
     Sources, ///< Fuentes de una búsqueda web, después de la respuesta (en sources).
+    /// Una llamada a una herramienta (en tool). Solo existe en el modo código:
+    /// Conversation no la crea, nunca se guarda y el RPC no la expone.
+    Tool,
+};
+
+/// En qué va una llamada a una herramienta.
+enum class ToolState : std::uint8_t {
+    Running, ///< Llegando o ejecutándose.
+    Done,
+    Failed,
+};
+
+/// Lo que dibuja una línea de herramienta (solo EntryKind::Tool). Todo es
+/// texto externo: se filtra con md::sanitize al dibujarlo.
+struct ToolLine {
+    /// Resumen en español, ya hecho: "Leer cli/src/main.cpp (1–200)".
+    std::string summary;
+    ToolState state = ToolState::Running;
+    /// Resultado en una línea ("180 líneas") o, con Failed, el error.
+    std::string result;
+    /// Salida completa (el motor la limita a 30 000 caracteres).
+    std::string output;
+    bool expanded = false; ///< Salida completa a la vista.
 };
 
 /// Cómo quiere ver el usuario el pensamiento de una respuesta (solo en la
@@ -68,6 +91,8 @@ struct Entry {
     /// Nunca va en el historial que se envía.
     std::string reasoning;
     ReasoningFold reasoning_fold = ReasoningFold::Auto;
+    /// Solo Tool (que deja vacíos text y lo demás).
+    ToolLine tool{};
 };
 
 /// Cómo se dibuja el pensamiento de entry, según su ReasoningFold.
@@ -79,6 +104,12 @@ struct Entry {
 /// "Pensamiento · 1 240 palabras": reasoning_word_count con
 /// espacio como separador de miles ("1 palabra" en singular).
 [[nodiscard]] std::string reasoning_summary(std::string_view reasoning);
+
+/// Abre o cierra el pensamiento de entries[index] (clic en su línea). Sin pensamiento o fuera
+/// de rango, nada. La usan Conversation y el modo código.
+void toggle_reasoning(std::vector<Entry>& entries, std::size_t index);
+/// Ctrl+T: si alguno no está abierto completo, abre todos; si no, los cierra todos.
+void toggle_all_reasoning(std::vector<Entry>& entries);
 
 /// Estado de la conversación. Se usa solo desde el hilo de la interfaz y no
 /// sabe nada de FTXUI ni de hilos.
