@@ -203,7 +203,11 @@ TEST_CASE("símbolos sencillos: barra de título", "[simbolos][titulo]") {
     check_all_palettes([&](const Palette& palette) {
         ftxui::Box box;
         return draw_fit(chatbot::cli::title_bar("Conversación — larga", 60, palette,
-                                                chatbot::cli::ExportButton{true, false}, box),
+                                                chatbot::cli::ExportButton{true, false},
+                                                chatbot::cli::TitleHelp{
+                                                    "Ctrl+B barra · Ctrl+O conversaciones",
+                                                    "Ctrl+B · Ctrl+O"},
+                                                box),
                         60);
     }, false);
 }

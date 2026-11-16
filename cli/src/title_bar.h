@@ -20,14 +20,20 @@ struct ExportButton {
 /// Etiqueta del botón de exportar.
 inline constexpr std::string_view kExportLabel = "[Exportar]";
 
-/// Título a la izquierda; [Exportar] y la ayuda de teclas a la derecha. El
-/// título ocupa primero el ancho, luego el botón y al final la ayuda: la
-/// ayuda se acorta o desaparece antes que el botón, y el botón desaparece
-/// antes de recortar el título con puntos suspensivos. box queda con la
-/// caja del botón al dibujar la barra (con reflect), o vacía si no cupo.
+/// Ayuda de teclas de la barra de título: la larga y, si no cabe, la corta.
+struct TitleHelp {
+    std::string_view full;
+    std::string_view short_form;
+};
+
+/// Título a la izquierda; [Exportar] y la ayuda de teclas (help) a la
+/// derecha. El título ocupa primero el ancho, luego el botón y al final la
+/// ayuda: la ayuda se acorta o desaparece antes que el botón, y el botón
+/// desaparece antes de recortar el título con puntos suspensivos. box queda
+/// con la caja del botón al dibujar la barra (con reflect), o vacía si no cupo.
 [[nodiscard]] ftxui::Element title_bar(std::string_view title, int width,
                                       const Palette& palette, const ExportButton& button,
-                                      ftxui::Box& box);
+                                      const TitleHelp& help_text, ftxui::Box& box);
 
 } // namespace chatbot::cli
 

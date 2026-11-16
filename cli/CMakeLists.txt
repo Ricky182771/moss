@@ -108,6 +108,7 @@ endif()
 # chatbot_cli_lib para que esta siga sin FTXUI. Las pruebas de la vista lo
 # usan con ftxui::Screen.
 add_library(chatbot_cli_ui STATIC
+    src/appearance_startup.cpp
     src/command_menu_view.cpp
     src/model_picker_view.cpp
     src/history_view.cpp
@@ -116,6 +117,7 @@ add_library(chatbot_cli_ui STATIC
     src/sidebar_view.cpp
     src/status_line.cpp
     src/markdown_view.cpp
+    src/scroll.cpp
     src/text_edit.cpp
     src/theme.cpp
     src/title_bar.cpp)
@@ -124,7 +126,8 @@ target_link_libraries(chatbot_cli_ui PUBLIC chatbot_cli_lib ftxui::dom ftxui::sc
 chatbot_set_warnings(chatbot_cli_ui)
 
 # Ejecutable de la interfaz: el único que usa ftxui::component.
-add_executable(moss src/main.cpp src/addons_panel.cpp src/settings_screen.cpp src/text_area.cpp)
+add_executable(moss src/main.cpp src/addons_panel.cpp src/key_events.cpp src/settings_screen.cpp
+    src/text_area.cpp)
 target_link_libraries(moss PRIVATE chatbot_cli_lib chatbot_cli_ui ftxui::component)
 chatbot_set_warnings(moss)
 chatbot_windows_manifest(moss)

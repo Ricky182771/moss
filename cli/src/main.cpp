@@ -7,6 +7,7 @@
 
 #include "addon_launcher.h"
 #include "addons_panel.h"
+#include "appearance_startup.h"
 #include "app_startup.h"
 #include "chatbot/child_process.h"
 #include "block_actions.h"
@@ -23,10 +24,12 @@
 #include "history_view.h"
 #include "input_edit.h"
 #include "input_style.h"
+#include "key_events.h"
 #include "key_log.h"
 #include "models_loader.h"
 #include "paste.h"
 #include "provider_settings.h"
+#include "scroll.h"
 #include "search_settings.h"
 #include "session.h"
 #include "settings_screen.h"
@@ -76,55 +79,6 @@ namespace {
 /// Líneas que mueve cada paso de la rueda del ratón.
 constexpr int kWheelStep = 3;
 
-/// Valor de una variable de entorno, o nullopt si no existe.
-std::optional<std::string> env_value(const char* name) {
-    const char* value = std::getenv(name);
-    return value != nullptr ? std::optional<std::string>{value} : std::nullopt;
-}
-
-/// Traduce una tecla de FTXUI a la de la barra de conversaciones.
-chatbot::cli::ListKey list_key(const ftxui::Event& event) {
-    using chatbot::cli::ListKey;
-    const std::pair<const ftxui::Event*, ListKey> keys[] = {
-        {&ftxui::Event::ArrowUp, ListKey::Up},     {&ftxui::Event::ArrowDown, ListKey::Down},
-        {&ftxui::Event::PageUp, ListKey::PageUp},  {&ftxui::Event::PageDown, ListKey::PageDown},
-        {&ftxui::Event::Home, ListKey::Home},      {&ftxui::Event::End, ListKey::End},
-        {&ftxui::Event::Return, ListKey::Enter},   {&ftxui::Event::Escape, ListKey::Escape},
-        {&ftxui::Event::Delete, ListKey::Delete},  {&ftxui::Event::Tab, ListKey::Tab},
-    };
-    for (const auto& [ftxui_event, key] : keys) {
-        if (event == *ftxui_event) {
-            return key;
-        }
-    }
-    return ListKey::Other;
-}
-
-/// Traduce un evento de FTXUI para el acumulador del pegado entre corchetes.
-chatbot::cli::PasteKey paste_key(const ftxui::Event& event) {
-    using chatbot::cli::PasteKey;
-    // Event::Custom es Special("\0"): también un NUL pegado, que se descarta.
-    if (event.is_mouse() || event == ftxui::Event::Custom) {
-        return PasteKey::Passthrough;
-    }
-    if (event == ftxui::Event::Special(chatbot::cli::kPasteStartMark)) {
-        return PasteKey::Start;
-    }
-    if (event == ftxui::Event::Special(chatbot::cli::kPasteEndMark)) {
-        return PasteKey::End;
-    }
-    if (event.is_character()) {
-        return PasteKey::Character;
-    }
-    if (event == ftxui::Event::Return) {
-        return PasteKey::Return;
-    }
-    if (event == ftxui::Event::Tab) {
-        return PasteKey::Tab;
-    }
-    return PasteKey::Other;
-}
-
 /// Atajos de pegado de Windows: Ctrl+V (Ctrl+Shift+V llega igual, como el
 /// byte 0x16) y Shift+Insert (ESC [ 2 ; 2 ~ = 1b 5b 32 3b 32 7e, que FTXUI
 /// v7.0.3 entrega tal cual como Event::Special). Bytes confirmados en conhost
@@ -134,106 +88,14 @@ bool is_paste_shortcut(const ftxui::Event& event) {
            event == ftxui::Event::Special(chatbot::cli::kShiftInsert);
 }
 
-/// Traduce un evento de FTXUI para el registro de teclas (key_log.h). La
-/// vista apunta a event: debe vivir mientras se use.
-chatbot::cli::KeyLogEvent key_log_event(ftxui::Event& event) { // mouse() no es const.
-    using Kind = chatbot::cli::KeyLogEvent::Kind;
-    chatbot::cli::KeyLogEvent out;
-    if (event == ftxui::Event::Custom) {
-        out.kind = Kind::Custom;
-    } else if (event.is_mouse()) {
-        static constexpr std::string_view kButtons[] = {
-            "left", "middle", "right", "none", "wheel-up", "wheel-down", "wheel-left", "wheel-right"};
-        static constexpr std::string_view kMotions[] = {"released", "pressed", "moved"};
-        const ftxui::Mouse& mouse = event.mouse();
-        out.kind = Kind::Mouse;
-        out.button = mouse.button < std::size(kButtons) ? kButtons[mouse.button] : "?";
-        out.motion = mouse.motion < std::size(kMotions) ? kMotions[mouse.motion] : "?";
-        out.x = mouse.x;
-        out.y = mouse.y;
-    } else {
-        out.kind = event.is_character() ? Kind::Character : Kind::Special;
-        out.input = event.input();
-    }
-    return out;
-}
+// Los traductores de teclas (key_events.h) se llaman sin calificar en el loop.
+using chatbot::cli::key_log_event;
+using chatbot::cli::list_key;
+using chatbot::cli::paste_key;
 
-/// Igual que ftxui::reflect, pero guarda la caja completa que recibe el
-/// elemento sin recortarla a la zona visible. Dentro de un frame, eso es el
-/// alto total del contenido, que hace falta para limitar el scroll.
-class MeasureBox : public ftxui::Node {
-public:
-    MeasureBox(ftxui::Element child, ftxui::Box& box)
-        : ftxui::Node(ftxui::Elements{std::move(child)}), box_(box) {}
-
-    void ComputeRequirement() override {
-        ftxui::Node::ComputeRequirement();
-        requirement_ = children_[0]->requirement();
-    }
-
-    void SetBox(ftxui::Box box) override {
-        box_ = box;
-        ftxui::Node::SetBox(box);
-        children_[0]->SetBox(box);
-    }
-
-private:
-    ftxui::Box& box_;
-};
-
-/// Posición del historial en pantalla. La vista sigue el final mientras el
-/// usuario no suba; si sube, se queda donde está aunque llegue texto nuevo.
-/// Se usa solo desde el hilo de la interfaz.
-class Scroll {
-public:
-    /// Decora el historial: frame vertical posicionado según el estado.
-    ftxui::Element apply(ftxui::Element content) {
-        ftxui::Element measured = std::make_shared<MeasureBox>(std::move(content), content_box_);
-        // Frame::SetBox centra el foco: con el foco en top + (alto - 1) / 2 la
-        // primera línea visible es exactamente top (FTXUI v7.0.3, frame.cpp).
-        ftxui::Element focused =
-            follow_ ? measured | ftxui::focusPositionRelative(0.f, 1.f)
-                    : measured | ftxui::focusPosition(0, top_ + (view_height() - 1) / 2);
-        return focused | ftxui::yframe | ftxui::reflect(view_box_) | ftxui::flex;
-    }
-
-    void by(int lines) {
-        const int base = follow_ ? max_top() : top_;
-        top_ = std::clamp(base + lines, 0, max_top());
-        follow_ = top_ >= max_top();
-    }
-    void page_up() { by(-page()); }
-    void page_down() { by(page()); }
-    void to_top() {
-        top_ = 0;
-        follow_ = max_top() == 0;
-    }
-    void to_bottom() { follow_ = true; }
-
-    /// true si (x, y) cae en la zona visible del historial (último cuadro).
-    [[nodiscard]] bool contains(int x, int y) const { return view_box_.Contain(x, y); }
-
-    /// true si el usuario subió y hay contenido debajo de la vista.
-    [[nodiscard]] bool has_more_below() const { return !follow_; }
-
-private:
-    [[nodiscard]] int view_height() const {
-        return std::max(1, view_box_.y_max - view_box_.y_min + 1);
-    }
-    /// Una pantalla de líneas, dejando una de contexto.
-    [[nodiscard]] int page() const { return std::max(1, view_height() - 1); }
-    /// Mayor primera línea posible, con la misma cuenta que Frame::SetBox.
-    [[nodiscard]] int max_top() const {
-        const int internal = content_box_.y_max - content_box_.y_min;
-        const int external = view_box_.y_max - view_box_.y_min;
-        return std::max(0, internal - external - 1);
-    }
-
-    bool follow_ = true;
-    int top_ = 0;
-    ftxui::Box view_box_;    ///< Zona visible del historial (último render).
-    ftxui::Box content_box_; ///< Historial completo (último render).
-};
+/// Ayuda de teclas de la barra de título del chat: larga y, si no cabe, corta.
+constexpr chatbot::cli::TitleHelp kChatTitleHelp{"Ctrl+B barra · Ctrl+O conversaciones",
+                                                 "Ctrl+B · Ctrl+O"};
 
 } // namespace
 
@@ -287,25 +149,12 @@ int main(int argc, char** argv) {
         return fail(initial.is_error() ? initial.error() : *incomplete);
     }
 
-    // Tema, fondo y símbolos de config.json ("appearance"). Un valor
-    // desconocido usa el de por defecto y deja un aviso en la línea de
-    // estado. Símbolos "Automático": Sencillos solo en la consola de Windows 10.
-    const chatbot::cli::Symbols detected_symbols = chatbot::cli::detect_symbols(
-        chatbot::current_os(), chatbot::windows_build(), env_value("WT_SESSION").has_value(),
-        env_value("TERM_PROGRAM").has_value());
-    std::string appearance_warning;
-    chatbot::cli::Appearance appearance =
-        chatbot::cli::resolve_appearance(chatbot::AppearanceValues{}, detected_symbols);
-    if (const std::optional<std::string> path = chatbot::default_config_path()) {
-        const chatbot::Result<chatbot::AppearanceValues> saved =
-            chatbot::load_appearance_values(*path);
-        if (saved.is_ok()) {
-            appearance = chatbot::cli::resolve_appearance(saved.value(), detected_symbols,
-                                                          &appearance_warning);
-        } else {
-            appearance_warning = saved.error().message;
-        }
-    }
+    // Tema, fondo y símbolos de config.json ("appearance"), con su aviso
+    // (appearance_startup.h).
+    chatbot::cli::StartupAppearance startup_appearance = chatbot::cli::load_startup_appearance();
+    const chatbot::cli::Symbols detected_symbols = startup_appearance.detected_symbols;
+    const std::string appearance_warning = std::move(startup_appearance.warning);
+    chatbot::cli::Appearance appearance = startup_appearance.appearance;
     /// Con lo que se dibuja todo; cambia al guardar la apariencia.
     chatbot::cli::Palette palette{appearance};
 
@@ -316,7 +165,7 @@ int main(int argc, char** argv) {
     // ejecuta: después de Loop() FTXUI no corre tareas (App::Internal::PostMain
     // → App::Internal::Uninstall puede correr algunas todavía dentro de Loop(),
     // con todo vivo), y App::~App y TaskRunner::~TaskRunner solo descartan la cola.
-    Scroll scroll;
+    chatbot::cli::Scroll scroll;
     chatbot::cli::HistoryView history;
     chatbot::cli::Sidebar sidebar;
     // Barra lateral: visible al arrancar si la terminal es ancha. Si el ancho
@@ -843,7 +692,8 @@ int main(int argc, char** argv) {
                                           : chatbot::md::sanitize(conversation.title()));
         ftxui::Element content = ftxui::vbox({
             chatbot::cli::title_bar(title, width, palette,
-                                    {conversation.has_turns(), export_hover}, export_box),
+                                    {conversation.has_turns(), export_hover}, kChatTitleHelp,
+                                    export_box),
             std::move(body),
             // Con el menú abierto y sin avisos, el renglón de estado y su
             // línea se ocultan: la línea del menú lo separa del historial.

@@ -156,7 +156,11 @@ moss/
 │       ├── sidebar_view.h/.cpp        # dibujo de la barra de conversaciones (chatbot_cli_ui)
 │       ├── command_menu_view.h/.cpp   # dibujo del menú de comandos (chatbot_cli_ui)
 │       ├── model_picker_view.h/.cpp   # dibujo del selector de /model, en el lugar del menú de comandos (chatbot_cli_ui)
-│       ├── title_bar.h/.cpp           # barra de título con [Exportar] (chatbot_cli_ui)
+│       ├── title_bar.h/.cpp           # barra de título con [Exportar]; la ayuda de teclas (TitleHelp) llega como dato (chatbot_cli_ui)
+│       ├── scroll.h/.cpp              # Scroll: posición del historial en pantalla (chatbot_cli_ui)
+│       ├── appearance_startup.h/.cpp  # load_startup_appearance: tema, fondo, símbolos y su aviso al arrancar (chatbot_cli_ui)
+│       ├── key_events.h/.cpp          # ftxui::Event → ListKey, PasteKey y KeyLogEvent (ejecutable moss, ftxui::component)
+│       ├── command_mode.h             # CommandMode (chat, código, ambos) de cada comando de kCommands (sin FTXUI)
 │       ├── status_line.h/.cpp         # línea de estado: indicadores reservados, avisos recortados con … (chatbot_cli_ui)
 │       └── main.cpp             # interfaz FTXUI (ejecutable moss)
 └── tests/                   # chatbot_tests (sin FTXUI), chatbot_markdown_tests (solo

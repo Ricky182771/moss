@@ -1,6 +1,8 @@
 #ifndef CHATBOT_CLI_COMMAND_PARSER_H
 #define CHATBOT_CLI_COMMAND_PARSER_H
 
+#include "command_mode.h"
+
 #include <functional>
 #include <optional>
 #include <string>
@@ -66,8 +68,11 @@ inline constexpr std::string_view kModelUsage = "Uso: /model [proveedor] [modelo
 /// - Cualquier otro texto (incluido `/buscarx`, `/copiarx` u otros comandos): devuelve Normal.
 /// is_endpoint: si hay un endpoint guardado con ese id (en minúsculas); se
 /// llama solo con /model. Vacío: ninguno.
+/// mode: solo cuentan los comandos de ese modo (commands.h); el nombre de uno
+/// de otro modo es texto normal.
 using EndpointLookup = std::function<bool(std::string_view id)>;
-ParsedCommand parse_command(std::string_view input, const EndpointLookup& is_endpoint = {});
+ParsedCommand parse_command(std::string_view input, const EndpointLookup& is_endpoint = {},
+                            CommandMode mode = CommandMode::Chat);
 
 }  // namespace chatbot::cli
 

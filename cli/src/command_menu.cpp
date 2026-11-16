@@ -27,7 +27,7 @@ bool matches_prefix(std::string_view name, std::string_view typed) {
 
 } // namespace
 
-void CommandMenu::update(std::string_view text, bool input_focused) {
+void CommandMenu::update(std::string_view text, bool input_focused, CommandMode mode) {
     if (dismissed_.has_value() && *dismissed_ != text) {
         dismissed_.reset();
     }
@@ -44,7 +44,7 @@ void CommandMenu::update(std::string_view text, bool input_focused) {
         cursor_ < matches_.size() ? std::optional<std::size_t>{matches_[cursor_]} : std::nullopt;
     matches_.clear();
     for (std::size_t i = 0; i < kCommands.size(); ++i) {
-        if (matches_prefix(kCommands[i].name, text)) {
+        if (command_in_mode(kCommands[i].mode, mode) && matches_prefix(kCommands[i].name, text)) {
             matches_.push_back(i);
         }
     }

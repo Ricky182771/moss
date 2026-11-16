@@ -274,3 +274,17 @@ TEST_CASE("Ratón: hover mueve el cursor y clic completa", "[command_menu]") {
     CHECK_FALSE(menu.is_open());
     CHECK(menu.choose(0).type == CommandMenuAction::Type::Pass);
 }
+
+TEST_CASE("El menú solo lista los comandos del modo que recibe", "[command_menu]") {
+    CommandMenu menu;
+    menu.update("/", true, chatbot::cli::CommandMode::Chat);
+    CHECK(shown(menu) == kAll);
+
+    // Hoy no hay comandos del modo código: abierto, sin coincidencias.
+    menu.update("/", true, chatbot::cli::CommandMode::Code);
+    CHECK(menu.is_open());
+    CHECK(menu.matches().empty());
+    menu.update("/b", true, chatbot::cli::CommandMode::Code);
+    CHECK(menu.matches().empty());
+    CHECK(menu.handle(chatbot::cli::ListKey::Enter).type == chatbot::cli::CommandMenuAction::Type::Pass);
+}

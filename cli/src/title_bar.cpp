@@ -10,7 +10,8 @@
 namespace chatbot::cli {
 
 ftxui::Element title_bar(std::string_view title, int width, const Palette& palette,
-                         const ExportButton& button, ftxui::Box& box) {
+                         const ExportButton& button, const TitleHelp& help_text,
+                         ftxui::Box& box) {
     width = std::max(width, 1);
     box = ftxui::Box{0, -1, 0, -1}; // Vacía hasta que se dibuje el botón.
     std::string clean = md::sanitize(title);
@@ -20,9 +21,9 @@ ftxui::Element title_bar(std::string_view title, int width, const Palette& palet
     // El botón, con un espacio de separación, solo si cabe junto al título entero.
     const bool show_button = title_width + 1 + button_width <= width;
     const int used = title_width + (show_button ? 1 + button_width : 0);
-    std::string_view help = "Ctrl+B barra · Ctrl+O conversaciones";
+    std::string_view help = help_text.full;
     if (used + 1 + ftxui::string_width(help) > width) {
-        help = "Ctrl+B · Ctrl+O";
+        help = help_text.short_form;
     }
     if (used + 1 + ftxui::string_width(help) > width) {
         help = {};

@@ -20,13 +20,18 @@ struct Drawn {
     ftxui::Box box;
 };
 
+/// La ayuda de teclas del chat (la que pasa main.cpp).
+constexpr chatbot::cli::TitleHelp kChatHelp{"Ctrl+B barra · Ctrl+O conversaciones",
+                                            "Ctrl+B · Ctrl+O"};
+
 Drawn draw_bar(std::string_view title, int width, chatbot::cli::ExportButton button = {true, false},
-               const chatbot::cli::Palette& palette = chatbot::cli::terminal_palette()) {
+               const chatbot::cli::Palette& palette = chatbot::cli::terminal_palette(),
+               const chatbot::cli::TitleHelp& help = kChatHelp) {
     Drawn drawn;
     drawn.screen = ftxui::Screen::Create(ftxui::Dimension::Fixed(width),
                                          ftxui::Dimension::Fixed(1));
     ftxui::Render(drawn.screen,
-                  chatbot::cli::title_bar(title, width, palette, button, drawn.box));
+                  chatbot::cli::title_bar(title, width, palette, button, help, drawn.box));
     for (int x = 0; x < width; ++x) {
         const auto& character = drawn.screen.CellAt(x, 0).character;
         if (character.empty() && x > 0 &&
@@ -131,4 +136,26 @@ TEST_CASE("barra de título: un título con saltos de línea queda en una fila",
           "[titulo][varias]") {
     const Drawn drawn = draw_bar("Moss — modelo — uno\ndos", 80);
     CHECK(drawn.text.find("uno dos") != std::string::npos);
+}
+
+TEST_CASE("barra de título: la ayuda larga y la corta llegan como dato", "[titulo]") {
+    const std::string title = "Moss Code"; // 9 columnas.
+    const chatbot::cli::TitleHelp help{"Ctrl+X salir · Ctrl+Y aplicar", "Ctrl+X · Ctrl+Y"};
+    const chatbot::cli::Palette palette = chatbot::cli::terminal_palette();
+    const chatbot::cli::ExportButton button{true, false};
+    // 9 + 1 + 10 + 1 + 29 = 50: cabe la ayuda larga, sin la del chat.
+    const std::string wide = draw_bar(title, 50, button, palette, help).text;
+    CHECK(wide.ends_with("Ctrl+X salir · Ctrl+Y aplicar [Exportar]"));
+    CHECK(wide.find("Ctrl+B") == std::string::npos);
+    // Una columna menos: pasa a la corta (9 + 1 + 10 + 1 + 15 = 36).
+    const std::string narrow = draw_bar(title, 49, button, palette, help).text;
+    CHECK(narrow.ends_with("Ctrl+X · Ctrl+Y [Exportar]"));
+    // Sin lugar para la corta: solo el botón.
+    const std::string none = draw_bar(title, 35, button, palette, help).text;
+    CHECK(none.find("Ctrl+X") == std::string::npos);
+    CHECK(none.ends_with("[Exportar]"));
+    // Sin ayuda: el título y el botón.
+    const std::string empty = draw_bar(title, 50, button, palette, {}).text;
+    CHECK(empty.ends_with("[Exportar]"));
+    CHECK(empty.find("Ctrl") == std::string::npos);
 }

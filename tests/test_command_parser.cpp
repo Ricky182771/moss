@@ -285,3 +285,15 @@ TEST_CASE("Parser: /model con el id de un endpoint, solo o con custom:", "[comma
     CHECK(parsed.type == ParsedCommand::Type::ModelUsage);
     CHECK(parsed.text == "Proveedor desconocido: lab. Escribe /model para ver la lista.");
 }
+
+TEST_CASE("parse_command en modo código no reconoce los comandos del chat", "[command_parser]") {
+    for (const char* input : {"/buscar clima", "/copiar 2", "/guardar", "/exportar", "/model ollama"}) {
+        INFO(input);
+        const auto chat = parse_command(input, {}, CommandMode::Chat);
+        CHECK(chat.type != ParsedCommand::Type::Normal);
+        const auto code = parse_command(input, {}, CommandMode::Code);
+        CHECK(code.type == ParsedCommand::Type::Normal);
+        CHECK(code.text == input);
+    }
+    CHECK(parse_command("  /copiar\n2 ", {}, CommandMode::Code).text == "/copiar\n2");
+}

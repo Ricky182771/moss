@@ -156,3 +156,15 @@ TEST_CASE("Disponibilidad de los comandos", "[commands]") {
         CHECK(availability_of("/exportar", context).note == "la conversación está vacía");
     }
 }
+
+TEST_CASE("Los comandos de hoy son todos del modo chat", "[commands]") {
+    using chatbot::cli::CommandMode;
+    for (const CommandInfo& command : kCommands) {
+        CHECK(command.mode == CommandMode::Chat);
+        CHECK(chatbot::cli::command_in_mode(command.mode, CommandMode::Chat));
+        CHECK_FALSE(chatbot::cli::command_in_mode(command.mode, CommandMode::Code));
+    }
+    CHECK(chatbot::cli::command_in_mode(CommandMode::Both, CommandMode::Chat));
+    CHECK(chatbot::cli::command_in_mode(CommandMode::Both, CommandMode::Code));
+    CHECK_FALSE(chatbot::cli::command_in_mode(CommandMode::Code, CommandMode::Chat));
+}

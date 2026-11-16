@@ -137,13 +137,23 @@ std::string unknown_provider_message(std::string_view word) {
     return "Proveedor desconocido: " + std::string{word} + ". Escribe /model para ver la lista.";
 }
 
-ParsedCommand parse_command(std::string_view input, const EndpointLookup& is_endpoint) {
+ParsedCommand parse_command(std::string_view input, const EndpointLookup& is_endpoint,
+                            CommandMode mode) {
     // Recortar espacios al inicio y al final.
     while (!input.empty() && std::isspace(static_cast<unsigned char>(input.front()))) {
         input.remove_prefix(1);
     }
     while (!input.empty() && std::isspace(static_cast<unsigned char>(input.back()))) {
         input.remove_suffix(1);
+    }
+
+    // Un comando que no existe en este modo es texto normal.
+    const std::string_view word = input.substr(
+        0, static_cast<std::size_t>(std::find_if(input.begin(), input.end(), is_space) -
+                                    input.begin()));
+    if (const CommandInfo* info = find_command(word);
+        info != nullptr && !command_in_mode(info->mode, mode)) {
+        return {ParsedCommand::Type::Normal, std::string{input}, std::nullopt, "", std::nullopt, std::nullopt};
     }
 
     if (std::optional<ParsedCommand> command = parse_block_command(input, is_endpoint)) {

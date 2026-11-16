@@ -37,8 +37,8 @@ public:
     /// cada tecla y al dibujar. El menú se ve si la caja tiene el foco, el
     /// texto empieza con "/" y no tiene espacios ni saltos de línea (se está
     /// escribiendo el nombre), salvo que se haya cerrado (Esc o al elegir)
-    /// con este mismo texto.
-    void update(std::string_view text, bool input_focused);
+    /// con este mismo texto. Solo coinciden los comandos del modo mode.
+    void update(std::string_view text, bool input_focused, CommandMode mode = CommandMode::Chat);
 
     [[nodiscard]] bool is_open() const { return open_; }
     /// Índices en kCommands de los comandos que coinciden, en orden. Vacío
