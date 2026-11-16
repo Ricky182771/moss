@@ -160,6 +160,21 @@ std::string cap_git_status(std::string_view text) {
     return kept;
 }
 
+/// Salida de `git config --show-scope`: cada línea es "<ámbito>\t<llave> <valor>". Falla
+/// cerrada: toda línea que no sea global ni system (local, worktree, command, un ámbito
+/// desconocido o la continuación de un valor de varias líneas) cuenta como del repo.
+bool has_repo_filters(std::string_view out) {
+    for (std::size_t start = 0; start < out.size();) {
+        const std::size_t end = std::min(out.find('\n', start), out.size());
+        const std::string_view line = out.substr(start, end - start);
+        if (!line.empty() && !line.starts_with("global\t") && !line.starts_with("system\t")) {
+            return true;
+        }
+        start = end + 1;
+    }
+    return false;
+}
+
 /// Rama y estado de git; vacío si no hay git, no es un repo, falla o se pasa del tiempo.
 std::string git_section(const ProjectRoot& root, const SystemPromptOptions& options,
                         const CancelToken& cancel) {
@@ -170,20 +185,22 @@ std::string git_section(const ProjectRoot& root, const SystemPromptOptions& opti
             return {};
         }
         // git status corre los filtros clean/process de la configuración (un .git/config ajeno
-        // lanzaría lo que quiera): si hay alguno, no se corre. config no ejecuta nada.
-        // Salida 1: no hay ninguno; 0: hay alguno; otra: falla como cualquier git.
+        // lanzaría lo que quiera): si el repo define alguno, no se corre. config no ejecuta nada.
+        // Los globales y del sistema son del usuario (git-lfs) y no cuentan. Salida 1: no hay
+        // ninguno; 0: hay alguno; otra (también git < 2.26, sin --show-scope): falla.
         const auto deadline = std::chrono::steady_clock::now() + kGitTimeout;
-        const process::ProcessResult filters =
-            run_git(options.run_process, *git, root,
-                    {"config", "--get-regexp", "^filter\\..*\\.(clean|process)$"}, kGitTimeout,
-                    cancel);
-        if (filters.status == process::ProcessResult::Status::Exited && filters.exit_code == 0) {
-            return "- Git: repository status not read, because the git configuration defines "
-                   "clean/process filters.\n";
+        const process::ProcessResult filters = run_git(
+            options.run_process, *git, root,
+            {"config", "--show-scope", "--get-regexp", "^filter\\..*\\.(clean|process)$"},
+            kGitTimeout, cancel);
+        const bool exited = filters.status == process::ProcessResult::Status::Exited;
+        if (exited && filters.exit_code == 0 && has_repo_filters(filters.out)) {
+            return "- Git: repository status not read, because the repository's git configuration "
+                   "defines clean/process filters.\n";
         }
         const auto left = std::chrono::duration_cast<std::chrono::milliseconds>(
             deadline - std::chrono::steady_clock::now());
-        if (filters.status != process::ProcessResult::Status::Exited || filters.exit_code != 1 ||
+        if (!exited || (filters.exit_code != 0 && filters.exit_code != 1) ||
             left <= std::chrono::milliseconds::zero()) {
             return {};
         }

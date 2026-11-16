@@ -68,7 +68,7 @@ ProcessResult git_exited(int code, std::string out) {
     return result;
 }
 
-const std::vector<std::string> kFilterQuery{"config", "--get-regexp",
+const std::vector<std::string> kFilterQuery{"config", "--show-scope", "--get-regexp",
                                             "^filter\\..*\\.(clean|process)$"};
 
 /// Un git falso: `config` (la búsqueda de filtros) da config_result, que por defecto es "no hay
@@ -369,22 +369,46 @@ TEST_CASE("system prompt: sin repo, git falla, se pasa del tiempo o se cancela: 
     CHECK(contains(prompt.text, "- Commands:"));
 }
 
-TEST_CASE("system prompt: con filtros clean/process en la configuración no se corre git status",
+TEST_CASE("system prompt: con filtros clean/process del repo no se corre git status",
           "[system_prompt]") {
+    // Todo lo que no es global ni system cuenta como del repo, también una mezcla, un ámbito
+    // worktree o una línea sin tabulador (la continuación de un valor de varias líneas).
+    const std::string out = GENERATE(
+        std::string{"local\tfilter.x.clean cmd\n"},
+        std::string{"global\tfilter.lfs.clean git-lfs clean -- %f\nlocal\tfilter.x.clean cmd\n"},
+        std::string{"worktree\tfilter.x.process cmd\n"},
+        std::string{"global\tfilter.lfs.clean a\nsegunda línea\n"});
     ToolFixture fixture;
     SystemPromptOptions options = no_git_options();
     FakeGit git;
     git.install(options);
     git.result = git_exited(0, "## main\n M a.cpp\n");
-    git.config_result = git_exited(0, "filter.x.clean cmd\n");
+    git.config_result = git_exited(0, out);
     const CodeSystemPrompt prompt = build(fixture, options);
     REQUIRE(git.calls.size() == 1);
     CHECK(git.calls[0] == tool_test::git_argv("/fake/git", fixture.root, kFilterQuery));
-    CHECK(contains(prompt.text, "- Git: repository status not read, because the git configuration "
-                                "defines clean/process filters.\n"));
+    CHECK(contains(prompt.text, "- Git: repository status not read, because the repository's git "
+                                "configuration defines clean/process filters.\n"));
     CHECK_FALSE(contains(prompt.text, "Git repository"));
     CHECK_FALSE(contains(prompt.text, "<git_status>"));
-    CHECK_FALSE(contains(prompt.text, "filter.x.clean"));
+    CHECK_FALSE(contains(prompt.text, "filter."));
+}
+
+TEST_CASE("system prompt: los filtros global y system no impiden git status", "[system_prompt]") {
+    ToolFixture fixture;
+    SystemPromptOptions options = no_git_options();
+    FakeGit git;
+    git.install(options);
+    git.result = git_exited(0, "## main\n M a.cpp\n");
+    git.config_result = git_exited(0, "global\tfilter.lfs.clean git-lfs clean -- %f\n"
+                                      "system\tfilter.lfs.process git-lfs filter-process\n");
+    const CodeSystemPrompt prompt = build(fixture, options);
+    REQUIRE(git.calls.size() == 2);
+    CHECK(git.calls[0] == tool_test::git_argv("/fake/git", fixture.root, kFilterQuery));
+    CHECK(contains(prompt.text, "- Git repository: yes, branch main\n"));
+    CHECK(contains(prompt.text, "<git_status>\n M a.cpp\n</git_status>"));
+    CHECK_FALSE(contains(prompt.text, "- Git:"));
+    CHECK_FALSE(contains(prompt.text, "filter."));
 }
 
 TEST_CASE("system prompt: si la búsqueda de filtros falla, ni status ni sección",
@@ -477,13 +501,23 @@ TEST_CASE("system prompt con git real", "[system_prompt][git]") {
                   .ends_with("rama-prueba"));
         CHECK(contains(prompt.text, "?? nuevo.txt\n"));
     }
-    SECTION("con un filtro clean, sin estado") {
+    SECTION("con un filtro clean en el .git/config del repo, sin estado") {
         REQUIRE(chatbot::process::run_process({"git", "-C", proy, "config", "filter.x.clean", "true"})
                     .ok());
         const CodeSystemPrompt prompt = build(fixture, options);
-        CHECK(contains(prompt.text, "- Git: repository status not read, because the git "
-                                    "configuration defines clean/process filters.\n"));
+        CHECK(contains(prompt.text, "- Git: repository status not read, because the repository's "
+                                    "git configuration defines clean/process filters.\n"));
         CHECK_FALSE(contains(prompt.text, "Git repository"));
         CHECK_FALSE(contains(prompt.text, "nuevo.txt"));
+    }
+    SECTION("con un filtro clean en la configuración global, con rama y estado") {
+        const fs::path config = fixture.project.temp.path() / "gitconfig-global";
+        project_root_test::write_file(config, "[filter \"lfs\"]\n\tclean = cat\n");
+        const std::string config_path = utf8(config);
+        const chatbot_test::EnvGuard global_filter{"GIT_CONFIG_GLOBAL", config_path.c_str()};
+        const CodeSystemPrompt prompt = build(fixture, options);
+        CHECK(contains(prompt.text, "- Git repository: yes, branch "));
+        CHECK(contains(prompt.text, "?? nuevo.txt\n"));
+        CHECK_FALSE(contains(prompt.text, "- Git:"));
     }
 }
