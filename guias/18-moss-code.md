@@ -113,7 +113,7 @@ Idle ─send─► Requesting ─(texto, sin herramientas)─► Idle
  
 **Límites del turno** (configurables en `config.json` → `"code"`):
  
-- **Pasos:** 50 peticiones al modelo por turno. Al llegar, se detiene con un aviso (la pregunta "¿Seguir?" llega con la pantalla, C2).
+- **Pasos:** 50 peticiones al modelo por turno. Al llegar, se detiene con un aviso; para seguir basta pedírselo en el siguiente mensaje (la pregunta "¿Seguir?" no entró en C2).
 - **Bucles:** la misma herramienta con los mismos argumentos 3 veces seguidas detiene el turno con un aviso. Los modelos gratis caen en esto.
 - **Argumentos rotos:** si el modelo manda argumentos que no son JSON, se le regresa el error como resultado para que corrija; 3 seguidos detienen el turno.
 - **Cuota:** el plan gratis de NIM limita las peticiones por minuto (se reporta alrededor de 40). El 429 con `Retry-After` ya se reintenta; la línea de estado dice "Esperando a NIM (límite de peticiones)…" en vez de quedarse muda.
@@ -235,7 +235,7 @@ Nombres y descripciones en inglés para el modelo (D7); en la pantalla, en espa�
 - El recorte del historial del modo código usa su propio límite (`history_limit_bytes`, 300 000 bytes): el del chat (32 000) se llena con una sola lectura.
 - Los `arguments` que no son JSON se guardan como `{}` en el historial: el servidor rechaza una llamada con argumentos inválidos en la petición siguiente.
 - Si la primera petición del turno se cancela, falla o llega vacía, el turno devuelve el mensaje del usuario sin enviarlo, como el chat.
-- Al llegar al límite de pasos, C1 solo se detiene con un aviso; la pregunta "¿Seguir?" llega con la pantalla (C2).
+- Al llegar al límite de pasos, C1 solo se detiene con un aviso (en C2 también: la pregunta "¿Seguir?" no entró en la pantalla).
 - El aviso "Esperando a NIM (límite de peticiones)…" (sección 2) todavía no existe: el núcleo no avisa de sus reintentos.
 
 ### 4.1 `bash` (C4)
@@ -319,6 +319,16 @@ Las instrucciones del chat (`system_prompt` de `config.json`) **no** aplican en 
 - Comandos con `/` del modo código: `/model`, `/clear`, `/compact`, `/reanudar`, `/permisos`, `/init`, `/deshacer`, `/ayuda`. Van en `kCommands` con su disponibilidad por modo.
 - F2 abre Configuración igual que en el chat (proveedor, modelo, F2 → Moss Code para los límites).
 - `!comando` en la caja corre un comando tuyo sin pasar por el modelo, y su salida entra al contexto (Claude Code lo tiene; es barato cuando ya existe `bash`).
+
+### Lo que cambió al implementarlo (C2)
+
+- La lógica vive en `CodeMode` (`cli/src/code_mode.h`, sin FTXUI) y la pantalla en `cli/src/code_screen.cpp`. Una `Session` de apoyo sirve solo para F2 y `/model`; `CodeSession::set_client` cambia cliente y secretos entre turnos.
+- La línea de herramienta es un `EntryKind::Tool` dentro de `HistoryView` y nunca sale del modo código: el chat no lo crea, no se guarda y el RPC lo manda como aviso vacío.
+- Orden de abajo hacia arriba: caja, tareas, línea de estado, separador (la maqueta ponía el estado en la fila de la caja).
+- De la lista de comandos de arriba, en C2 solo existen `/model`, `/clear` y `/ayuda`.
+- Ctrl+O es "salida completa" en el modo código y "foco a la barra" en el chat.
+- El resumen de `todo_write` es `Tareas` (la cuenta va en el resultado).
+- `main.cpp` soltó lo que comparten las dos pantallas: `scroll.h`, `key_events.h`, `appearance_startup.h`, `screen_input.h`, `prompt_menus.h` y `settings_binding.h`.
 ---
  
 ## 10. RPC y GUI (C6, boceto)
@@ -356,7 +366,7 @@ Todo aditivo, sin cambiar `protocol_version`:
 |---|---|
 | **C0** (En revisión, PR #64) | Tool calling en el núcleo (3.1–3.5): `Role::Tool`, `ToolCall`, `content: null`, `tools`/`tool_choice`, el acumulador, `CompletionInfo.tool_calls`, `ToolCallStarted`, el pensamiento con su llave, recorte por grupos. `tools/fake-llm.py` con guiones de llamadas. La sonda `moss-tools-probe`. **Sin herramientas reales ni pantalla.** El chat no cambia en nada |
 | **C1** (En revisión, PR #65) | El motor sin pantalla: `code/` con `chatbot_code`, `ProjectRoot`, `read`, `glob`, `grep`, `todo_write`, `AgentLoop` con sus límites y cancelación, las instrucciones con `AGENTS.md`, y `moss code -p` (solo herramientas de lectura). Linux y Windows |
-| **C2** | La TUI del modo código, de solo lectura: `moss code`, la vista de herramientas y tareas, la línea de estado, Esc, `/model`, `/clear`, Ctrl+O |
+| **C2** (En revisión, PR #66) | La TUI del modo código, de solo lectura: `moss code`, la vista de herramientas y tareas, la línea de estado, Esc, `/model`, `/clear`, Ctrl+O |
 | **C3** | Editar: `edit`, `write`, diffs, la pregunta de aprobación, los modos (Shift+Tab, Plan con `exit_plan_mode`), las reglas de `.moss/`, `/permisos` y `/deshacer` |
 | **C4** | Comandos en Linux: `bash` con grupo de procesos, entorno filtrado, reglas de comandos compuestos, salida en vivo, `!comando` |
 | **C5** | Sesiones y contexto: guardar después de cada paso, `--continuar` y `/reanudar`, uso de tokens, `/compact` y compactación automática, `/init` |

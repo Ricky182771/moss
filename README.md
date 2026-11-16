@@ -69,6 +69,7 @@ Ubuntu y Debian, Windows (MSYS2), los demás presets y las pruebas: [guias/11-co
 ## Documentación
 
 - [Usar Moss en la terminal](guias/uso.md): teclas, comandos, `/model`, copiar y exportar.
+- [Moss Code](guias/19-moss-code-uso.md): explora y explica un proyecto leyendo sus archivos, desde `moss code`.
 - [Configurar](guias/configurar.md): proveedores, keys, endpoints, colores, búsqueda web, modo portable.
 - [Instalar](guias/instalar.md): Windows y Linux, paso a paso.
 - [Bot de Telegram](guias/telegram.md): crearlo, configurarlo y autorizar a los alumnos.
