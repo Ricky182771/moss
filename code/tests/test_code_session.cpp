@@ -224,7 +224,17 @@ struct Options {
     CodeLimits limits{};
     PermissionEngine::Rule rule = allow_all;
     bool interactive = true;
+    std::vector<std::string> secrets{};
+    bool with_read = false; ///< Agrega la herramienta read de verdad.
 };
+
+/// Un cliente sobre un GatedTransport nuevo; transport apunta a él mientras viva el cliente.
+std::unique_ptr<chatbot::ChatClient> make_client(GatedTransport*& transport) {
+    auto gated = std::make_unique<GatedTransport>();
+    transport = gated.get();
+    return std::make_unique<chatbot::ChatClient>(chatbot_test::test_config(), std::move(gated),
+                                                 std::make_unique<chatbot_test::FakeSleeper>());
+}
 
 /// Una sesión de código sobre un proyecto temporal, con su cola y lo que vio el observador.
 struct Harness {
@@ -250,19 +260,19 @@ struct Harness {
     std::unique_ptr<CodeSession> session; ///< Al final: se destruye primero.
 
     void open(const Options& options = {}) {
-        auto gated = std::make_unique<GatedTransport>();
-        transport = gated.get();
-        auto client = std::make_unique<chatbot::ChatClient>(
-            chatbot_test::test_config(), std::move(gated),
-            std::make_unique<chatbot_test::FakeSleeper>());
+        std::vector<std::shared_ptr<const Tool>> tools{count_tool(probe), fail_tool(),
+                                                       block_tool(probe),
+                                                       chatbot::code::make_todo_write_tool()};
+        if (options.with_read) {
+            tools.push_back(chatbot::code::make_read_tool());
+        }
         session = std::make_unique<CodeSession>(
             CodeSessionEnvironment{
                 .root = project_root_test::open_root(project.proy, {project.moss}),
-                .client = std::move(client),
-                .registry = ToolRegistry{{count_tool(probe), fail_tool(), block_tool(probe),
-                                          chatbot::code::make_todo_write_tool()}},
+                .client = make_client(transport),
+                .registry = ToolRegistry{std::move(tools)},
                 .prompt_options = no_git_options(),
-                .secrets = {},
+                .secrets = options.secrets,
                 .limits = options.limits,
                 .permissions = PermissionEngine{options.rule},
                 .interactive = options.interactive,
@@ -1010,4 +1020,112 @@ TEST_CASE("code session: destruir esperando aprobación termina en < 2 s y la co
     CHECK(harness.turns.empty());
     CHECK(harness.probe->counted().empty());
     CHECK_FALSE(harness.off_thread);
+}
+
+TEST_CASE("code session: set_client entre turnos usa el cliente nuevo con todo el historial",
+          "[code_session][cliente]") {
+    Harness harness;
+    harness.open();
+    harness.respond({calls_response({{"c1", "count", R"({"n":1})"}}), answer_response("Uno.")});
+    CHECK(harness.run_turn("cuenta").reason == TurnEnd::Answered);
+    REQUIRE(harness.transport->inner.requests.size() == 2);
+    const std::string system = harness.session->history()[0].content;
+
+    GatedTransport* second = nullptr;
+    REQUIRE(harness.session->set_client(make_client(second), {}));
+    harness.transport = second; // El primero se destruyó con su cliente.
+    harness.respond({answer_response("Dos.")});
+    const TurnOutcome turn = harness.run_turn("otra");
+    CHECK(turn.reason == TurnEnd::Answered);
+    CHECK(turn.answer == "Dos.");
+
+    REQUIRE(second->inner.requests.size() == 1);
+    const json messages = harness.body(0)["messages"];
+    REQUIRE(messages.size() == 6);
+    CHECK(messages[0]["content"] == system);
+    CHECK(messages[1]["content"] == "cuenta");
+    REQUIRE(messages[2]["tool_calls"].size() == 1);
+    CHECK(messages[2]["tool_calls"][0]["id"] == "c1");
+    CHECK(messages[3] == json{{"role", "tool"}, {"tool_call_id", "c1"}, {"content", "count 1"}});
+    CHECK(messages[4]["content"] == "Uno.");
+    CHECK(messages[5]["content"] == "otra");
+    CHECK(harness.session->history().size() == 7);
+    CHECK(harness.session->history()[0].content == system);
+    CHECK(one_result_per_call(harness.session->history()));
+}
+
+TEST_CASE("code session: set_client con un turno en curso no cambia nada",
+          "[code_session][cliente][cancelar]") {
+    Harness harness;
+    GatedTransport* unused = nullptr;
+    SECTION("Requesting") {
+        harness.open();
+        harness.transport->block_at = 0;
+        REQUIRE(harness.session->send("hola"));
+        REQUIRE(harness.transport->blocked.wait_for(kThreadTimeout));
+        CHECK(harness.session->state() == LoopState::Requesting);
+        CHECK_FALSE(harness.session->set_client(make_client(unused), {"x"}));
+    }
+    SECTION("Running") {
+        harness.open();
+        harness.respond({calls_response({{"c1", "block", "{}"}})});
+        REQUIRE(harness.session->send("espera"));
+        harness.wait_block_running();
+        CHECK_FALSE(harness.session->set_client(make_client(unused), {"x"}));
+    }
+    SECTION("AwaitingApproval") {
+        Options options;
+        options.rule = [](std::string_view, std::string_view) { return Permission::Ask; };
+        harness.open(options);
+        harness.respond({calls_response({{"c1", "count", "{}"}})});
+        REQUIRE(harness.session->send("corre"));
+        REQUIRE(harness.drain_until(
+            [&] { return harness.session->state() == LoopState::AwaitingApproval; }));
+        CHECK_FALSE(harness.session->set_client(make_client(unused), {"x"}));
+    }
+    CHECK(harness.session->busy());
+    harness.session->cancel();
+    REQUIRE(harness.wait_turn(0));
+    CHECK(harness.turns.back().reason == TurnEnd::Cancelled);
+
+    // El siguiente turno sigue yendo al transporte original.
+    check_next_message_works(harness);
+}
+
+TEST_CASE("code session: set_client sin cliente devuelve false", "[code_session][cliente]") {
+    Harness harness;
+    harness.open();
+    CHECK_FALSE(harness.session->set_client(nullptr, {"x"}));
+    check_next_message_works(harness);
+}
+
+TEST_CASE("code session: set_client reemplaza los secretos que se ocultan",
+          "[code_session][cliente]") {
+    Harness harness;
+    Options options;
+    options.with_read = true;
+    options.secrets = {"clave-vieja"};
+    harness.open(options);
+    project_root_test::write_file(harness.project.proy / "llaves.txt",
+                                  "vieja=clave-vieja\nnueva=clave-nueva\n");
+    const auto read_turn = [&harness] {
+        harness.respond({calls_response({{"c1", "read", R"({"path":"llaves.txt"})"}}),
+                         answer_response("Leído.")});
+        CHECK(harness.run_turn("lee").reason == TurnEnd::Answered);
+        REQUIRE(harness.transport->inner.requests.size() == 2);
+        const json messages = harness.body(1)["messages"];
+        REQUIRE(messages.back()["role"] == "tool");
+        return messages.back()["content"].get<std::string>();
+    };
+
+    const std::string before = read_turn();
+    CHECK(before.find("clave-vieja") == std::string::npos);
+    CHECK(before.find("clave-nueva") != std::string::npos);
+
+    GatedTransport* second = nullptr;
+    REQUIRE(harness.session->set_client(make_client(second), {"clave-nueva"}));
+    harness.transport = second;
+    const std::string after = read_turn();
+    CHECK(after.find("clave-nueva") == std::string::npos);
+    CHECK(after.find("clave-vieja") != std::string::npos);
 }

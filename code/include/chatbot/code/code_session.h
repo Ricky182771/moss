@@ -152,6 +152,14 @@ public:
     /// ninguna pendiente.
     bool respond_approval(ApprovalDecision decision, const std::string& reason = {});
 
+    /// Cambia el cliente del modelo y la lista de secretos (reemplaza la anterior: pasa todos
+    /// los que deban ocultarse) desde el siguiente turno, al guardar en F2 o con /model. No toca
+    /// el historial, las tareas, las instrucciones ni los límites. false, sin cambiar nada, si
+    /// hay un turno en curso (busy(), también en AwaitingApproval) o client es nulo; en ese caso
+    /// client se destruye.
+    [[nodiscard]] bool set_client(std::unique_ptr<ChatClient> client,
+                                  std::vector<std::string> secrets);
+
     [[nodiscard]] const std::vector<Message>& history() const { return history_; }
     [[nodiscard]] const std::vector<TodoItem>& todos() const;
     /// Las instrucciones de sistema y qué archivos se cargaron.
