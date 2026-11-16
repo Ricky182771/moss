@@ -1,5 +1,5 @@
-#ifndef CHATBOT_SRC_HIDE_SECRET_H
-#define CHATBOT_SRC_HIDE_SECRET_H
+#ifndef CHATBOT_HIDE_SECRET_H
+#define CHATBOT_HIDE_SECRET_H
 
 #include <cstddef>
 #include <string>
@@ -14,7 +14,7 @@ inline constexpr std::string_view kHiddenKey = "[key oculta]";
 /// un servidor puede repetir la key en su mensaje de error. Se usa antes de
 /// truncar, para que no quede un pedazo. Una key de menos de 8 bytes (solo
 /// en localhost) no se busca: cambiaría letras sueltas del mensaje.
-/// Header interno (src/); no forma parte de la API pública.
+/// Header público del núcleo: lo usa también chatbot_code (sobre los resultados de las herramientas).
 [[nodiscard]] inline std::string hide_secret(std::string text, std::string_view secret) {
     if (secret.size() < 8) {
         return text;
@@ -28,4 +28,4 @@ inline constexpr std::string_view kHiddenKey = "[key oculta]";
 
 } // namespace chatbot
 
-#endif // CHATBOT_SRC_HIDE_SECRET_H
+#endif // CHATBOT_HIDE_SECRET_H

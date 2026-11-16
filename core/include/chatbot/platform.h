@@ -154,6 +154,15 @@ enum class KnownFolder {
 /// también se prueban en Linux.
 [[nodiscard]] std::string join_windows_path(std::string_view base, std::string_view tail);
 
+/// true si name (un tramo de ruta, UTF-8) es un dispositivo reservado de
+/// Windows: CON, PRN, AUX, NUL, CONIN$, CONOUT$, COM1 a COM9, LPT1 a LPT9 y
+/// COM o LPT con ¹, ² o ³, sin distinguir mayúsculas y también con extensión
+/// ("con.cpp", "Aux.tar.gz"): Windows mira lo que va antes del primer punto,
+/// sin los espacios del final ("con .txt"). COM0 y LPT0 no: Windows los deja
+/// crear. Pura, en todos los sistemas: la usan las descargas y las rutas del
+/// modo código.
+[[nodiscard]] bool is_reserved_windows_name(std::string_view name);
+
 /// Cómo está un archivo con secretos (credentials.json).
 enum class SecretFileState {
     Missing,    ///< No existe.

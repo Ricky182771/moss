@@ -1,6 +1,6 @@
 #include "chatbot/tavily_search.h"
 #include "chatbot/error.h"
-#include "hide_secret.h"
+#include "chatbot/hide_secret.h"
 #include "published_date.h"
 
 #include <nlohmann/json.hpp>

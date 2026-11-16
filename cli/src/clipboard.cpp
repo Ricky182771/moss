@@ -1,6 +1,6 @@
 #include "clipboard.h"
 
-#include "child_process.h"
+#include "chatbot/child_process.h"
 
 #include <cstdlib>
 #include <iostream>
@@ -173,11 +173,11 @@ std::string to_crlf(std::string_view text) {
 
 bool run_with_input(const std::vector<std::string>& argv, std::string_view input,
                     std::chrono::milliseconds timeout) {
-    ProcessOptions options;
+    process::ProcessOptions options;
     options.input = input;
     options.timeout = timeout;
     options.capture_output = false;
-    const ProcessResult result = run_process(argv, options);
+    const process::ProcessResult result = process::run_process(argv, options);
     return result.ok() && result.input_written;
 }
 

@@ -272,7 +272,7 @@ std::string addon_install_problem(const settings::AddonInfo& addon, const AddonI
     return {};
 }
 
-std::optional<int> parse_config_version(const ProcessResult& result) {
+std::optional<int> parse_config_version(const process::ProcessResult& result) {
     if (!result.ok()) {
         return std::nullopt;
     }

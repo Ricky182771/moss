@@ -10,6 +10,7 @@
 # - Modo portable (moss.portable): no busca en el PATH → 69, "junto a
 #   moss." sin "ni en el PATH".
 # - Sin addon: 69 con el mensaje. Argumento desconocido: 2 con el uso.
+# - moss code sin -p o con -p sin texto: 2 (BUILD_CODE=ON; sin Moss Code, el primero da 69).
 # - Windows: 1 con "Los addons todavía no están disponibles en Windows.".
 
 foreach(variable CHATBOT WORK)
@@ -66,6 +67,10 @@ function(expect_text what haystack needle)
         message(FATAL_ERROR "${what}: no aparece \"${needle}\" en:\n${haystack}")
     endif()
 endfunction()
+
+if(NOT DEFINED BUILD_CODE)
+    set(BUILD_CODE OFF)
+endif()
 
 if(CMAKE_HOST_WIN32)
     # Con el PATH de siempre: sin él, moss.exe no encuentra las DLL de MSYS2.
@@ -126,5 +131,20 @@ run("${moss}" "${empty_path}" --nada)
 expect("argumento desconocido" 2)
 expect_text("argumento desconocido" "${err}" "argumento desconocido: --nada")
 expect_text("argumento desconocido" "${err}" "Uso:")
+
+# moss code: sin red ni configuración. Sin -p, la pantalla llega en C2; -p sin texto es uso
+# incorrecto. Sin Moss Code en la compilación, 69.
+copy_chatbot(code moss)
+run("${moss}" "${empty_path}" code)
+if(BUILD_CODE)
+    expect("code sin -p" 2)
+    expect_text("code sin -p" "${err}" "La pantalla de Moss Code llega en C2")
+else()
+    expect("code sin Moss Code" 69)
+    expect_text("code sin Moss Code" "${err}" "Moss Code no está incluido en esta compilación.")
+endif()
+run("${moss}" "${empty_path}" code -p)
+expect("code -p sin texto" 2)
+expect_text("code -p sin texto" "${err}" "-p necesita un texto.")
 
 message(STATUS "moss <addon>: bien")

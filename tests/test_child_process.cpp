@@ -2,22 +2,27 @@
 // búsqueda en PATH. Lanzan /bin/sh y programas de coreutils; solo POSIX
 // (en Windows run_process no lanza nada).
 
-#include "child_process.h"
+#include "chatbot/child_process.h"
 
 #include "chatbot/platform.h"
+
+#include "env_guard.hpp"
+#include "temp_dir.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <chrono>
 #include <filesystem>
+#include <fstream>
 #include <string>
+#include <system_error>
 #include <thread>
 #include <vector>
 
-using chatbot::cli::find_in_path;
-using chatbot::cli::ProcessOptions;
-using chatbot::cli::ProcessResult;
-using chatbot::cli::run_process;
+using chatbot::process::find_in_path;
+using chatbot::process::ProcessOptions;
+using chatbot::process::ProcessResult;
+using chatbot::process::run_process;
 using namespace std::chrono_literals;
 
 TEST_CASE("run_process: en Windows no lanza nada", "[process]") {
@@ -131,10 +136,44 @@ TEST_CASE("run_process: no existe el programa", "[process]") {
 
 TEST_CASE("run_process: guarda hasta kMaxProcessOutput", "[process]") {
     const ProcessResult result =
-        run_process({"head", "-c", std::to_string(chatbot::cli::kMaxProcessOutput + 5000),
+        run_process({"head", "-c", std::to_string(chatbot::process::kMaxProcessOutput + 5000),
                      "/dev/zero"});
     CHECK(result.ok());
-    CHECK(result.out.size() == chatbot::cli::kMaxProcessOutput);
+    CHECK(result.out.size() == chatbot::process::kMaxProcessOutput);
+}
+
+TEST_CASE("run_process: el entorno del hijo se puede ajustar", "[process]") {
+    const chatbot_test::EnvGuard key{"MOSS_PRUEBA_KEY", "secreto"};
+    const chatbot_test::EnvGuard other{"MOSS_PRUEBA_OTRA", "otra"};
+    const chatbot_test::EnvGuard kept{"PRUEBA_MOSS_QUEDA", "queda"};
+    const chatbot_test::EnvGuard replaced{"MOSS_PRUEBA_LC", "es_MX"};
+    const std::vector<std::string> show{
+        "/bin/sh", "-c",
+        "printf '%s|%s|%s|%s|%s' \"${MOSS_PRUEBA_KEY-x}\" \"${MOSS_PRUEBA_OTRA-x}\" "
+        "\"${PRUEBA_MOSS_QUEDA-x}\" \"${MOSS_PRUEBA_LC-x}\" \"${MOSS_PRUEBA_NUEVA-x}\""};
+
+    // Sin opciones, hereda todo como antes.
+    const ProcessResult inherited = run_process(show);
+    REQUIRE(inherited.ok());
+    CHECK(inherited.out == "secreto|otra|queda|es_MX|x");
+
+    ProcessOptions options;
+    options.env_remove_prefixes = {"MOSS_PRUEBA_"};
+    options.env_set = {{"MOSS_PRUEBA_LC", "C"}, {"MOSS_PRUEBA_NUEVA", "nueva"}};
+    const ProcessResult adjusted = run_process(show, options);
+    REQUIRE(adjusted.ok());
+    // Quitadas por prefijo (salvo las que se ponen), la de otro prefijo queda y las puestas se ven.
+    CHECK(adjusted.out == "x|x|queda|C|nueva");
+
+    // Solo poner: lo demás se hereda.
+    ProcessOptions only_set;
+    only_set.env_set = {{"MOSS_PRUEBA_NUEVA", "nueva"}};
+    const ProcessResult added = run_process(show, only_set);
+    REQUIRE(added.ok());
+    CHECK(added.out == "secreto|otra|queda|es_MX|nueva");
+
+    // PATH sigue sirviendo para buscar el programa.
+    CHECK(run_process({"true"}, options).ok());
 }
 
 TEST_CASE("find_in_path: la ruta completa del programa", "[process]") {
@@ -145,6 +184,49 @@ TEST_CASE("find_in_path: la ruta completa del programa", "[process]") {
     CHECK_FALSE(find_in_path("programa-que-no-existe-moss").has_value());
     CHECK_FALSE(find_in_path("bin/sh").has_value()); // Con '/' no se busca.
     CHECK_FALSE(find_in_path("").has_value());
+}
+
+namespace {
+
+/// Cambia la carpeta actual mientras vive y la restaura aunque falle la prueba.
+class ScopedCurrentPath {
+public:
+    explicit ScopedCurrentPath(const std::filesystem::path& path)
+        : previous_{std::filesystem::current_path()} {
+        std::filesystem::current_path(path);
+    }
+    ~ScopedCurrentPath() {
+        std::error_code ignored;
+        std::filesystem::current_path(previous_, ignored);
+    }
+    ScopedCurrentPath(const ScopedCurrentPath&) = delete;
+    ScopedCurrentPath& operator=(const ScopedCurrentPath&) = delete;
+
+private:
+    std::filesystem::path previous_;
+};
+
+void write_fake_program(const std::filesystem::path& path) {
+    std::ofstream{path} << "#!/bin/sh\nexit 0\n";
+    std::filesystem::permissions(path, std::filesystem::perms::owner_all);
+}
+
+} // namespace
+
+TEST_CASE("find_in_path: salta las entradas vacías y relativas del PATH", "[process]") {
+    // Un rg plantado en la carpeta actual (el proyecto en moss code) nunca se encuentra.
+    const chatbot_test::ScopedTempDir dir;
+    std::filesystem::create_directory(dir.path() / "bin");
+    write_fake_program(dir.path() / "rg");
+    write_fake_program(dir.path() / "bin" / "rg");
+    const ScopedCurrentPath cwd{dir.path()};
+
+    for (const char* path : {".:/usr/bin", ":/usr/bin", "/usr/bin:", "bin:/usr/bin"}) {
+        INFO(path);
+        const chatbot_test::EnvGuard guard{"PATH", path};
+        const auto found = find_in_path("rg");
+        CHECK((!found || found->starts_with("/usr/bin/")));
+    }
 }
 
 #endif

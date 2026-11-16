@@ -54,6 +54,10 @@ add_executable(chatbot_tests
     test_tool_call_accumulator.cpp
     test_web_search.cpp)
 
+# moss code -p (code_command.h): solo existe con Moss Code; sin él, code_command_stub.cpp.
+if(CHATBOT_BUILD_CODE)
+    target_sources(chatbot_tests PRIVATE test_code_command.cpp)
+endif()
 target_compile_features(chatbot_tests PRIVATE cxx_std_20)
 target_include_directories(chatbot_tests PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/core/src)
@@ -148,7 +152,7 @@ endif()
 # moss <addon> con el ejecutable real y un addon falso junto a él, en el
 # PATH y en modo portable (addon_launcher.cmake).
 add_test(NAME chatbot_addon_launcher
-    COMMAND ${CMAKE_COMMAND} -DCHATBOT=$<TARGET_FILE:moss>
+    COMMAND ${CMAKE_COMMAND} -DCHATBOT=$<TARGET_FILE:moss> -DBUILD_CODE=${CHATBOT_BUILD_CODE}
         -DWORK=${CMAKE_CURRENT_BINARY_DIR}/addon_launcher
         -P ${CMAKE_CURRENT_SOURCE_DIR}/addon_launcher.cmake)
 

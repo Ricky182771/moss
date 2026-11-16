@@ -8,7 +8,7 @@
 #include "addon_launcher.h"
 #include "addons_panel.h"
 #include "app_startup.h"
-#include "child_process.h"
+#include "chatbot/child_process.h"
 #include "block_actions.h"
 #include "clipboard.h"
 #include "command_menu.h"

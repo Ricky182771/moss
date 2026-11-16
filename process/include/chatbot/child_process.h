@@ -1,24 +1,23 @@
-#ifndef CHATBOT_CLI_CHILD_PROCESS_H
-#define CHATBOT_CLI_CHILD_PROCESS_H
+#ifndef CHATBOT_PROCESS_CHILD_PROCESS_H
+#define CHATBOT_PROCESS_CHILD_PROCESS_H
 
 #include "chatbot/cancel_token.h"
 
 #include <chrono>
 #include <cstddef>
+#include <map>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
 
-/// Programas externos: el portapapeles (wl-copy, xclip…), systemctl,
-/// loginctl, journalctl y moss-telegram --config-version. Sin shell:
-/// posix_spawnp con los argumentos tal cual. CMake compila
-/// child_process_posix.cpp o child_process_windows.cpp (ahí solo lo mínimo
-/// para compilar: no se lanzan programas). Nunca desde el hilo de la
-/// interfaz si puede tardar. No se llama process.h: con cli/src en el
-/// include path, la pthread.h de MinGW tomaría este en lugar del <process.h>
-/// del sistema.
-namespace chatbot::cli {
+/// Programas externos. Los usan cli/ (el portapapeles: wl-copy, xclip…;
+/// systemctl, loginctl, journalctl y moss-telegram --config-version) y
+/// chatbot_code (git y rg). Sin shell: posix_spawnp con los argumentos tal
+/// cual. CMake compila child_process_posix.cpp o child_process_windows.cpp
+/// (ahí solo lo mínimo para compilar: no se lanzan programas). Nunca desde el
+/// hilo de la interfaz si puede tardar.
+namespace chatbot::process {
 
 /// Tope de lo que se guarda de stdout y de stderr; el resto se lee y se tira
 /// (el programa no se queda esperando a que alguien lea).
@@ -35,6 +34,13 @@ struct ProcessOptions {
     /// Al cancelarse: SIGTERM al hijo, unos 200 ms para que salga y después
     /// SIGKILL. Quien lo pasa lo mantiene vivo mientras corre.
     const CancelToken* cancel = nullptr;
+    /// Entorno del hijo. Con los dos vacíos (por defecto) hereda el de este
+    /// proceso tal cual. Si no, el de este proceso sin las variables cuyo
+    /// nombre empieza con alguno de env_remove_prefixes (un nombre completo
+    /// también sirve), más env_set, que reemplaza a las que ya estén. En
+    /// Windows no aplica: run_process no lanza nada.
+    std::vector<std::string> env_remove_prefixes{};
+    std::map<std::string, std::string> env_set{};
 };
 
 struct ProcessResult {
@@ -75,10 +81,12 @@ struct ProcessResult {
 [[nodiscard]] std::optional<unsigned long> current_user_id();
 
 /// La ruta del primer archivo ejecutable con ese nombre en las carpetas de
-/// PATH (sin la carpeta actual), o nullopt. Un nombre con '/' no se busca.
+/// PATH, o nullopt. Solo usa las carpetas absolutas: salta las vacías y las
+/// relativas ("." o "bin"), que dependen de la carpeta actual. Un nombre con
+/// '/' no se busca.
 /// En Windows, siempre nullopt: ahí no se lanzan programas.
 [[nodiscard]] std::optional<std::string> find_in_path(std::string_view program);
 
-} // namespace chatbot::cli
+} // namespace chatbot::process
 
-#endif // CHATBOT_CLI_CHILD_PROCESS_H
+#endif // CHATBOT_PROCESS_CHILD_PROCESS_H

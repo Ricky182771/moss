@@ -6,6 +6,7 @@
 
 #include "platform_internal.h"
 
+#include <string>
 #include <string_view>
 
 namespace chatbot {
@@ -31,6 +32,29 @@ std::string join_windows_path(std::string_view base, std::string_view tail) {
         base.remove_suffix(1);
     }
     return std::string{base} + "\\" + std::string{tail};
+}
+
+bool is_reserved_windows_name(std::string_view name) {
+    std::string_view stem = name.substr(0, name.find('.'));
+    while (!stem.empty() && stem.back() == ' ') {
+        stem.remove_suffix(1);
+    }
+    std::string device{stem};
+    for (char& c : device) {
+        if (c >= 'A' && c <= 'Z') {
+            c = static_cast<char>(c - 'A' + 'a');
+        }
+    }
+    if (device == "con" || device == "prn" || device == "aux" || device == "nul" ||
+        device == "conin$" || device == "conout$") {
+        return true;
+    }
+    if (device.size() < 4 || (device.compare(0, 3, "com") != 0 && device.compare(0, 3, "lpt") != 0)) {
+        return false;
+    }
+    const std::string_view number = std::string_view{device}.substr(3);
+    return (number.size() == 1 && number[0] >= '1' && number[0] <= '9') ||
+           number == "\xC2\xB9" || number == "\xC2\xB2" || number == "\xC2\xB3";
 }
 
 } // namespace chatbot

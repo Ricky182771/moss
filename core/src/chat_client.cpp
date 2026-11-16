@@ -5,7 +5,7 @@
 #include "chatbot/platform.h"
 #include "config_internal.h"
 #include "error_body.h"
-#include "hide_secret.h"
+#include "chatbot/hide_secret.h"
 #include "model_params_internal.h"
 #include "redirect.h"
 #include "sse.h"

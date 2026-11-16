@@ -36,12 +36,23 @@ FetchContent_MakeAvailable(ftxui)
 # reglas de la configuración de los addons); sin FTXUI, para poder probarla
 # sin terminal.
 find_package(Threads REQUIRED)
-# Portapapeles y programas externos: el lanzador (posix_spawnp) solo en
-# POSIX; la API de Win32 solo en Windows.
+# Portapapeles: la API de Win32 solo en Windows. Los programas externos
+# (posix_spawnp) son chatbot::process.
 if(WIN32)
-    set(CHATBOT_CLIPBOARD_SOURCE src/clipboard_windows.cpp src/child_process_windows.cpp)
+    set(CHATBOT_CLIPBOARD_SOURCE src/clipboard_windows.cpp)
 else()
-    set(CHATBOT_CLIPBOARD_SOURCE src/clipboard_posix.cpp src/child_process_posix.cpp)
+    set(CHATBOT_CLIPBOARD_SOURCE src/clipboard_posix.cpp)
+endif()
+# moss code (code_command.h): con CHATBOT_BUILD_CODE usa el motor (chatbot::code) y Ctrl+C por
+# sistema; sin él, un archivo que solo avisa que no está incluido.
+if(CHATBOT_BUILD_CODE)
+    if(WIN32)
+        set(CHATBOT_CODE_COMMAND_SOURCES src/code_command.cpp src/interrupt_windows.cpp)
+    else()
+        set(CHATBOT_CODE_COMMAND_SOURCES src/code_command.cpp src/interrupt_posix.cpp)
+    endif()
+else()
+    set(CHATBOT_CODE_COMMAND_SOURCES src/code_command_stub.cpp)
 endif()
 add_library(chatbot_cli_lib STATIC
     src/addon_form.cpp
@@ -51,6 +62,7 @@ add_library(chatbot_cli_lib STATIC
     src/clipboard.cpp
     ${CHATBOT_CLIPBOARD_SOURCE}
     src/code_blocks.cpp
+    ${CHATBOT_CODE_COMMAND_SOURCES}
     src/command_menu.cpp
     src/command_parser.cpp
     src/commands.cpp
@@ -80,8 +92,11 @@ find_package(nlohmann_json 3.9 REQUIRED)
 # moss --version (addon_launcher.cpp).
 target_compile_definitions(chatbot_cli_lib PRIVATE CHATBOT_VERSION="${PROJECT_VERSION}")
 target_link_libraries(chatbot_cli_lib
-    PUBLIC chatbot::core chatbot::markdown chatbot::addon_settings Threads::Threads
+    PUBLIC chatbot::core chatbot::process chatbot::markdown chatbot::addon_settings Threads::Threads
     PRIVATE nlohmann_json::nlohmann_json)
+if(CHATBOT_BUILD_CODE)
+    target_link_libraries(chatbot_cli_lib PRIVATE chatbot::code)
+endif()
 chatbot_set_warnings(chatbot_cli_lib)
 # Windows: portapapeles y ventana de solo mensajes (user32). Biblioteca del
 # sistema, no una dependencia nueva.

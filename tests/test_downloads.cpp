@@ -1,6 +1,8 @@
 #include "downloads.h"
 #include "temp_dir.hpp"
 
+#include "chatbot/platform.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #ifndef _WIN32
@@ -384,4 +386,27 @@ TEST_CASE("display_path abrevia HOME con ~", "[downloads]") {
     CHECK(display_path("/home/ab/x", "/home/a") == "/home/ab/x");
     CHECK(display_path("/srv/x", "/home/a") == "/srv/x");
     CHECK(display_path("/srv/x", "") == "/srv/x");
+}
+
+TEST_CASE("is_reserved_windows_name: dispositivos de Windows en cualquier sistema", "[downloads]") {
+    using chatbot::is_reserved_windows_name;
+    for (const char* name : {"CON", "con", "Prn", "AUX", "nul", "CONIN$", "conout$", "COM1", "com9",
+                             "LPT1", "lpt9", "COM\xC2\xB9", "com\xC2\xB2", "COM\xC2\xB3",
+                             "LPT\xC2\xB9", "lpt\xC2\xB2", "LPT\xC2\xB3"}) {
+        INFO(name);
+        CHECK(is_reserved_windows_name(name));
+    }
+    // Con extensión o espacios antes del punto: Windows mira lo que va antes del primer punto.
+    for (const char* name : {"con.cpp", "Aux.tar.gz", "con .txt", "NUL.", "CONIN$.txt",
+                             "COM\xC2\xB9.txt", "lpt3.x.y"}) {
+        INFO(name);
+        CHECK(is_reserved_windows_name(name));
+    }
+    // COM0 y LPT0 los deja crear Windows; el resto son nombres normales.
+    for (const char* name : {"COM0", "lpt0", "COM10", "LPT10", "COM", "LPT", "CONS", "console",
+                             "CONIN", "CONOUT", "COM\xC2\xB4", "COM\xC2\xB9\xC2\xB9",
+                             "xcon", "con-1", "a.con", "", "COM1x", "NULL"}) {
+        INFO(name);
+        CHECK_FALSE(is_reserved_windows_name(name));
+    }
 }

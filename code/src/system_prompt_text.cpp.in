@@ -1,0 +1,10 @@
+// Generado por CMake (code/CMakeLists.txt) a partir de code/src/system_prompt.md: no editar.
+#include "chatbot/code/system_prompt.h"
+
+namespace chatbot::code {
+
+std::string_view fixed_system_prompt() {
+    return R"moss_prompt(@CHATBOT_CODE_SYSTEM_PROMPT@)moss_prompt";
+}
+
+} // namespace chatbot::code

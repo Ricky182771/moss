@@ -1,6 +1,8 @@
 #include "addon_launcher.h"
 
-#include "child_process.h"
+#include "code_command.h"
+
+#include "chatbot/child_process.h"
 
 #include "chatbot/config.h"
 
@@ -9,6 +11,17 @@
 namespace chatbot::cli {
 
 namespace settings = addon_settings;
+
+namespace {
+
+CommandLine usage(std::string problem) {
+    CommandLine line;
+    line.kind = CommandLine::Kind::Usage;
+    line.problem = std::move(problem);
+    return line;
+}
+
+} // namespace
 
 CommandLine parse_command_line(const std::vector<std::string>& args) {
     CommandLine line;
@@ -22,6 +35,34 @@ CommandLine parse_command_line(const std::vector<std::string>& args) {
         } else {
             line.kind = CommandLine::Kind::Usage;
             line.problem = first + " no lleva más argumentos.";
+        }
+        return line;
+    }
+    if (first == "code") {
+        line.kind = CommandLine::Kind::Code;
+        for (std::size_t i = 1; i < args.size(); ++i) {
+            const std::string& argument = args[i];
+            if (argument == "-p") {
+                if (line.prompt.has_value()) {
+                    return usage("-p solo puede ir una vez.");
+                }
+                if (i + 1 >= args.size()) {
+                    return usage("-p necesita un texto.");
+                }
+                std::string text = args[++i];
+                if (text.find_first_not_of(" \t\r\n") == std::string::npos) {
+                    return usage("el texto de -p está vacío.");
+                }
+                line.prompt = std::move(text);
+            } else if (argument.starts_with('-')) {
+                return usage("opción desconocida para code: " + argument);
+            } else if (!line.folder.empty()) {
+                return usage("code lleva una sola carpeta.");
+            } else if (argument.empty()) {
+                return usage("la carpeta de code está vacía.");
+            } else {
+                line.folder = argument;
+            }
         }
         return line;
     }
@@ -58,8 +99,8 @@ std::optional<std::string> locate_addon(const settings::AddonInfo& addon) {
         return std::nullopt;
     }
     return find_addon_executable(addon, executable_dir().value_or(""),
-                                 process_portable_data_dir().has_value(), is_executable_file,
-                                 find_in_path);
+                                 process_portable_data_dir().has_value(),
+                                 process::is_executable_file, process::find_in_path);
 }
 
 std::string addon_not_found_message(const settings::AddonInfo& addon, bool portable) {
@@ -72,6 +113,7 @@ std::string usage_text(Os os, bool portable, const AddonLocator& locate) {
         "Uso:\n"
         "  moss                       abre el chat\n"
         "  moss <addon> [argumentos]  arranca un addon\n"
+        "  moss code [carpeta] -p <texto>  Moss Code sin pantalla: imprime la respuesta\n"
         "  moss --help                esta ayuda\n"
         "  moss --version             la versión\n"
         "\n"
@@ -110,6 +152,8 @@ std::optional<int> run_command_line(const std::vector<std::string>& args) {
         std::cerr << "moss: " << line.problem << "\n\n"
                   << usage_text(current_os(), portable, locate_addon);
         return kExitUsage;
+    case CommandLine::Kind::Code:
+        return run_code_command(line);
     case CommandLine::Kind::Addon:
         break;
     }
@@ -124,7 +168,7 @@ std::optional<int> run_command_line(const std::vector<std::string>& args) {
     }
     std::vector<std::string> argv{*path};
     argv.insert(argv.end(), line.arguments.begin(), line.arguments.end());
-    const std::string error = exec_program(*path, argv);
+    const std::string error = process::exec_program(*path, argv);
     std::cerr << "moss: no se pudo arrancar " << *path << ": " << error << '\n';
     return 1;
 }

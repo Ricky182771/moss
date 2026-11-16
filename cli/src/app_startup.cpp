@@ -1,7 +1,7 @@
 #include "app_startup.h"
 
 #include "addon_launcher.h"
-#include "child_process.h"
+#include "chatbot/child_process.h"
 #include "clipboard.h"
 #include "conversation_store.h"
 #include "downloads.h"
@@ -69,8 +69,9 @@ AddonsEnvironment addons_environment(ServiceWorker::Post post, std::string chatb
     };
     AddonsEnvironment environment;
     environment.post = std::move(post);
-    environment.run = [](const std::vector<std::string>& argv, const ProcessOptions& options) {
-        return run_process(argv, options);
+    environment.run = [](const std::vector<std::string>& argv,
+                         const process::ProcessOptions& options) {
+        return process::run_process(argv, options);
     };
     environment.portable = process_portable_data_dir().has_value();
     // Junto a moss, que es quien hace exec del addon (la TUI: executable_dir).
@@ -79,14 +80,15 @@ AddonsEnvironment addons_environment(ServiceWorker::Post post, std::string chatb
         if (current_os() == Os::Windows) {
             return std::optional<std::string>{};
         }
-        return find_addon_executable(addon, dir, portable, is_executable_file, find_in_path);
+        return find_addon_executable(addon, dir, portable, process::is_executable_file,
+                                     process::find_in_path);
     };
     environment.config_path = default_config_path().value_or("");
     environment.credentials_path = default_credentials_path().value_or("");
     const settings::AddonInfo& telegram = *settings::find_addon("telegram");
     environment.data_dir = settings::default_addon_data_dir(telegram.name);
     environment.unit_path = settings::default_unit_path(telegram.unit);
-    environment.uid = current_user_id();
+    environment.uid = process::current_user_id();
     environment.chatbot_path = std::move(chatbot_path);
     environment.xdg_config_home = absolute("XDG_CONFIG_HOME");
     environment.xdg_data_home = absolute("XDG_DATA_HOME");

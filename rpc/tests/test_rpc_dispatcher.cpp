@@ -2282,8 +2282,8 @@ TEST_CASE("RPC: service.log", "[rpc][addons][registro]") {
                   .dump());
     }
     SECTION("sin systemd: -32006; journalctl falla: -32007") {
-        chatbot::cli::ProcessResult missing;
-        missing.status = chatbot::cli::ProcessResult::Status::NotFound;
+        chatbot::process::ProcessResult missing;
+        missing.status = chatbot::process::ProcessResult::Status::NotFound;
         rpc.system.answer(journal, missing);
         check_error(long_call(rpc, 2, "service.log", {{"addon", "telegram"}})[0], -32006,
                     std::string{chatbot::cli::kNoUserSystemd});

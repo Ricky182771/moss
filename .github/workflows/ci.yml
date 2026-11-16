@@ -46,11 +46,14 @@ jobs:
       # FTXUI y md4c se descargan solos por FetchContent al configurar.
       # tzdata: la base de zonas de C++20 (std::chrono::locate_zone) del tope
       # diario del addon de Telegram, que en Linux se compila por defecto.
+      # ripgrep: opcional para Moss (grep usa rg si está en el PATH); aquí va
+      # para que las pruebas de grep corran sus dos implementaciones.
       - name: Instalar dependencias
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            cmake ninja-build g++ clang libcurl4-openssl-dev nlohmann-json3-dev catch2 tzdata
+            cmake ninja-build g++ clang libcurl4-openssl-dev nlohmann-json3-dev catch2 tzdata \
+            ripgrep
 
       # Con vm.mmap_rnd_bits=32 (kernels recientes), TSan falla con
       # "FATAL: ThreadSanitizer: unexpected memory mapping".
@@ -76,9 +79,15 @@ jobs:
       # cuerpo de las peticiones (tools, tool_choice, tool_call_id, sin key).
       # Sin red ni keys. No hay paso en Windows: el script es de bash y corre en el shell de MSYS2, sin
       # Python (el del runner solo se ve desde pwsh, como en check-rpc-https.ps1).
-      # La punta a punta en Windows llega en C1 con `moss code -p`.
+      # La punta a punta de `moss code -p` (Linux y Windows) es tools/check-code-e2e.py.
       - name: Sonda de tool calling
         run: tools/check-tools-probe.sh build/${{ matrix.preset }}/tools/moss-tools-probe
+
+      # moss code -p de punta a punta contra tools/fake-llm.py (tres guiones:
+      # tres pasos, grep y el límite de pasos): código de salida, stdout, stderr y
+      # las peticiones recibidas. Entorno aislado, sin red ni keys.
+      - name: Moss Code de punta a punta
+        run: python3 -I tools/check-code-e2e.py build/${{ matrix.preset }}/cli/moss
 
       # Sin CHAT_API_KEY el programa debe salir con código 1 y el error de
       # configuración, sin abrir la interfaz ni conectarse a nada.
@@ -141,7 +150,7 @@ jobs:
 
   # Sin addons: con CHATBOT_BUILD_TELEGRAM=OFF la app compila y pasa sus
   # pruebas sin addons/telegram ni addons/common, y "moss telegram" dice
-  # que no está instalado (69).
+  # que no está instalado (69). También sin code/ (CHATBOT_BUILD_CODE=OFF).
   no-addons:
     name: gcc / dev sin addons
     runs-on: ubuntu-24.04
@@ -159,7 +168,7 @@ jobs:
             cmake ninja-build g++ libcurl4-openssl-dev nlohmann-json3-dev catch2
 
       - name: Configurar
-        run: cmake --preset dev -DCHATBOT_BUILD_TELEGRAM=OFF
+        run: cmake --preset dev -DCHATBOT_BUILD_TELEGRAM=OFF -DCHATBOT_BUILD_CODE=OFF
 
       - name: Compilar
         run: cmake --build --preset dev
@@ -237,6 +246,12 @@ jobs:
       - name: moss-rpc por HTTPS
         shell: pwsh
         run: tools/check-rpc-https.ps1 -Rpc build/${{ matrix.preset }}/cli/moss-rpc.exe
+
+      # moss code -p de punta a punta contra tools/fake-llm.py, con el Python
+      # del runner (solo se ve desde pwsh) y la búsqueda propia de grep. Sin red ni keys.
+      - name: Moss Code de punta a punta
+        shell: pwsh
+        run: python -I tools/check-code-e2e.py build/${{ matrix.preset }}/cli/moss.exe
 
       # Sin CHAT_API_KEY debe salir con código 1 y el error de configuración.
       # stdin es NUL: GetConsoleMode falla y no se abre la interfaz. El

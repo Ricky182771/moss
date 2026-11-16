@@ -11,6 +11,8 @@ Moss es un chatbot tipo asistente general que corre en la terminal (pantalla com
 - **Interfaz (`cli/`)**: ejecutable con FTXUI. **No se toca hasta el hito 3.**
 - **RPC (`rpc/`)**: ejecutable `moss-rpc`, la app sin pantalla por JSON-RPC 2.0 sobre stdin/stdout, para la interfaz gráfica (Flutter) y otras interfaces. Usa la misma lógica que la TUI (`Session`), sin FTXUI ni addons. Protocolo en `rpc/PROTOCOL.md`.
 - **Addons (`addons/`)**: bots que usan el mismo núcleo (hoy, Telegram), compilados por defecto solo en Linux; la app los arranca (`moss telegram`) y los configura en F2 → Addons (sección 14). `core` no sabe que existen; de `addons/`, `cli/` solo usa `chatbot::addon_settings`.
+- **Procesos (`process/`)**: `chatbot::process`, programas externos sin shell (`run_process`, `find_in_path`); la usan `cli/` y `code/`.
+- **Moss Code (`code/`)**: `chatbot::code`, el motor del modo agente de programación (herramientas de lectura, `ProjectRoot`, `AgentLoop`), sin terminal; `moss code -p` en C1. Opción `CHATBOT_BUILD_CODE` (ON). Diseño: `guias/18-moss-code.md`; uso: `guias/19-moss-code-uso.md`.
 - **Interfaz gráfica (`gui/`)**: app de Flutter (`moss-gui`) que arranca `moss-rpc` como proceso hijo; sin lógica del núcleo (sección 16).
 - **Servidor**: API de NVIDIA NIM (plan gratuito), compatible con OpenAI: `POST {base_url}/chat/completions`.
 
@@ -42,6 +44,7 @@ Lee la guía correspondiente antes de hacer cambios:
 | `rpc/` | `rpc/PROTOCOL.md` y `guias/05-estructura.md` |
 | Presets, compilación, pruebas o CI | `guias/11-compilacion.md` |
 | `gui/` (Flutter) | `gui/diseno/DISENO.md`, `guias/16-gui.md` y `rpc/PROTOCOL.md` |
+| `code/`, `process/` y `moss code` | `guias/18-moss-code.md` y `guias/19-moss-code-uso.md` |
 | `VERSION`, `packaging/`, paquetes de Linux o releases | `guias/17-empaquetado.md` |
 
 ## 3. Alcance por hitos
@@ -82,6 +85,13 @@ moss/
 │   └── src/
 ├── cli/
 │   └── src/
+├── process/
+│   ├── include/
+│   └── src/
+├── code/
+│   ├── include/
+│   ├── src/
+│   └── tests/
 ├── rpc/
 │   ├── src/
 │   └── tests/
@@ -101,7 +111,9 @@ moss/
 ```
 
 - `chatbot_core` (namespace `moss`) no depende de FTXUI ni addons, ni usa la terminal. `chatbot_markdown` (`chatbot::markdown`, namespace `chatbot::md`) no depende de core ni FTXUI; md4c en privado. El dibujo de markdown también usa `chatbot::md`.
-- `chatbot_cli_lib` solo depende de `chatbot::core`, `chatbot::markdown`, `chatbot::addon_settings` y nlohmann/json privado; sin FTXUI ni includes de `core/src`.
+- `chatbot_process` solo depende de core. `chatbot_code` solo de `chatbot::core`, `chatbot::process` y nlohmann/json privado: nunca FTXUI, `cli/` ni addons; no calcula las carpetas de Moss (se le pasan).
+- Moss Code: toda ruta que pide el modelo pasa por `ProjectRoot` y los archivos se abren solo con `read_file`/`walk`; `git` y `rg` por ruta absoluta y sin shell; resultados con `hide_secret` y tope.
+- `chatbot_cli_lib` solo depende de `chatbot::core`, `chatbot::markdown`, `chatbot::addon_settings`, `chatbot::process`, `chatbot::code` (con `CHATBOT_BUILD_CODE`) y nlohmann/json privado; sin FTXUI ni includes de `core/src`.
 - RPC solo depende de `chatbot_cli_lib` (con su `chatbot::addon_settings`, como `cli/`) y nlohmann/json; nunca FTXUI, `chatbot_cli_ui` ni addons (`chatbot::bot`, Telegram). Siempre se compila, también en Windows y sin addons. **Todo cambio de protocolo se documenta en `rpc/PROTOCOL.md` en el mismo PR**, incluida su tabla de estado.
 - `gui/` no es target de CMake: habla con `moss-rpc` solo por `rpc/PROTOCOL.md` (sección 16).
 - `chatbot_cli_ui`: `chatbot_cli_lib`, `ftxui::dom` y `ftxui::screen`; dibuja sin terminal. Solo `moss` y `chatbot_ui_tests` enlazan `ftxui::component`.

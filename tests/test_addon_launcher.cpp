@@ -40,6 +40,51 @@ TEST_CASE("línea de comandos: interfaz, ayuda, versión, addon y error de uso",
     CHECK(parse_command_line({"--version", "telegram"}).kind == CommandLine::Kind::Usage);
 }
 
+TEST_CASE("línea de comandos: moss code [carpeta] -p texto", "[lanzador][code]") {
+    using Kind = CommandLine::Kind;
+    const CommandLine bare = parse_command_line({"code"});
+    CHECK(bare.kind == Kind::Code);
+    CHECK(bare.folder.empty());
+    CHECK_FALSE(bare.prompt.has_value());
+
+    const CommandLine prompt = parse_command_line({"code", "-p", "qué hay aquí"});
+    CHECK(prompt.kind == Kind::Code);
+    CHECK(prompt.folder.empty());
+    CHECK(prompt.prompt == "qué hay aquí");
+
+    // La carpeta va antes o después de -p con su texto.
+    for (const std::vector<std::string>& args : {std::vector<std::string>{"code", "/tmp/p", "-p", "x"},
+                                                  std::vector<std::string>{"code", "-p", "x", "/tmp/p"}}) {
+        const CommandLine line = parse_command_line(args);
+        CHECK(line.kind == Kind::Code);
+        CHECK(line.folder == "/tmp/p");
+        CHECK(line.prompt == "x");
+    }
+    CHECK(parse_command_line({"code", "/tmp/p"}).folder == "/tmp/p");
+    // El texto de -p puede empezar con guion.
+    CHECK(parse_command_line({"code", "-p", "--version"}).prompt == "--version");
+
+    const auto problem = [](const std::vector<std::string>& args) {
+        const CommandLine line = parse_command_line(args);
+        REQUIRE(line.kind == Kind::Usage);
+        return line.problem;
+    };
+    CHECK(problem({"code", "-p"}) == "-p necesita un texto.");
+    CHECK(problem({"code", "/tmp/p", "-p"}) == "-p necesita un texto.");
+    CHECK(problem({"code", "-p", ""}) == "el texto de -p está vacío.");
+    CHECK(problem({"code", "-p", "  \n"}) == "el texto de -p está vacío.");
+    CHECK(problem({"code", "-p", "a", "-p", "b"}) == "-p solo puede ir una vez.");
+    CHECK(problem({"code", "a", "b"}) == "code lleva una sola carpeta.");
+    CHECK(problem({"code", "--continuar"}) == "opción desconocida para code: --continuar");
+    CHECK(problem({"code", ""}) == "la carpeta de code está vacía.");
+
+    // Lo demás no cambia.
+    CHECK(parse_command_line({"telegram", "code"}).kind == Kind::Addon);
+    CHECK(parse_command_line({"--help"}).kind == Kind::Help);
+    CHECK(parse_command_line({"--version"}).kind == Kind::Version);
+    CHECK(parse_command_line({"Code"}).kind == Kind::Usage);
+}
+
 TEST_CASE("línea de comandos: el addon junto a moss, luego PATH; portable sin PATH",
           "[addons][lanzador]") {
     std::set<std::string> executables;
@@ -87,6 +132,8 @@ TEST_CASE("línea de comandos: mensajes y ayuda", "[addons][lanzador]") {
     CHECK(chatbot::cli::usage_text(chatbot::Os::Posix, true, missing)
               .find("no instalado (copia moss-telegram junto a moss)") != std::string::npos);
 
+    CHECK(installed.find("moss code [carpeta] -p <texto>") != std::string::npos);
+
     bool searched = false;
     const std::string windows = chatbot::cli::usage_text(
         chatbot::Os::Windows, false, [&](const chatbot::addon_settings::AddonInfo&) {
@@ -96,4 +143,5 @@ TEST_CASE("línea de comandos: mensajes y ayuda", "[addons][lanzador]") {
     CHECK_FALSE(searched);
     CHECK(windows.find("Los addons todavía no están disponibles en Windows.") !=
           std::string::npos);
+    CHECK(windows.find("moss code [carpeta] -p <texto>") != std::string::npos);
 }

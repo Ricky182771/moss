@@ -2,7 +2,7 @@
 // stdin, stdout y stderr, y la búsqueda en PATH. CMake lo compila en lugar
 // de child_process_windows.cpp fuera de Windows.
 
-#include "child_process.h"
+#include "chatbot/child_process.h"
 
 #include <algorithm>
 #include <cerrno>
@@ -21,7 +21,7 @@
 
 extern char** environ; // NOLINT: lo exige posix_spawnp.
 
-namespace chatbot::cli {
+namespace chatbot::process {
 
 namespace {
 
@@ -149,6 +149,33 @@ struct SpawnSetup {
     SpawnSetup& operator=(const SpawnSetup&) = delete;
 };
 
+/// El entorno del hijo según options (ProcessOptions::env_*): punteros a las cadenas de storage,
+/// con nullptr al final.
+std::vector<char*> child_environment(const ProcessOptions& options,
+                                     std::vector<std::string>& storage) {
+    for (char** entry = environ; *entry != nullptr; ++entry) {
+        const std::string_view text{*entry};
+        const std::string name{text.substr(0, text.find('='))};
+        const bool removed =
+            options.env_set.contains(name) ||
+            std::any_of(options.env_remove_prefixes.begin(), options.env_remove_prefixes.end(),
+                        [&name](const std::string& prefix) { return name.starts_with(prefix); });
+        if (!removed) {
+            storage.emplace_back(text);
+        }
+    }
+    for (const auto& [name, value] : options.env_set) {
+        storage.push_back(name + "=" + value);
+    }
+    std::vector<char*> pointers;
+    pointers.reserve(storage.size() + 1);
+    for (std::string& variable : storage) {
+        pointers.push_back(variable.data());
+    }
+    pointers.push_back(nullptr);
+    return pointers;
+}
+
 /// Gracia entre SIGTERM y SIGKILL al cancelar.
 constexpr std::chrono::milliseconds kTerminateGrace{200};
 
@@ -240,10 +267,14 @@ ProcessResult run_process(const std::vector<std::string>& argv, const ProcessOpt
         c_args.push_back(arg.data());
     }
     c_args.push_back(nullptr);
+    std::vector<std::string> env_storage;
+    std::vector<char*> c_env;
+    if (!options.env_remove_prefixes.empty() || !options.env_set.empty()) {
+        c_env = child_environment(options, env_storage);
+    }
     pid_t pid = -1;
-    const int spawned =
-        posix_spawnp(&pid, c_args.front(), &setup.actions, &setup.attributes, c_args.data(),
-                     environ);
+    const int spawned = posix_spawnp(&pid, c_args.front(), &setup.actions, &setup.attributes,
+                                     c_args.data(), c_env.empty() ? environ : c_env.data());
     if (spawned != 0) {
         result.status = spawned == ENOENT ? ProcessResult::Status::NotFound
                                           : ProcessResult::Status::Failed;
@@ -372,8 +403,8 @@ std::optional<std::string> find_in_path(std::string_view program) {
     while (true) {
         const std::size_t end = rest.find(':');
         const std::string_view dir = rest.substr(0, end);
-        // Una carpeta vacía sería la actual: no se usa.
-        if (!dir.empty()) {
+        // Una carpeta vacía o relativa ("." o "bin") depende de la carpeta actual: no se usa.
+        if (dir.starts_with('/')) {
             std::string candidate = std::string{dir} + "/" + std::string{program};
             if (is_executable_file(candidate)) {
                 return candidate;
@@ -390,4 +421,4 @@ std::optional<unsigned long> current_user_id() {
     return static_cast<unsigned long>(::getuid());
 }
 
-} // namespace chatbot::cli
+} // namespace chatbot::process

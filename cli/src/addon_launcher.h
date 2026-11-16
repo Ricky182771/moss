@@ -26,12 +26,15 @@ struct CommandLine {
         Help,      ///< --help o -h.
         Version,   ///< --version: "moss X.Y.Z", sin leer configuración.
         Addon,     ///< moss <addon> [argumentos].
+        Code,      ///< moss code [carpeta] [-p texto]: Moss Code (folder y prompt).
         Usage,     ///< Otra cosa: problem dice qué.
     };
     Kind kind = Kind::Interface;
     const addon_settings::AddonInfo* addon = nullptr; ///< Solo con Addon.
     std::vector<std::string> arguments;               ///< Los del addon, tal cual.
     std::string problem;                              ///< Solo con Usage.
+    std::string folder;                               ///< Solo con Code: vacía, la actual.
+    std::optional<std::string> prompt;                ///< Solo con Code: el texto de -p.
 };
 
 /// Interpreta los argumentos (sin argv[0]). Solo los nombres del registro
@@ -66,8 +69,8 @@ using AddonLocator =
 [[nodiscard]] std::string usage_text(Os os, bool portable, const AddonLocator& locate);
 
 /// Atiende la línea de comandos: nullopt si hay que abrir la interfaz; si
-/// no, el código de salida (la ayuda, un error de uso, un addon que no está).
-/// Con un addon que sí está, no regresa: el proceso se reemplaza por él.
+/// no, el código de salida (la ayuda, un error de uso, un addon que no está,
+/// moss code). Con un addon que sí está, no regresa: el proceso se reemplaza por él.
 [[nodiscard]] std::optional<int> run_command_line(const std::vector<std::string>& args);
 
 } // namespace chatbot::cli

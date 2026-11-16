@@ -1,0 +1,15 @@
+[
+  {
+    "reasoning": "Listo los archivos Markdown.",
+    "tool_calls": [{"id": "call_glob", "name": "glob", "arguments": {"pattern": "*.md"}}]
+  },
+  {
+    "reasoning": "Leo el README.md.",
+    "tool_calls": [{"id": "call_read", "name": "read", "arguments": {"path": "README.md"}}]
+  },
+  {
+    "reasoning": "Esta petición no debe llegar: el límite es de dos pasos.",
+    "tool_calls": [{"id": "call_grep", "name": "grep", "arguments": {"pattern": "GRILLO-[0-9]+"}}]
+  },
+  {"content": "No debería llegar."}
+]

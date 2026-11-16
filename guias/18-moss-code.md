@@ -16,14 +16,14 @@ Moss ya no es parte del servicio social: Moss Code es de uso general, para cualq
 | D2 | Plataformas | Leer, buscar y editar en Linux y Windows desde el principio. **Ejecutar comandos, solo en Linux**, hasta un hito propio para Windows | **Decidido (14 nov 2026)** |
 | D3 | Para quién | Uso general, imitando a Claude Code. Sin modo escuela | **Decidido (14 nov 2026)** |
 | D4 | Modelos | **NVIDIA NIM.** Los candidatos se eligen en C0 con una sonda contra la lista viva de `/v1/models`, porque el catálogo gratis cambia (GLM-5.2 ya da 410 y Kimi K3 salió del plan gratis) | **Decidido (14 nov 2026)**; los modelos, en C0 |
-| D5 | Instrucciones del proyecto | `AGENTS.md` en la raíz del proyecto (el estándar abierto que ya usan Moss y OpenCode); si no hay, `CLAUDE.md`. Más uno personal en `~/.config/moss/AGENTS.md` | Propuesta |
+| D5 | Instrucciones del proyecto | `AGENTS.md` en la raíz del proyecto (el estándar abierto que ya usan Moss y OpenCode); si no hay, `CLAUDE.md`. Más uno personal en `~/.config/moss/AGENTS.md` | Decidido |
 | D6 | Pensamiento en el modo código | **Se reenvía**, con la misma llave en que llegó (`reasoning_content` o `reasoning`), en los mensajes del asistente de una sesión de código. Es una excepción a la regla de M3 ("nunca se reenvía"), y solo en el modo código: el chat no cambia | Propuesta (casi obligada, ver 3.4) |
-| D7 | Idioma de las herramientas | Nombres, descripciones e instrucciones de sistema del modo código **en inglés** (los modelos usan mejor las herramientas así). El modelo te contesta en español, y todo lo que ves en la pantalla está en español | Propuesta |
+| D7 | Idioma de las herramientas | Nombres, descripciones e instrucciones de sistema del modo código **en inglés** (los modelos usan mejor las herramientas así). El modelo te contesta en español, y todo lo que ves en la pantalla está en español | Decidido |
 | D8 | Modos de permiso | Como Claude Code, con Shift+Tab: **Preguntar** (por defecto) → **Aceptar ediciones** → **Plan**. **Sin preguntar** solo con la bandera `--sin-preguntar` | Propuesta |
 | D9 | Reglas guardadas | `.moss/settings.json` (del proyecto, se puede subir a git) y `.moss/settings.local.json` (tuyo, ignorado por git), con la sintaxis de Claude Code: `bash(cmake --build:*)` | Propuesta |
 | D10 | Comandos con shell | La herramienta `bash` corre `bash -c` (es lo que el modelo espera). Es una excepción a "procesos sin shell" de `AGENTS.md`: solo para comandos que pidió el modelo y que tú aprobaste | Propuesta |
 | D11 | Dónde se guardan las sesiones | Carpeta aparte `…/moss/code/`, con su propio formato. No salen en la barra del chat, y una versión vieja de Moss no las ve | Propuesta |
-| D12 | `grep` | `rg` (ripgrep) si está en el `PATH`; si no, una búsqueda propia con `std::regex` y límites de tamaño | Propuesta |
+| D12 | `grep` | `rg` (ripgrep) si está en el `PATH`; si no, una búsqueda propia con `std::regex` y límites de tamaño | Decidido |
  
 **Por qué D1:** `moss-telegram` es un ejecutable aparte porque corre como servicio, sin pantalla. Moss Code es interactivo, igual que el chat: comparte la configuración, el proveedor, `/model`, F2 y el dibujo de markdown. Un ejecutable aparte repetiría todo eso. Lo que sí se separa es el **motor**, en una biblioteca sin FTXUI, por la misma razón que se separó `Session` en R0.
  
@@ -113,7 +113,7 @@ Idle ─send─► Requesting ─(texto, sin herramientas)─► Idle
  
 **Límites del turno** (configurables en `config.json` → `"code"`):
  
-- **Pasos:** 50 peticiones al modelo por turno. Al llegar, se detiene y pregunta "¿Seguir?".
+- **Pasos:** 50 peticiones al modelo por turno. Al llegar, se detiene con un aviso (la pregunta "¿Seguir?" llega con la pantalla, C2).
 - **Bucles:** la misma herramienta con los mismos argumentos 3 veces seguidas detiene el turno con un aviso. Los modelos gratis caen en esto.
 - **Argumentos rotos:** si el modelo manda argumentos que no son JSON, se le regresa el error como resultado para que corrija; 3 seguidos detienen el turno.
 - **Cuota:** el plan gratis de NIM limita las peticiones por minuto (se reporta alrededor de 40). El 429 con `Retry-After` ya se reintenta; la línea de estado dice "Esperando a NIM (límite de peticiones)…" en vez de quedarse muda.
@@ -215,11 +215,29 @@ Nombres y descripciones en inglés para el modelo (D7); en la pantalla, en espa�
  
 **Reglas comunes:**
  
-- **Raíz del proyecto:** la carpeta donde arrancó `moss code`. Toda ruta se resuelve contra ella, con los enlaces simbólicos ya resueltos (`weakly_canonical`). Fuera de la raíz, **todo** pregunta, también leer.
+- **Raíz del proyecto:** la carpeta donde arrancó `moss code`. Toda ruta se resuelve contra ella, con los enlaces simbólicos ya resueltos (`weakly_canonical`). Fuera de la raíz, **todo** pregunta, también leer (en C1 se rechaza: todavía no hay preguntas).
 - **Leer antes de editar:** `edit` y `write` sobre un archivo existente fallan si no se leyó en esta sesión, o si cambió desde que se leyó (por fecha y tamaño). Es lo que hace Claude Code, y evita que el modelo pise cambios tuyos.
 - **Nunca, en ningún modo:** la carpeta de configuración de Moss (`config.json`, `credentials.json`), ni la de datos. `glob` y `grep` se la saltan. Así el modelo no puede leer tus keys.
 - **Tope de resultado:** 30 000 caracteres por resultado (la cabeza y la cola, con `[… N líneas omitidas …]` en medio). El modelo puede pedir el resto con `offset` o un `grep` más fino.
 - **Sin terminal:** cada herramienta es una función sin FTXUI que recibe `ProjectRoot`, sus argumentos ya validados contra el esquema y un `CancelToken`, y regresa `ToolResult {text, is_error, display}` (`display` es lo que dibuja la pantalla: el diff, el resumen de una línea).
+### Lo que cambió al implementarlo (C1)
+
+- `child_process` salió de `cli/` a `chatbot_process` (`process/`): `chatbot_code` no puede depender de `cli/` y la usan las dos.
+- `chatbot_code` no calcula las carpetas de Moss: se le pasan ya resueltas, porque esa lógica (portable, `CHAT_DATA_DIR`) vive en `cli/`.
+- El bloqueo de la carpeta de Moss y la pertenencia a la raíz van también por identidad de archivo (dispositivo e inodo; en Windows, volumen y FileId), no solo por ruta: un sistema de archivos sin distinción de mayúsculas o un montaje bind no se lo saltan.
+- No se acepta `/` ni una unidad como raíz: sería dejar al modelo leer todo el disco.
+- En Windows no se siguen enlaces simbólicos en v1 (uno hacia una ruta UNC mandaría credenciales de red); las uniones sí.
+- `output_cap.h` no es público: vive en `code/src/`.
+- `walk` y `read_file` son únicos para todas las herramientas: ninguna abre archivos por su cuenta.
+- `git` y `rg` solo por ruta absoluta (nunca del directorio actual) y la carpeta de Moss se excluye desde el comando de `rg`.
+- `rg` se lee con `--json`: una línea con texto raro no rompe el análisis.
+- La búsqueda propia usa el motor sin retroceso exponencial de libstdc++ (`__polynomial`): un patrón malicioso del modelo no cuelga la herramienta.
+- El recorte del historial del modo código usa su propio límite (`history_limit_bytes`, 300 000 bytes): el del chat (32 000) se llena con una sola lectura.
+- Los `arguments` que no son JSON se guardan como `{}` en el historial: el servidor rechaza una llamada con argumentos inválidos en la petición siguiente.
+- Si la primera petición del turno se cancela, falla o llega vacía, el turno devuelve el mensaje del usuario sin enviarlo, como el chat.
+- Al llegar al límite de pasos, C1 solo se detiene con un aviso; la pregunta "¿Seguir?" llega con la pantalla (C2).
+- El aviso "Esperando a NIM (límite de peticiones)…" (sección 2) todavía no existe: el núcleo no avisa de sus reintentos.
+
 ### 4.1 `bash` (C4)
  
 - `bash -c "<command>"` con la raíz como carpeta de trabajo, stdin desde `/dev/null` y su propio grupo de procesos (`setpgid`). Esc o el tiempo límite matan **el grupo entero** (SIGTERM, 2 s, SIGKILL): `cmake` y sus compiladores también se mueren.
@@ -269,7 +287,7 @@ Una herramienta rechazada regresa como resultado: `"The user rejected this actio
 Las instrucciones de sistema del modo código se arman al empezar cada sesión:
  
 1. Las fijas de Moss Code (en inglés, D7): cómo usar las herramientas, leer antes de editar, preferir `edit` a `write`, no inventar rutas, ser breve, contestar en el idioma del usuario (español por defecto).
-2. El entorno: carpeta, sistema, fecha, si es un repo de git (rama y `git status --short`, recortado), y si hay `bash`.
+2. El entorno: carpeta, sistema, fecha, si es un repo de git (rama y `git status --short`, recortado), y si hay `bash`. Si la configuración del repositorio tiene filtros `clean`/`process` (`git config --show-scope --get-regexp`; los de los niveles global y del sistema no cuentan), `git status` no se corre y el entorno solo dice que el estado no se leyó; con git < 2.26 tampoco se corre, sin aviso.
 3. `~/.config/moss/AGENTS.md` (tuyo) y el `AGENTS.md` de la raíz (o `CLAUDE.md`), D5, hasta 40 KiB entre los dos.
 Las instrucciones del chat (`system_prompt` de `config.json`) **no** aplican en el modo código.
  
@@ -337,7 +355,7 @@ Todo aditivo, sin cambiar `protocol_version`:
 | Hito | Contenido |
 |---|---|
 | **C0** (En revisión, PR #64) | Tool calling en el núcleo (3.1–3.5): `Role::Tool`, `ToolCall`, `content: null`, `tools`/`tool_choice`, el acumulador, `CompletionInfo.tool_calls`, `ToolCallStarted`, el pensamiento con su llave, recorte por grupos. `tools/fake-llm.py` con guiones de llamadas. La sonda `moss-tools-probe`. **Sin herramientas reales ni pantalla.** El chat no cambia en nada |
-| **C1** | El motor sin pantalla: `code/` con `chatbot_code`, `ProjectRoot`, `read`, `glob`, `grep`, `todo_write`, `AgentLoop` con sus límites y cancelación, las instrucciones con `AGENTS.md`, y `moss code -p` (solo herramientas de lectura). Linux y Windows |
+| **C1** (En revisión, PR #65) | El motor sin pantalla: `code/` con `chatbot_code`, `ProjectRoot`, `read`, `glob`, `grep`, `todo_write`, `AgentLoop` con sus límites y cancelación, las instrucciones con `AGENTS.md`, y `moss code -p` (solo herramientas de lectura). Linux y Windows |
 | **C2** | La TUI del modo código, de solo lectura: `moss code`, la vista de herramientas y tareas, la línea de estado, Esc, `/model`, `/clear`, Ctrl+O |
 | **C3** | Editar: `edit`, `write`, diffs, la pregunta de aprobación, los modos (Shift+Tab, Plan con `exit_plan_mode`), las reglas de `.moss/`, `/permisos` y `/deshacer` |
 | **C4** | Comandos en Linux: `bash` con grupo de procesos, entorno filtrado, reglas de comandos compuestos, salida en vivo, `!comando` |

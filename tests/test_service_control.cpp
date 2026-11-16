@@ -28,8 +28,8 @@
 namespace {
 
 namespace settings = chatbot::addon_settings;
-using chatbot::cli::ProcessOptions;
-using chatbot::cli::ProcessResult;
+using chatbot::process::ProcessOptions;
+using chatbot::process::ProcessResult;
 using chatbot::cli::ServiceAction;
 using chatbot::cli::ServiceControl;
 
@@ -381,7 +381,7 @@ TEST_CASE("servicio: cerrar con una consulta colgada no espera el tope", "[servi
         [&](const std::vector<std::string>&, const ProcessOptions& options) {
             ++runs;
             started.cancel();
-            return chatbot::cli::run_process({"sleep", "60"}, options);
+            return chatbot::process::run_process({"sleep", "60"}, options);
         }};
     std::optional<chatbot::cli::ServiceWorker> worker;
     worker.emplace([](std::function<void()>) {});
@@ -489,7 +489,7 @@ TEST_CASE("servicio: registro con una línea larga y el tope total", "[servicio]
 
 TEST_CASE("servicio: registro que llenó lo que guarda run_process", "[servicio][registro]") {
     ServiceHarness h;
-    const std::size_t full = chatbot::cli::kMaxProcessOutput;
+    const std::size_t full = chatbot::process::kMaxProcessOutput;
     // La última (la más vieja) quedó partida: no sale.
     h.fake.answers[kJournal200] = exited(0, std::string(full - 3, 'x') + "\nmitad");
     const chatbot::cli::ServiceLog partial = h.control.log(200, false);
@@ -532,11 +532,11 @@ TEST_CASE("servicio: si run_process corta la salida, se quedan las más nuevas",
         const std::string number = std::to_string(i);
         all += number + std::string(99 - number.size(), '.') + "\n";
     }
-    REQUIRE(all.size() > chatbot::cli::kMaxProcessOutput);
-    h.fake.answers[kJournal200] = exited(0, all.substr(0, chatbot::cli::kMaxProcessOutput));
+    REQUIRE(all.size() > chatbot::process::kMaxProcessOutput);
+    h.fake.answers[kJournal200] = exited(0, all.substr(0, chatbot::process::kMaxProcessOutput));
     const chatbot::cli::ServiceLog read = h.control.log(200, false);
     CHECK(read.truncated);
-    const std::size_t kept = chatbot::cli::kMaxProcessOutput / 100;
+    const std::size_t kept = chatbot::process::kMaxProcessOutput / 100;
     REQUIRE(read.lines.size() == kept);
     CHECK(read.lines.back().starts_with("19999."));
     CHECK(read.lines.front().starts_with(std::to_string(20000 - kept) + "."));

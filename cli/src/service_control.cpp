@@ -68,19 +68,19 @@ std::optional<std::string_view> bot_error(std::string_view line, std::string_vie
 }
 
 /// Por qué falló un programa, en una línea corta.
-std::string failure_detail(const ProcessResult& result) {
+std::string failure_detail(const process::ProcessResult& result) {
     switch (result.status) {
-    case ProcessResult::Status::TimedOut:
+    case process::ProcessResult::Status::TimedOut:
         return "no respondió en " +
                std::to_string(kServiceCommandTimeout.count() / 1000) + " s";
-    case ProcessResult::Status::Cancelled:
+    case process::ProcessResult::Status::Cancelled:
         return "se canceló";
-    case ProcessResult::Status::Signaled:
+    case process::ProcessResult::Status::Signaled:
         return "terminó por una señal";
-    case ProcessResult::Status::NotFound:
-    case ProcessResult::Status::Failed:
+    case process::ProcessResult::Status::NotFound:
+    case process::ProcessResult::Status::Failed:
         return "no se pudo ejecutar";
-    case ProcessResult::Status::Exited:
+    case process::ProcessResult::Status::Exited:
         break;
     }
     std::string_view first = trim(result.err);
@@ -181,9 +181,9 @@ bool service_running(std::string_view active) {
     return !active.empty() && active != "inactive" && active != "failed";
 }
 
-bool no_user_systemd(const ProcessResult& result) {
-    if (result.status == ProcessResult::Status::NotFound ||
-        result.status == ProcessResult::Status::Failed) {
+bool no_user_systemd(const process::ProcessResult& result) {
+    if (result.status == process::ProcessResult::Status::NotFound ||
+        result.status == process::ProcessResult::Status::Failed) {
         return true;
     }
     // "Failed to connect to bus" / "…user scope bus…" (sin sesión).
@@ -194,15 +194,15 @@ ServiceControl::ServiceControl(const addon_settings::AddonInfo& addon, std::stri
                                std::optional<unsigned long> uid, ProcessRunner run)
     : addon_(addon), unit_path_(std::move(unit_path)), uid_(uid), run_(std::move(run)) {}
 
-ProcessResult ServiceControl::run(std::vector<std::string> argv,
+process::ProcessResult ServiceControl::run(std::vector<std::string> argv,
                                   const CancelToken* cancel) const {
-    ProcessOptions options;
+    process::ProcessOptions options;
     options.timeout = kServiceCommandTimeout;
     options.cancel = cancel;
     return run_(argv, options);
 }
 
-ProcessResult ServiceControl::systemctl(std::vector<std::string> arguments,
+process::ProcessResult ServiceControl::systemctl(std::vector<std::string> arguments,
                                         const CancelToken* cancel) const {
     arguments.insert(arguments.begin(), {"systemctl", "--user"});
     return run(std::move(arguments), cancel);
@@ -213,7 +213,7 @@ ServiceStatus ServiceControl::status(const addon_settings::UnitParams& params,
     // Cancelada (se cierra la app), no sigue con los programas que faltan.
     ServiceStatus status;
     const std::string unit{addon_.unit};
-    const ProcessResult active = systemctl({"is-active", unit}, cancel);
+    const process::ProcessResult active = systemctl({"is-active", unit}, cancel);
     if (cancelled(cancel)) {
         return status;
     }
@@ -226,7 +226,7 @@ ServiceStatus ServiceControl::status(const addon_settings::UnitParams& params,
     if (cancelled(cancel)) {
         return status;
     }
-    const ProcessResult show = systemctl({"show", "-p", "ExecMainStatus,Result", unit}, cancel);
+    const process::ProcessResult show = systemctl({"show", "-p", "ExecMainStatus,Result", unit}, cancel);
     if (cancelled(cancel)) {
         return status;
     }
@@ -241,7 +241,7 @@ ServiceStatus ServiceControl::status(const addon_settings::UnitParams& params,
 
     if (uid_.has_value()) {
         // El UID numérico: $USER puede no estar o no coincidir.
-        const ProcessResult linger = run(
+        const process::ProcessResult linger = run(
             {"loginctl", "show-user", std::to_string(*uid_), "-p", "Linger", "--value"}, cancel);
         if (cancelled(cancel)) {
             return status;
@@ -251,7 +251,7 @@ ServiceStatus ServiceControl::status(const addon_settings::UnitParams& params,
             status.linger = value == "yes";
         }
     }
-    const ProcessResult journal =
+    const process::ProcessResult journal =
         run({"journalctl", "--user", "-u", unit, "-o", "cat", "-n", "200", "--no-pager"},
             cancel);
     status.last_error = last_error_line(journal.out, addon_.executable);
@@ -260,7 +260,7 @@ ServiceStatus ServiceControl::status(const addon_settings::UnitParams& params,
 
 ServiceAction ServiceControl::simple(std::vector<std::string> arguments, std::string_view done,
                                      std::string_view failed, const CancelToken* cancel) const {
-    const ProcessResult result = systemctl(std::move(arguments), cancel);
+    const process::ProcessResult result = systemctl(std::move(arguments), cancel);
     if (result.ok()) {
         return {ServiceAction::Kind::Done, std::string{done}};
     }
@@ -274,7 +274,7 @@ ServiceAction ServiceControl::apply(const addon_settings::UnitParams& params, bo
                                     bool replace_foreign, bool restart_bot,
                                     const CancelToken* cancel) const {
     const std::string unit{addon_.unit};
-    const ProcessResult active = systemctl({"is-active", unit}, cancel);
+    const process::ProcessResult active = systemctl({"is-active", unit}, cancel);
     if (no_user_systemd(active)) {
         return {ServiceAction::Kind::NoSystemd, std::string{kNoUserSystemd}};
     }
@@ -328,7 +328,7 @@ ServiceAction ServiceControl::restart(const CancelToken* cancel) const {
 }
 
 ServiceAction ServiceControl::reload_if_active(const CancelToken* cancel) const {
-    const ProcessResult active = systemctl({"is-active", std::string{addon_.unit}}, cancel);
+    const process::ProcessResult active = systemctl({"is-active", std::string{addon_.unit}}, cancel);
     if (no_user_systemd(active)) {
         return {ServiceAction::Kind::NoSystemd, std::string{kNoUserSystemd}};
     }
@@ -342,7 +342,7 @@ ServiceAction ServiceControl::reload_if_active(const CancelToken* cancel) const 
 ServiceLog ServiceControl::log(int lines, bool details, const CancelToken* cancel) const {
     // -r: de la más nueva a la más vieja, así lo que run_process no guarda
     // (pasado kMaxProcessOutput) son las más viejas.
-    const ProcessResult result =
+    const process::ProcessResult result =
         run({"journalctl", "--user", "-u", std::string{addon_.unit}, "-n",
              std::to_string(std::clamp(lines, 1, kMaxLogLines)), "-r", "-o", "short-iso",
              "--no-pager"},
@@ -359,7 +359,7 @@ ServiceLog ServiceControl::log(int lines, bool details, const CancelToken* cance
         return read;
     }
     std::string_view out = result.out;
-    if (out.size() >= kMaxProcessOutput) {
+    if (out.size() >= process::kMaxProcessOutput) {
         // Se cortó: la última (la más vieja) puede estar partida.
         if (const std::size_t last = out.rfind('\n'); last != std::string_view::npos) {
             out = out.substr(0, last + 1);
